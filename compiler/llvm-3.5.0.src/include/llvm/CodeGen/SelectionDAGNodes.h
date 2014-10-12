@@ -757,7 +757,7 @@ protected:
       OperandList(Ops.size() ? new SDUse[Ops.size()] : nullptr),
       ValueList(VTs.VTs), UseList(nullptr),
       NumOperands(Ops.size()), NumValues(VTs.NumVTs),
-      debugLoc(dl), IROrder(Order), IRInst(NULL) {
+      debugLoc(dl), IROrder(Order), IRInst(nullptr) {
     for (unsigned i = 0; i != Ops.size(); ++i) {
       OperandList[i].setUser(this);
       OperandList[i].setInitial(Ops[i]);
@@ -771,7 +771,7 @@ protected:
     : NodeType(Opc), OperandsNeedDelete(false), HasDebugValue(false),
       SubclassData(0), NodeId(-1), OperandList(nullptr), ValueList(VTs.VTs),
       UseList(nullptr), NumOperands(0), NumValues(VTs.NumVTs), debugLoc(dl),
-      IROrder(Order), IRInst(NULL) {}
+      IROrder(Order), IRInst(nullptr) {}
 
   /// InitOperands - Initialize the operands list of this with 1 operand.
   void InitOperands(SDUse *Ops, const SDValue &Op0) {

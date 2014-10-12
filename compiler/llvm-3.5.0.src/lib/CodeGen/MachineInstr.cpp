@@ -550,7 +550,7 @@ MachineInstr::MachineInstr(MachineFunction &MF, const MCInstrDesc &tid,
                            const DebugLoc dl, bool NoImp)
   : MCID(&tid), Parent(nullptr), Operands(nullptr), NumOperands(0),
     Flags(0), AsmPrinterFlags(0),
-    NumMemRefs(0), MemRefs(nullptr), debugLoc(dl), IRInst(NULL) {
+    NumMemRefs(0), MemRefs(nullptr), debugLoc(dl), IRInst(nullptr) {
   // Reserve space for the expected number of operands.
   if (unsigned NumOps = MCID->getNumOperands() +
     MCID->getNumImplicitDefs() + MCID->getNumImplicitUses()) {
@@ -568,7 +568,7 @@ MachineInstr::MachineInstr(MachineFunction &MF, const MachineInstr &MI)
   : MCID(&MI.getDesc()), Parent(nullptr), Operands(nullptr), NumOperands(0),
     Flags(0), AsmPrinterFlags(0),
     NumMemRefs(MI.NumMemRefs), MemRefs(MI.MemRefs),
-    debugLoc(MI.getDebugLoc()), IRInst(NULL) {
+    debugLoc(MI.getDebugLoc()), IRInst(nullptr) {
   CapOperands = OperandCapacity::get(MI.getNumOperands());
   Operands = MF.allocateOperandArray(CapOperands);
 
