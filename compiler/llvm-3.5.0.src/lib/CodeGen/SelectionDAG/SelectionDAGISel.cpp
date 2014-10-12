@@ -863,7 +863,7 @@ void SelectionDAGISel::DoInstructionSelection() {
         continue;
 
       SDNode *ResNode = Select(Node);
-
+      
       // FIXME: This is pretty gross.  'Select' should be changed to not return
       // anything at all and this code should be nuked with a tactical strike.
 
@@ -872,6 +872,8 @@ void SelectionDAGISel::DoInstructionSelection() {
         continue;
       // Replace node.
       if (ResNode) {
+        // propagate the IRInst to the actual instruction
+        ResNode->setIRInst(Node->getIRInst());
         ReplaceUses(Node, ResNode);
       }
 

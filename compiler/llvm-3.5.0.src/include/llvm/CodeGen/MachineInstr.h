@@ -93,6 +93,10 @@ private:
 
   DebugLoc debugLoc;                    // Source line information.
 
+  const Instruction* IRInst;            // correlated IR instruction used by
+                                        // MCFI to associate types with each
+                                        // indirect call/jump instruction.
+  
   MachineInstr(const MachineInstr&) LLVM_DELETED_FUNCTION;
   void operator=(const MachineInstr&) LLVM_DELETED_FUNCTION;
   // Use MachineFunction::DeleteMachineInstr() instead.
@@ -1101,6 +1105,14 @@ public:
     assert(NumMemRefs == NewMemRefsEnd - NewMemRefs && "Too many memrefs");
   }
 
+  void setIRInst(const Instruction* inst) {
+    IRInst = inst;
+  }
+
+  const Instruction* getIRInst() const {
+    return IRInst;
+  }
+  
 private:
   /// getRegInfo - If this instruction is embedded into a MachineFunction,
   /// return the MachineRegisterInfo object for the current function, otherwise

@@ -383,6 +383,9 @@ private:
   // this ordering.
   unsigned IROrder;
 
+  // IR Instruction from which this node is lowered
+  const Instruction* IRInst;
+  
   /// getValueTypeList - Return a pointer to the specified value type.
   static const EVT *getValueTypeList(EVT VT);
 
@@ -732,6 +735,15 @@ public:
   ///
   void addUse(SDUse &U) { U.addToList(&UseList); }
 
+  /// getter and setter of IRInst
+  
+  const Instruction* getIRInst() const {
+    return IRInst;
+  }
+
+  void setIRInst(const Instruction* inst) {
+    IRInst = inst;
+  }
 protected:
   static SDVTList getSDVTList(EVT VT) {
     SDVTList Ret = { getValueTypeList(VT), 1 };
@@ -745,7 +757,7 @@ protected:
       OperandList(Ops.size() ? new SDUse[Ops.size()] : nullptr),
       ValueList(VTs.VTs), UseList(nullptr),
       NumOperands(Ops.size()), NumValues(VTs.NumVTs),
-      debugLoc(dl), IROrder(Order) {
+      debugLoc(dl), IROrder(Order), IRInst(NULL) {
     for (unsigned i = 0; i != Ops.size(); ++i) {
       OperandList[i].setUser(this);
       OperandList[i].setInitial(Ops[i]);
@@ -759,7 +771,7 @@ protected:
     : NodeType(Opc), OperandsNeedDelete(false), HasDebugValue(false),
       SubclassData(0), NodeId(-1), OperandList(nullptr), ValueList(VTs.VTs),
       UseList(nullptr), NumOperands(0), NumValues(VTs.NumVTs), debugLoc(dl),
-      IROrder(Order) {}
+      IROrder(Order), IRInst(NULL) {}
 
   /// InitOperands - Initialize the operands list of this with 1 operand.
   void InitOperands(SDUse *Ops, const SDValue &Op0) {

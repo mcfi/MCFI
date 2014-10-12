@@ -3003,10 +3003,13 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // This isn't right, although it's probably harmless on x86; liveouts
     // should be computed from returns not tail calls.  Consider a void
     // function making a tail call to a function returning int.
-    return DAG.getNode(X86ISD::TC_RETURN, dl, NodeTys, Ops);
+    SDValue SD_TCRETURN = DAG.getNode(X86ISD::TC_RETURN, dl, NodeTys, Ops);
+    SD_TCRETURN.getNode()->setIRInst(CLI.CS->getInstruction());
+    return SD_TCRETURN;
   }
 
   Chain = DAG.getNode(X86ISD::CALL, dl, NodeTys, Ops);
+  Chain.getNode()->setIRInst(CLI.CS->getInstruction());
   InFlag = Chain.getValue(1);
 
   // Create the CALLSEQ_END node.
