@@ -66,40 +66,26 @@ namespace {
     }
 
     llvm::Module *ReleaseModule() override {
-      std::string ErrorInfo;
-      llvm::raw_fd_ostream CHAOut((M->getModuleIdentifier() + std::string(".cha")).c_str(),
-                                  ErrorInfo, llvm::sys::fs::F_Text);
-      if (!ErrorInfo.empty()) {
-        llvm::errs() << "Error: Opening " << M->getModuleIdentifier() << ".cha failed\n";
-        exit(-1);
-      }
-      for (auto it = CHA.begin(); it != CHA.end(); it++) {
-        CHAOut << *it << "\n";
-        if (!ErrorInfo.empty()) {
-          llvm::errs() << "Error: Writing " << M->getModuleIdentifier() << ".cha failed\n";
-          exit(-1);
+      if (!CHA.empty()) {
+        llvm::NamedMDNode* MDCHA = M->getOrInsertNamedMetadata("MCFICHA");
+        assert(MDCHA);
+        for (auto it = CHA.begin(); it != CHA.end(); it++) {
+          MDCHA->addOperand(llvm::MDNode::get(M->getContext(),
+                                              llvm::MDString::get(
+                                                M->getContext(), it->c_str())));
         }
       }
 
-      CHAOut.close();
 
       if (!Builder->DtorCxxAtExit.empty()) {
-        llvm::raw_fd_ostream DtorOut((M->getModuleIdentifier() + std::string(".dtor")).c_str(),
-            ErrorInfo, llvm::sys::fs::F_Text);
-        if (!ErrorInfo.empty()) {
-          llvm::errs() << "Error: Opening " << M->getModuleIdentifier() << ".dtor failed\n";
-          exit(-1);
-        }
+        llvm::NamedMDNode* MDDtor = M->getOrInsertNamedMetadata("MCFIDtor");
+        assert(MDDtor);
         for (auto it = Builder->DtorCxxAtExit.begin();
-             it != Builder->DtorCxxAtExit.end();
-             it++) {
-          DtorOut << *it << "\n";
-          if (!ErrorInfo.empty()) {
-            llvm::errs() << "Error: Writing " << M->getModuleIdentifier() << ".dtor failed\n";
-            exit(-1);
-          }
+             it != Builder->DtorCxxAtExit.end(); it++) {
+          MDDtor->addOperand(llvm::MDNode::get(M->getContext(),
+                                               llvm::MDString::get(
+                                                 M->getContext(), it->c_str())));
         }
-        DtorOut.close();
       }
 
       return M.release();
