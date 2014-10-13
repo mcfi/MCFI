@@ -480,6 +480,7 @@ namespace {
     void linkFunctionBody(Function *Dst, Function *Src);
     void linkAliasBodies();
     void linkNamedMDNodes();
+    void linkMCFINamedMDNodes(const StringRef&);
   };
 }
 
@@ -1219,6 +1220,32 @@ void ModuleLinker::linkAliasBodies() {
   }
 }
 
+void ModuleLinker::linkMCFINamedMDNodes(const StringRef& NamedMDNodeName) {
+  const NamedMDNode *SrcNMD = SrcM->getNamedMetadata(NamedMDNodeName);
+  if (SrcNMD) {
+    std::set<std::string> MDSet;
+    NamedMDNode *DestNMD = DstM->getOrInsertNamedMetadata(NamedMDNodeName);
+    // Load all CHA info to MDCHA
+    for (unsigned i = 0, e = DestNMD->getNumOperands(); i != e; ++i) {
+      const MDNode* mdNode = DestNMD->getOperand(i);
+      for (unsigned j = 0, je = mdNode->getNumOperands(); j != je; ++j)
+        MDSet.insert(((MDString*)mdNode->getOperand(j))->getString().str());
+    }
+
+    // any CHA info in Src not in MDCHA should be inserted into DestNMD
+    for (unsigned i = 0, e = SrcNMD->getNumOperands(); i != e; ++i) {
+      const MDNode* mdNode = SrcNMD->getOperand(i);
+      for (unsigned j = 0, je = mdNode->getNumOperands(); j!= je; ++j) {
+        const MDString* mdStr = (MDString*)mdNode->getOperand(j);
+        if (MDSet.find(mdStr->getString().str()) == MDSet.end()) { // not found
+          DestNMD->addOperand(MapValue(mdNode, ValueMap,
+                                       RF_None, &TypeMap, &ValMaterializer));
+        }
+      }
+    }
+  }
+}
+
 /// linkNamedMDNodes - Insert all of the named MDNodes in Src into the Dest
 /// module.
 void ModuleLinker::linkNamedMDNodes() {
@@ -1227,12 +1254,20 @@ void ModuleLinker::linkNamedMDNodes() {
        E = SrcM->named_metadata_end(); I != E; ++I) {
     // Don't link module flags here. Do them separately.
     if (&*I == SrcModFlags) continue;
+    // MCFI-related metadata are handled separately.
+    if (I->getName().equals("MCFICHA"))  continue;
+    if (I->getName().equals("MCFIDtor")) continue;
+    if (I->getName().equals("MCFIPureVirt")) continue;
     NamedMDNode *DestNMD = DstM->getOrInsertNamedMetadata(I->getName());
     // Add Src elements into Dest node.
     for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
       DestNMD->addOperand(MapValue(I->getOperand(i), ValueMap,
                                    RF_None, &TypeMap, &ValMaterializer));
   }
+  // MCFI-related metadata
+  linkMCFINamedMDNodes("MCFICHA");
+  linkMCFINamedMDNodes("MCFIDtor");
+  linkMCFINamedMDNodes("MCFIPureVirt");
 }
 
 /// linkModuleFlagsMetadata - Merge the linker flags in Src into the Dest
