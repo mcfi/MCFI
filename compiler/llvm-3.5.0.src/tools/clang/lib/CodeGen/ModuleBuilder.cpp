@@ -272,8 +272,6 @@ namespace {
           Entry += std::string("@");
           Entry += std::string(I->isStatic() ? "1" : "0");
           Entry += std::string(I->isVirtual() ? "1" : "0");
-          Entry += std::string(I->isConst() ? "1" : "0");
-          Entry += std::string(I->isVolatile() ? "1" : "0");
           CHA.insert(Entry);
         }
         for (RecordDecl::field_iterator I = CRD->field_begin();
