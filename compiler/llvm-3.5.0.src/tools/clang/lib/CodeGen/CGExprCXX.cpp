@@ -208,6 +208,8 @@ RValue CodeGenFunction::EmitCXXMemberCallExpr(const CXXMemberCallExpr *CE,
     Callee = CGM.GetAddrOfFunction(GlobalDecl(Ctor, Ctor_Complete), Ty);
   } else if (UseVirtualCall) {
     Callee = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, Ty);
+    assert(VirtualCallee.find(Callee) == VirtualCallee.end());
+    VirtualCallee[Callee] = std::string("VC ") + CGM.getCanonicalMethodName(MD);
   } else {
     if (getLangOpts().AppleKext &&
         MD->isVirtual() &&
@@ -276,6 +278,11 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   
   // And the rest of the call args
   EmitCallArgs(Args, FPT, E->arg_begin(), E->arg_end());
+
+  assert(VirtualCallee.find(Callee) == VirtualCallee.end());
+  VirtualCallee[Callee] = std::string("PM ") + CGM.getCanonicalRecordName(RD) +
+    "+" + FPT->desugar().getAsString();
+
   return EmitCall(CGM.getTypes().arrangeCXXMethodCall(Args, FPT, required),
                   Callee, ReturnValue, Args);
 }

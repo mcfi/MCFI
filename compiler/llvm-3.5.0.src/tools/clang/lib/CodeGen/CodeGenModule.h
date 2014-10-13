@@ -1030,6 +1030,15 @@ public:
   /// are emitted lazily.
   void EmitGlobal(GlobalDecl D);
 
+  /// MCFI uses canonical method name and record name for class hierarchy
+  /// analysis.
+  std::string getCanonicalMethodName(const CXXMethodDecl *MD) const;
+  std::string getCanonicalRecordName(const RecordDecl* RD) const;
+
+  /// MCFI needs to know which destructors are registered to __cxa_atexit for
+  /// connecting destructors
+  std::vector<std::string> DtorCxxAtExit;
+
 private:
   llvm::GlobalValue *GetGlobalValue(StringRef Ref);
 

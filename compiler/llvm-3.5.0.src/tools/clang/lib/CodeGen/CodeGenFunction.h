@@ -139,6 +139,9 @@ public:
     unsigned Index;
   };
 
+  llvm::DenseMap<llvm::Value*, std::string> VirtualCallee; // Each virtual call's
+                                                           // callee name
+
   CodeGenModule &CGM;  // Per-module state.
   const TargetInfo &Target;
 

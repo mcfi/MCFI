@@ -3041,6 +3041,14 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   if (Builder.isNamePreserving() && !CI->getType()->isVoidTy())
     CI->setName("call");
 
+  if (VirtualCallee.find(Callee) != VirtualCallee.end()) {
+    llvm::MDNode* N = llvm::MDNode::get(CI->getContext(),
+                                        llvm::MDString::get(CI->getContext(),
+                                                            VirtualCallee[Callee].c_str()));
+    //llvm::errs() << "HLInfo " << VirtualCallee[Callee] << "\n";
+    CI->setMetadata("CXXVirtual", N);
+  }
+
   // Emit any writebacks immediately.  Arguably this should happen
   // after any return-value munging.
   if (CallArgs.hasWritebacks())

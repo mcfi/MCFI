@@ -51,6 +51,7 @@
 #include "llvm/ProfileData/InstrProfReader.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <cxxabi.h>
 
 using namespace clang;
 using namespace CodeGen;
@@ -3379,3 +3380,31 @@ llvm::Constant *CodeGenModule::GetAddrOfRTTIDescriptor(QualType Ty,
   return getCXXABI().getAddrOfRTTIDescriptor(Ty);
 }
 
+std::string CodeGenModule::getCanonicalMethodName(const CXXMethodDecl *MD) const {
+  std::string Name;
+  llvm::raw_string_ostream Out(Name);
+  getCXXABI().getMangleContext().mangleName(MD, Out);
+  Out.flush();
+  int status = 0;
+  char* result = abi::__cxa_demangle(Name.c_str(), 0, 0, &status);
+  if (result) {
+    Name = std::string(result);
+    free(result);
+  }
+  return Name;
+}
+
+std::string CodeGenModule::getCanonicalRecordName(const RecordDecl* RD) const {
+  std::string Name;
+  llvm::raw_string_ostream Out(Name);
+  getCXXABI().getMangleContext().
+    mangleCXXRTTIName(RD->getTypeForDecl()->getCanonicalTypeInternal (), Out);
+  Out.flush();
+  int status = 0;
+  char* result = abi::__cxa_demangle(Name.c_str(), 0, 0, &status);
+  if (result) {
+    Name = std::string(result).substr(18); // remove "typeinfo name for "
+    free(result);
+  }
+  return Name;
+}

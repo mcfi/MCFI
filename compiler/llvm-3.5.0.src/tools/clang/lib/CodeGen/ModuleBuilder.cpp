@@ -24,6 +24,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <unordered_set>
 #include <memory>
 using namespace clang;
 
@@ -43,7 +44,7 @@ namespace {
       : Diags(diags), CodeGenOpts(CGO),
         M(new llvm::Module(ModuleName, C)) {}
 
-    virtual ~CodeGeneratorImpl() {}
+    virtual ~CodeGeneratorImpl() { }
 
     llvm::Module* GetModule() override {
       return M.get();
@@ -64,7 +65,45 @@ namespace {
       return D;
     }
 
-    llvm::Module *ReleaseModule() override { return M.release(); }
+    llvm::Module *ReleaseModule() override {
+      std::string ErrorInfo;
+      llvm::raw_fd_ostream CHAOut((M->getModuleIdentifier() + std::string(".cha")).c_str(),
+                                  ErrorInfo, llvm::sys::fs::F_Text);
+      if (!ErrorInfo.empty()) {
+        llvm::errs() << "Error: Opening " << M->getModuleIdentifier() << ".cha failed\n";
+        exit(-1);
+      }
+      for (auto it = CHA.begin(); it != CHA.end(); it++) {
+        CHAOut << *it << "\n";
+        if (!ErrorInfo.empty()) {
+          llvm::errs() << "Error: Writing " << M->getModuleIdentifier() << ".cha failed\n";
+          exit(-1);
+        }
+      }
+
+      CHAOut.close();
+
+      if (!Builder->DtorCxxAtExit.empty()) {
+        llvm::raw_fd_ostream DtorOut((M->getModuleIdentifier() + std::string(".dtor")).c_str(),
+            ErrorInfo, llvm::sys::fs::F_Text);
+        if (!ErrorInfo.empty()) {
+          llvm::errs() << "Error: Opening " << M->getModuleIdentifier() << ".dtor failed\n";
+          exit(-1);
+        }
+        for (auto it = Builder->DtorCxxAtExit.begin();
+             it != Builder->DtorCxxAtExit.end();
+             it++) {
+          DtorOut << *it << "\n";
+          if (!ErrorInfo.empty()) {
+            llvm::errs() << "Error: Writing " << M->getModuleIdentifier() << ".dtor failed\n";
+            exit(-1);
+          }
+        }
+        DtorOut.close();
+      }
+
+      return M.release();
+    }
 
     void Initialize(ASTContext &Context) override {
       Ctx = &Context;
@@ -141,6 +180,7 @@ namespace {
           }
         }
       }
+      genClassHierarchyInfo(CHA, D);
     }
 
     void HandleTagDeclRequiredDefinition(const TagDecl *D) override {
@@ -193,6 +233,58 @@ namespace {
 
   private:
     std::vector<CXXMethodDecl *> DeferredInlineMethodDefinitions;
+    std::unordered_set<std::string> CHA;
+
+    void genClassHierarchyInfo(std::unordered_set<std::string>& CHA,
+                               const TagDecl *RD) const {
+      if (RD && !RD->isDependentContext() && isa<CXXRecordDecl>(RD)) {
+        const CXXRecordDecl* CRD = cast<CXXRecordDecl>(RD);
+        if (CRD->getNumBases() > 0) {
+          // print out the base classes
+          std::string Entry = std::string("~I~") + Builder->getCanonicalRecordName(CRD);
+          if (Entry.empty())
+            return;
+          Entry += "@";
+          for (CXXRecordDecl::base_class_const_iterator I = CRD->bases_begin(),
+                 E = CRD->bases_end(); I != E; ++I) {
+            assert(!I->getType()->isDependentType() &&
+                   "Cannot layout class with dependent bases.");
+            const CXXRecordDecl *Base =
+              cast<CXXRecordDecl>(I->getType()->getAs<RecordType>()->getDecl());
+            Entry += Builder->getCanonicalRecordName(Base) + "|";
+          }
+          Entry.erase(Entry.size()-1);
+          CHA.insert(Entry);
+        }
+
+        for (CXXRecordDecl::method_iterator I = CRD->method_begin();
+             I != CRD->method_end(); ++I) {
+          std::string Entry;
+          if (isa<CXXConstructorDecl>(*I))
+            continue;
+          else if (isa<CXXDestructorDecl>(*I)) {
+            Entry += std::string("~D~");
+            Entry += Builder->getCanonicalRecordName(CRD);
+          } else {
+            Entry += std::string("~M~");
+            Entry += Builder->getCanonicalMethodName(*I);
+          }
+          Entry += std::string("@");
+          Entry += std::string(I->isStatic() ? "1" : "0");
+          Entry += std::string(I->isVirtual() ? "1" : "0");
+          Entry += std::string(I->isConst() ? "1" : "0");
+          Entry += std::string(I->isVolatile() ? "1" : "0");
+          CHA.insert(Entry);
+        }
+        for (RecordDecl::field_iterator I = CRD->field_begin();
+             I != CRD->field_end(); ++I) {
+          const NamedDecl* ND = *I;
+          if (isa<CXXRecordDecl>(ND)) {
+            genClassHierarchyInfo(CHA, cast<CXXRecordDecl>(ND));
+          }
+        }
+      }
+    }
   };
 }
 

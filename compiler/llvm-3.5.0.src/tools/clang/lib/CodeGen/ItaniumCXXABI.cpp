@@ -1352,6 +1352,10 @@ void ItaniumCXXABI::EmitVirtualDestructorCall(CodeGenFunction &CGF,
   llvm::Value *Callee =
       getVirtualFunctionPointer(CGF, GlobalDecl(Dtor, DtorType), This, Ty);
 
+  assert(CGF.VirtualCallee.find(Callee) == CGF.VirtualCallee.end());
+  CGF.VirtualCallee[Callee] =
+    std::string("VD ") + CGM.getCanonicalRecordName(Dtor->getParent());
+
   CGF.EmitCXXMemberCall(Dtor, CallLoc, Callee, ReturnValueSlot(), This,
                         /*ImplicitParam=*/nullptr, QualType(), nullptr,
                         nullptr);
@@ -1794,6 +1798,7 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
     handle
   };
   CGF.EmitNounwindRuntimeCall(atexit, args);
+  CGF.CGM.DtorCxxAtExit.push_back(dtor->getName().str());
 }
 
 /// Register a global destructor as best as we know how.

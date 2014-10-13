@@ -344,7 +344,10 @@ CodeGenFunction::BuildAppleKextVirtualCall(const CXXMethodDecl *MD,
   if (const auto *DD = dyn_cast<CXXDestructorDecl>(MD))
     return BuildAppleKextVirtualDestructorCall(DD, Dtor_Complete, RD);
 
-  return ::BuildAppleKextVirtualCall(*this, MD, Ty, RD);
+  llvm::Value* Val = ::BuildAppleKextVirtualCall(*this, MD, Ty, RD);
+  assert(VirtualCallee.find(Val) == VirtualCallee.end());
+  VirtualCallee[Val] = std::string("VC ") + CGM.getCanonicalMethodName(MD);
+  return Val;
 }
 
 /// BuildVirtualCall - This routine makes indirect vtable call for
@@ -363,7 +366,11 @@ CodeGenFunction::BuildAppleKextVirtualDestructorCall(
     const CGFunctionInfo &FInfo =
       CGM.getTypes().arrangeCXXDestructor(DD, Dtor_Complete);
     llvm::Type *Ty = CGM.getTypes().GetFunctionType(FInfo);
-    return ::BuildAppleKextVirtualCall(*this, GlobalDecl(DD, Type), Ty, RD);
+    llvm::Value *Val =
+      ::BuildAppleKextVirtualCall(*this, GlobalDecl(DD, Type), Ty, RD);
+    assert(VirtualCallee.find(Val) == VirtualCallee.end());
+    VirtualCallee[Val] = std::string("VD ") + CGM.getCanonicalRecordName(RD);
+    return Val;
   }
   return nullptr;
 }

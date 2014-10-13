@@ -2083,9 +2083,12 @@ CodeGenFunction::EmitCXXOperatorMemberCallee(const CXXOperatorCallExpr *E,
     CGM.getTypes().GetFunctionType(
                              CGM.getTypes().arrangeCXXMethodDeclaration(MD));
 
-  if (MD->isVirtual() && !CanDevirtualizeMemberFunctionCall(E->getArg(0), MD))
-    return CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, fnType);
-
+  if (MD->isVirtual() && !CanDevirtualizeMemberFunctionCall(E->getArg(0), MD)) {
+    llvm::Value* Val = CGM.getCXXABI().getVirtualFunctionPointer(*this, MD, This, fnType);
+    assert(VirtualCallee.find(Val) == VirtualCallee.end());
+    VirtualCallee[Val] = std::string("VC ") + CGM.getCanonicalMethodName(MD);
+    return Val;
+  }
   return CGM.GetAddrOfFunction(MD, fnType);
 }
 
