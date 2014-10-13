@@ -66,9 +66,8 @@ namespace {
     }
 
     llvm::Module *ReleaseModule() override {
-      if (!CHA.empty()) {
+      if (!CHA.empty() && M) {
         llvm::NamedMDNode* MDCHA = M->getOrInsertNamedMetadata("MCFICHA");
-        assert(MDCHA);
         for (auto it = CHA.begin(); it != CHA.end(); it++) {
           MDCHA->addOperand(llvm::MDNode::get(M->getContext(),
                                               llvm::MDString::get(
@@ -76,10 +75,17 @@ namespace {
         }
       }
 
+      if (!MCFIPureVirt.empty() && M) {
+        llvm::NamedMDNode* MDPV = M->getOrInsertNamedMetadata("MCFIPureVirt");
+        for (auto it = MCFIPureVirt.begin(); it != MCFIPureVirt.end(); it++) {
+          MDPV->addOperand(llvm::MDNode::get(M->getContext(),
+                                             llvm::MDString::get(
+                                               M->getContext(), it->c_str())));
+        }
+      }
 
-      if (!Builder->DtorCxxAtExit.empty()) {
+      if (!Builder->DtorCxxAtExit.empty() && M) {
         llvm::NamedMDNode* MDDtor = M->getOrInsertNamedMetadata("MCFIDtor");
-        assert(MDDtor);
         for (auto it = Builder->DtorCxxAtExit.begin();
              it != Builder->DtorCxxAtExit.end(); it++) {
           MDDtor->addOperand(llvm::MDNode::get(M->getContext(),
@@ -166,7 +172,7 @@ namespace {
           }
         }
       }
-      genClassHierarchyInfo(CHA, D);
+      genClassHierarchyInfo(CHA, MCFIPureVirt, D);
     }
 
     void HandleTagDeclRequiredDefinition(const TagDecl *D) override {
@@ -219,9 +225,11 @@ namespace {
 
   private:
     std::vector<CXXMethodDecl *> DeferredInlineMethodDefinitions;
+    std::unordered_set<std::string> MCFIPureVirt;
     std::unordered_set<std::string> CHA;
 
     void genClassHierarchyInfo(std::unordered_set<std::string>& CHA,
+                               std::unordered_set<std::string>& MCFIPureVirt,
                                const TagDecl *RD) const {
       if (RD && !RD->isDependentContext() && isa<CXXRecordDecl>(RD)) {
         const CXXRecordDecl* CRD = cast<CXXRecordDecl>(RD);
@@ -254,6 +262,9 @@ namespace {
           } else {
             Entry += std::string("~M~");
             Entry += Builder->getCanonicalMethodName(*I);
+            if (I->isPure()) {
+              MCFIPureVirt.insert(Builder->getMCFIPureVirtual(*I));
+            }
           }
           Entry += std::string("@");
           Entry += std::string(I->isStatic() ? "1" : "0");
@@ -264,7 +275,7 @@ namespace {
              I != CRD->field_end(); ++I) {
           const NamedDecl* ND = *I;
           if (isa<CXXRecordDecl>(ND)) {
-            genClassHierarchyInfo(CHA, cast<CXXRecordDecl>(ND));
+            genClassHierarchyInfo(CHA, MCFIPureVirt, cast<CXXRecordDecl>(ND));
           }
         }
       }

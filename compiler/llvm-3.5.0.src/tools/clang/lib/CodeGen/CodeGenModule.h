@@ -1034,7 +1034,8 @@ public:
   /// analysis.
   std::string getCanonicalMethodName(const CXXMethodDecl *MD) const;
   std::string getCanonicalRecordName(const RecordDecl* RD) const;
-
+  std::string getMCFIPureVirtual(const CXXMethodDecl *MD);
+  
   /// MCFI needs to know which destructors are registered to __cxa_atexit for
   /// connecting destructors
   std::vector<std::string> DtorCxxAtExit;

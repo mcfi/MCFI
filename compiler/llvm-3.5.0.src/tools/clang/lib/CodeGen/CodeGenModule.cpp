@@ -3380,6 +3380,31 @@ llvm::Constant *CodeGenModule::GetAddrOfRTTIDescriptor(QualType Ty,
   return getCXXABI().getAddrOfRTTIDescriptor(Ty);
 }
 
+std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
+  assert(MD->isPure());
+  std::string MPV("~P~");
+  std::string OStr;
+  llvm::raw_string_ostream Out(OStr);
+  getCXXABI().getMangleContext().mangleName(MD, Out);
+  Out.flush();
+  int status = 0;
+  char* result = abi::__cxa_demangle(OStr.c_str(), 0, 0, &status);
+  MPV += OStr;
+  MPV += "@";
+  assert(result);
+  MPV += std::string(result);
+  free(result);
+  MPV += "@";
+  OStr.clear();
+  llvm::raw_string_ostream TypeOut(OStr);
+  const CGFunctionInfo &FI = getTypes().arrangeCXXMethodDeclaration(MD);
+  llvm::FunctionType * FT = getTypes().GetFunctionType(FI);
+  FT->print(TypeOut);
+  TypeOut.flush();
+  MPV += OStr;
+  return MPV;
+}
+
 std::string CodeGenModule::getCanonicalMethodName(const CXXMethodDecl *MD) const {
   std::string Name;
   llvm::raw_string_ostream Out(Name);
@@ -3387,10 +3412,9 @@ std::string CodeGenModule::getCanonicalMethodName(const CXXMethodDecl *MD) const
   Out.flush();
   int status = 0;
   char* result = abi::__cxa_demangle(Name.c_str(), 0, 0, &status);
-  if (result) {
-    Name = std::string(result);
-    free(result);
-  }
+  assert(result);
+  Name = std::string(result);
+  free(result);
   return Name;
 }
 
@@ -3402,9 +3426,8 @@ std::string CodeGenModule::getCanonicalRecordName(const RecordDecl* RD) const {
   Out.flush();
   int status = 0;
   char* result = abi::__cxa_demangle(Name.c_str(), 0, 0, &status);
-  if (result) {
-    Name = std::string(result).substr(18); // remove "typeinfo name for "
-    free(result);
-  }
+  assert(result);
+  Name = std::string(result).substr(18); // remove "typeinfo name for "
+  free(result);
   return Name;
 }
