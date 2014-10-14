@@ -263,7 +263,9 @@ namespace {
             Entry += std::string("~M~");
             Entry += Builder->getCanonicalMethodName(*I);
             if (I->isPure()) {
-              MCFIPureVirt.insert(Builder->getMCFIPureVirtual(*I));
+              std::string PV = Builder->getMCFIPureVirtual(*I);
+              if (!PV.empty())
+                MCFIPureVirt.insert(PV);
             }
           }
           Entry += std::string("@");

@@ -3380,8 +3380,28 @@ llvm::Constant *CodeGenModule::GetAddrOfRTTIDescriptor(QualType Ty,
   return getCXXABI().getAddrOfRTTIDescriptor(Ty);
 }
 
+static bool MCFIDefCompleted(const CXXMethodDecl *MD) {
+  const CXXMethodDecl *CMD = MD->getCanonicalDecl();
+  const CXXRecordDecl *RD = CMD->getReturnType()->getAsCXXRecordDecl();
+  if (RD && !RD->getDefinition())
+    return false;
+  for (unsigned i = 0; i < CMD->getNumParams(); i++) {
+    RD = CMD->getParamDecl(i)->getOriginalType()->getAsCXXRecordDecl();
+    if (RD && !RD->getDefinition())
+      return false;
+  }
+  return true;
+}
+
 std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
   assert(MD->isPure());
+
+  // Only if the MD-relevant struct/class definition is completed can
+  // the pure virtual function be translated. Otherwise, no member pointer
+  // is possible to be defined to point to that virtual function.
+  if (!MCFIDefCompleted(MD)) {
+    return std::string();
+  }
   std::string MPV("~P~");
   std::string OStr;
   llvm::raw_string_ostream Out(OStr);
