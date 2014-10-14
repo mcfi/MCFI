@@ -1010,6 +1010,9 @@ void X86FrameLowering::emitEpilogue(MachineFunction &MF,
     MachineInstr *NewMI = std::prev(MBBI);
     NewMI->copyImplicitOps(MF, MBBI);
 
+    // Also copy the IRInst information
+    NewMI->setIRInst(MBBI->getIRInst());
+    
     // Delete the pseudo instruction TCRETURN.
     MBB.erase(MBBI);
   } else if ((RetOpcode == X86::RETQ || RetOpcode == X86::RETL ||

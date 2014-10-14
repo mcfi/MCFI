@@ -847,6 +847,59 @@ bool MachineInstr::isIdenticalTo(const MachineInstr *Other,
     if (!getDebugLoc().isUnknown() && !Other->getDebugLoc().isUnknown()
         && getDebugLoc() != Other->getDebugLoc())
       return false;
+
+  // In MCFI, two indirect branch instructions are identical if their IR
+  // instructions have the same type and metadata info.
+  if ((IRInst && !Other->getIRInst()) || (!IRInst && Other->getIRInst()))
+    return false;
+
+  if (IRInst && Other->getIRInst()) {
+    const Value* V = nullptr;
+    if (isa<CallInst>(IRInst)) {
+      V = cast<CallInst>(IRInst)->getCalledValue();
+    } else if (isa<InvokeInst>(IRInst)) {
+      V = cast<InvokeInst>(IRInst)->getCalledValue();
+    } else {
+      llvm_unreachable("IRInst is associated with a non-call/invoke inst.");
+    }
+
+    const Value* OV = nullptr;
+    if (isa<CallInst>(Other->getIRInst())) {
+      OV = cast<CallInst>(Other->getIRInst())->getCalledValue();
+    } else if (isa<InvokeInst>(Other->getIRInst())) {
+      OV = cast<InvokeInst>(Other->getIRInst())->getCalledValue();
+    } else {
+      llvm_unreachable("OtherIRInst is associated with a non-call/invoke inst.");
+    }
+
+    if (V->getType() != OV->getType()) // different types
+      return false;
+
+    const MDNode *CXXVirtualNode = IRInst->getMetadata("CXXVirtual");
+    const MDNode *OtherCXXVirtualNode = Other->getIRInst()->getMetadata("CXXVirtual");
+
+    // one is C++ virtual call while the other is not
+    if ((CXXVirtualNode && !OtherCXXVirtualNode) ||
+        (!CXXVirtualNode && OtherCXXVirtualNode))
+      return false;
+
+    // both are C++ virtual calls
+    if (CXXVirtualNode && OtherCXXVirtualNode) {
+      if (CXXVirtualNode->getNumOperands() != 1 ||
+          CXXVirtualNode->getNumOperands() != OtherCXXVirtualNode->getNumOperands())
+        return false;
+      V = CXXVirtualNode->getOperand(0);
+      OV = OtherCXXVirtualNode->getOperand(0);
+      if (!isa<MDString>(V) || !isa<MDString>(OV))
+        return false;
+
+      const MDString* MDS = cast<MDString>(V);
+      const MDString* OtherMDS = cast<MDString>(OV);
+      if (!MDS->getString().equals(OtherMDS->getString()))
+        return false;
+    }
+  }
+  
   return true;
 }
 
@@ -1679,6 +1732,8 @@ void MachineInstr::print(raw_ostream &OS, const TargetMachine *TM,
   }
 
   OS << '\n';
+  if (IRInst)
+    IRInst->print(OS);
 }
 
 bool MachineInstr::addRegisterKilled(unsigned IncomingReg,
