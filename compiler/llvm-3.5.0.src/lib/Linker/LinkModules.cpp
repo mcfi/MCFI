@@ -1256,8 +1256,10 @@ void ModuleLinker::linkNamedMDNodes() {
     if (&*I == SrcModFlags) continue;
     // MCFI-related metadata are handled separately.
     if (I->getName().equals("MCFICHA"))  continue;
-    if (I->getName().equals("MCFIDtor")) continue;
     if (I->getName().equals("MCFIPureVirt")) continue;
+    if (I->getName().equals("MCFIDtorCxaAtExit")) continue;
+    if (I->getName().equals("MCFIDtorCxaThrow")) continue;
+    if (I->getName().equals("MCFINoReturnFunctions")) continue;
     NamedMDNode *DestNMD = DstM->getOrInsertNamedMetadata(I->getName());
     // Add Src elements into Dest node.
     for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
@@ -1266,8 +1268,10 @@ void ModuleLinker::linkNamedMDNodes() {
   }
   // MCFI-related metadata
   linkMCFINamedMDNodes("MCFICHA");
-  linkMCFINamedMDNodes("MCFIDtor");
   linkMCFINamedMDNodes("MCFIPureVirt");
+  linkMCFINamedMDNodes("MCFIDtorCxaAtExit");
+  linkMCFINamedMDNodes("MCFIDtorCxaThrow");
+  linkMCFINamedMDNodes("MCFINoReturnFunctions");
 }
 
 /// linkModuleFlagsMetadata - Merge the linker flags in Src into the Dest

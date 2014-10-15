@@ -32,6 +32,7 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ValueHandle.h"
+#include <unordered_set>
 
 namespace llvm {
 class Module;
@@ -1038,7 +1039,8 @@ public:
   
   /// MCFI needs to know which destructors are registered to __cxa_atexit for
   /// connecting destructors
-  std::vector<std::string> DtorCxxAtExit;
+  std::unordered_set<std::string> DtorCxaAtExit;
+  std::unordered_set<std::string> DtorCxaThrow;
 
 private:
   llvm::GlobalValue *GetGlobalValue(StringRef Ref);

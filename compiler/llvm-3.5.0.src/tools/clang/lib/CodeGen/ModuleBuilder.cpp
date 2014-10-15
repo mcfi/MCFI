@@ -66,32 +66,19 @@ namespace {
     }
 
     llvm::Module *ReleaseModule() override {
-      if (!CHA.empty() && M) {
-        llvm::NamedMDNode* MDCHA = M->getOrInsertNamedMetadata("MCFICHA");
-        for (auto it = CHA.begin(); it != CHA.end(); it++) {
-          MDCHA->addOperand(llvm::MDNode::get(M->getContext(),
-                                              llvm::MDString::get(
-                                                M->getContext(), it->c_str())));
-        }
-      }
+      createMetadata(CHA, "MCFICHA");
+      createMetadata(MCFIPureVirt, "MCFIPureVirt");
+      createMetadata(Builder->DtorCxaAtExit, "MCFIDtorCxaAtExit");
+      createMetadata(Builder->DtorCxaThrow, "MCFIDtorCxaThrow");
 
-      if (!MCFIPureVirt.empty() && M) {
-        llvm::NamedMDNode* MDPV = M->getOrInsertNamedMetadata("MCFIPureVirt");
-        for (auto it = MCFIPureVirt.begin(); it != MCFIPureVirt.end(); it++) {
-          MDPV->addOperand(llvm::MDNode::get(M->getContext(),
-                                             llvm::MDString::get(
-                                               M->getContext(), it->c_str())));
+      if (M) {
+        std::unordered_set<std::string> NoReturnFunctions;
+        for (auto it = M->begin(); it != M->end(); it++) {
+          if (it->doesNotReturn() && it->hasName()) {
+            NoReturnFunctions.insert(it->getName().str());
+          }
         }
-      }
-
-      if (!Builder->DtorCxxAtExit.empty() && M) {
-        llvm::NamedMDNode* MDDtor = M->getOrInsertNamedMetadata("MCFIDtor");
-        for (auto it = Builder->DtorCxxAtExit.begin();
-             it != Builder->DtorCxxAtExit.end(); it++) {
-          MDDtor->addOperand(llvm::MDNode::get(M->getContext(),
-                                               llvm::MDString::get(
-                                                 M->getContext(), it->c_str())));
-        }
+        createMetadata(NoReturnFunctions, "MCFINoReturnFunctions");
       }
 
       return M.release();
@@ -227,6 +214,18 @@ namespace {
     std::vector<CXXMethodDecl *> DeferredInlineMethodDefinitions;
     std::unordered_set<std::string> MCFIPureVirt;
     std::unordered_set<std::string> CHA;
+
+    void createMetadata(const std::unordered_set<std::string>& MDSet,
+                        const std::string& Name) {
+      if (M && !MDSet.empty()) {
+        llvm::NamedMDNode* MD = M->getOrInsertNamedMetadata(Name);
+        for (auto it = std::begin(MDSet); it != std::end(MDSet); it++) {
+          MD->addOperand(llvm::MDNode::get(M->getContext(),
+                                           llvm::MDString::get(
+                                             M->getContext(), it->c_str())));
+        }
+      }
+    }
 
     void genClassHierarchyInfo(std::unordered_set<std::string>& CHA,
                                std::unordered_set<std::string>& MCFIPureVirt,

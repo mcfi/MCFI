@@ -1798,7 +1798,7 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
     handle
   };
   CGF.EmitNounwindRuntimeCall(atexit, args);
-  CGF.CGM.DtorCxxAtExit.push_back(dtor->getName().str());
+  CGF.CGM.DtorCxaAtExit.insert(dtor->getName().str());
 }
 
 /// Register a global destructor as best as we know how.
