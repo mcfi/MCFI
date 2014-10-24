@@ -3906,6 +3906,39 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                                                   true))))
     CmdArgs.push_back("-fms-compatibility");
 
+  // fmcfi-sandbox=small is default
+  if (Args.hasArg(options::OPT_fmcfi_sandbox)) {
+    const Arg *MCFISBSize = Args.getLastArg(options::OPT_fmcfi_sandbox);
+    std::string SBSz;
+
+    if (MCFISBSize)
+      SBSz = MCFISBSize->getValue();
+
+    if (!SBSz.empty()) {
+      if (SBSz != "small" && SBSz != "large")
+        D.Diag(diag::err_drv_invalid_value)
+          << SBSz << "small or large";
+      CmdArgs.push_back(Args.MakeArgString("-fmcfi-sandbox=" + SBSz));
+    } else
+      CmdArgs.push_back("-fmcfi-sandbox=small");
+  }
+
+  // fmcfi-id=small is default
+  if (Args.hasArg(options::OPT_fmcfi_id)) {
+    const Arg *MCFIIDBits = Args.getLastArg(options::OPT_fmcfi_id);
+    std::string IDBits;
+    if (MCFIIDBits)
+      IDBits = MCFIIDBits->getValue();
+
+    if (!IDBits.empty()) {
+      if (IDBits != "small" && IDBits != "large")
+        D.Diag(diag::err_drv_invalid_value)
+          << IDBits << "small or large";
+      CmdArgs.push_back(Args.MakeArgString("-fmcfi-id=" + IDBits));
+    } else
+      CmdArgs.push_back("-fmcfi-id=small");
+  }
+
   // -fms-compatibility-version=17.00 is default.
   if (Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
                    IsWindowsMSVC) || Args.hasArg(options::OPT_fmsc_version) ||

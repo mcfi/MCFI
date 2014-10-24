@@ -479,7 +479,7 @@ namespace {
     void linkGlobalInits();
     void linkFunctionBody(Function *Dst, Function *Src);
     void linkAliasBodies();
-    void linkNamedMDNodes();
+    bool linkNamedMDNodes();
     void linkMCFINamedMDNodes(const StringRef&);
   };
 }
@@ -1248,7 +1248,7 @@ void ModuleLinker::linkMCFINamedMDNodes(const StringRef& NamedMDNodeName) {
 
 /// linkNamedMDNodes - Insert all of the named MDNodes in Src into the Dest
 /// module.
-void ModuleLinker::linkNamedMDNodes() {
+bool ModuleLinker::linkNamedMDNodes() {
   const NamedMDNode *SrcModFlags = SrcM->getModuleFlagsMetadata();
   for (Module::const_named_metadata_iterator I = SrcM->named_metadata_begin(),
        E = SrcM->named_metadata_end(); I != E; ++I) {
@@ -1260,6 +1260,8 @@ void ModuleLinker::linkNamedMDNodes() {
     if (I->getName().equals("MCFIDtorCxaAtExit")) continue;
     if (I->getName().equals("MCFIDtorCxaThrow")) continue;
     if (I->getName().equals("MCFINoReturnFunctions")) continue;
+    if (I->getName().equals("MCFILargeSandbox")) continue;
+    if (I->getName().equals("MCFILargeID")) continue; 
     NamedMDNode *DestNMD = DstM->getOrInsertNamedMetadata(I->getName());
     // Add Src elements into Dest node.
     for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
@@ -1272,6 +1274,19 @@ void ModuleLinker::linkNamedMDNodes() {
   linkMCFINamedMDNodes("MCFIDtorCxaAtExit");
   linkMCFINamedMDNodes("MCFIDtorCxaThrow");
   linkMCFINamedMDNodes("MCFINoReturnFunctions");
+  if ((SrcM->getNamedMetadata("MCFILargeSandbox") &&
+       !DstM->getNamedMetadata("MCFILargeSandbox")) ||
+      (!SrcM->getNamedMetadata("MCFILargeSandbox") &&
+       DstM->getNamedMetadata("MCFILargeSandbox"))) {
+    return emitError("Linking two different MCFI sandbox modes.");
+  }
+  if ((SrcM->getNamedMetadata("MCFILargeID") &&
+       !DstM->getNamedMetadata("MCFILargeID")) ||
+      (!SrcM->getNamedMetadata("MCFILargeID") &&
+       DstM->getNamedMetadata("MCFILargeID"))) {
+    return emitError("Linking two different MCFI ID bit-lengths.");
+  }
+  return false;
 }
 
 /// linkModuleFlagsMetadata - Merge the linker flags in Src into the Dest
@@ -1544,7 +1559,8 @@ bool ModuleLinker::run() {
   // Remap all of the named MDNodes in Src into the DstM module. We do this
   // after linking GlobalValues so that MDNodes that reference GlobalValues
   // are properly remapped.
-  linkNamedMDNodes();
+  if (linkNamedMDNodes())
+    return true;
 
   // Merge the module flags into the DstM module.
   if (linkModuleFlagsMetadata())

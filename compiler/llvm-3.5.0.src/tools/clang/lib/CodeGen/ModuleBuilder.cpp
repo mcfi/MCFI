@@ -81,6 +81,11 @@ namespace {
         createMetadata(NoReturnFunctions, "MCFINoReturnFunctions");
       }
 
+      if (!CodeGenOpts.MCFISmallSandbox)
+        assert(M->getOrInsertNamedMetadata("MCFILargeSandbox"));
+      if (!CodeGenOpts.MCFISmallID)
+        assert(M->getOrInsertNamedMetadata("MCFILargeID"));
+
       return M.release();
     }
 

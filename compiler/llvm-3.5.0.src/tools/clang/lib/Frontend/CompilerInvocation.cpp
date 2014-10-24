@@ -337,6 +337,10 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
         << Args.getLastArg(OPT_O)->getAsString(Args) << "-O" << MaxOptLevel;
     Opts.OptimizationLevel = MaxOptLevel;
   }
+  if (Args.hasArg(OPT_fmcfi_sandbox))
+    Opts.MCFISmallSandbox = Args.getLastArgValue(OPT_fmcfi_sandbox).equals("small");
+  if (Args.hasArg(OPT_fmcfi_id))
+    Opts.MCFISmallID = Args.getLastArgValue(OPT_fmcfi_id).equals("small");
 
   // We must always run at least the always inlining pass.
   Opts.setInlining(

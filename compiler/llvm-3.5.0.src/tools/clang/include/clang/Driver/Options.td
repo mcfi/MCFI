@@ -600,6 +600,14 @@ def fms_compatibility_version
       HelpText<"Dot-separated value representing the Microsoft compiler "
                "version number to report in _MSC_VER (0 = don't define it "
                "(default))">;
+
+def fmcfi_sandbox : Joined<["-"], "fmcfi-sandbox=">, Group<f_Group>, Flags<[CC1Option,
+CoreOption]>, HelpText<"MCFI sandbox size, small (4GB, default) or large (32TB)">,
+MetaVarName<"[small | large]">;
+
+def fmcfi_id : Joined<["-"], "fmcfi-id=">, Group<f_Group>, Flags<[CC1Option,
+CoreOption]>, HelpText<"MCFI equivalence class ID size in bits, small (32, default) or large (64). 32-bit ID supports up to 2^14 equivalence classes, while 64-bit ID supports up to 2^28 equivalence classes.">, MetaVarName<"[small | large]">;
+
 def fdelayed_template_parsing : Flag<["-"], "fdelayed-template-parsing">, Group<f_Group>,
   HelpText<"Parse templated function definitions at the end of the "
            "translation unit">,  Flags<[CC1Option]>;
@@ -1718,7 +1726,6 @@ defm sign_zero : BooleanFFlag<"sign-zero">, Group<gfortran_Group>;
 defm stack_arrays : BooleanFFlag<"stack-arrays">, Group<gfortran_Group>;
 defm underscoring : BooleanFFlag<"underscoring">, Group<gfortran_Group>;
 defm whole_file : BooleanFFlag<"whole-file">, Group<gfortran_Group>;
-
 
 include "CC1Options.td"
 
