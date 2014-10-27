@@ -320,6 +320,12 @@ protected:
     return false;
   }
 
+  /// addMCFIPass - This pass may be implemented by targets that want to emit
+  /// MCFI instrumented programs.
+  virtual bool addMCFIPass() {
+    return false;
+  }
+  
   /// Utilities for targets to add passes to the pass manager.
   ///
 

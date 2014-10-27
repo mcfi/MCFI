@@ -561,6 +561,9 @@ void TargetPassConfig::addMachinePasses() {
   if (addPreEmitPass())
     printAndVerify("After PreEmit passes");
 
+  if (addMCFIPass())
+    printAndVerify("After MCFI Pass");
+  
   addPass(&StackMapLivenessID);
 }
 

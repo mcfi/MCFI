@@ -77,6 +77,9 @@ FunctionPass *createX86PadShortFunctions();
 /// to eliminate execution delays in some Atom processors.
 FunctionPass *createX86FixupLEAs();
 
+/// createMCFIInstrumentation - Returns a pass that instruments the
+/// machine code with MCFI
+FunctionPass *createX86MCFIInstrumentation();
 } // End llvm namespace
 
 #endif
