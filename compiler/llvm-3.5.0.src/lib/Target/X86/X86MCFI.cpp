@@ -17,6 +17,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -44,7 +45,7 @@ struct MCFI : public MachineFunctionPass {
   static char ID;
   MCFI() : MachineFunctionPass(ID) { }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
+    AU.setPreservesAll();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
@@ -237,7 +238,7 @@ void MCFI::MCFIx64IDVersionCheck(MachineFunction &MF,
   } else {
     BIDReg = getX86SubSuperRegister(BIDReg, MVT::i32, true);
     TIDReg = getX86SubSuperRegister(TIDReg, MVT::i32, true);
-    CmpOp = X86::CMP32rr;    
+    CmpOp = X86::CMP32rr;
   }
 
   // cmp BIDReg, TIDReg
@@ -289,7 +290,7 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
   IDCmpMBB = MF.CreateMachineBasicBlock();
   MBBI = MBB;
   MF.insert(++MBBI, IDCmpMBB); // original MBB to ICCmpMBB, fallthrough
-  MBB->addSuccessor(IDCmpMBB);
+  
   MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TargetReg, SmallID); // fill the IDCmp block
   
   ICJMBB = MF.CreateMachineBasicBlock();
@@ -320,6 +321,12 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
   VerCheckMBB->addSuccessor(IDCmpMBB);
   VerCheckMBB->addSuccessor(ReportMBB);
 
+  // transfer MBB's current successor to ICJMBB
+  ICJMBB->transferSuccessors(MBB);
+
+  // now MBB should be followed by IDCmpMBB
+  MBB->addSuccessor(IDCmpMBB);
+  
   MachineInstrBuilder(MF, &IDCmpMBB->instr_back()).addMBB(IDValidityCheckMBB);
   MachineInstrBuilder(MF, &IDValidityCheckMBB->instr_back()).addMBB(ReportMBB);
   MachineInstrBuilder(MF, &VerCheckMBB->instr_back()).addMBB(IDCmpMBB);
@@ -380,46 +387,78 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   DebugLoc DL = MI->getDebugLoc();
 
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-  const TargetRegisterInfo* TRI = MF.getTarget().getRegisterInfo();
 
   // MCFI needs three scratch registers.
   std::set<unsigned> ScratchRegs = {
-    X86::RAX, X86::RCX, X86::RDX, X86::RDI, X86::RSI, X86::R8,
-    X86::R9, X86::R10};
+    X86::RAX, X86::RCX, X86::RDX, X86::RDI,
+    X86::RSI, X86::R8, X86::R9, X86::R10};
 
-  for (auto reg64 : ScratchRegs) {
-    const unsigned reg32 = getX86SubSuperRegister(reg64, MVT::i32, true);
-    const unsigned reg16 = getX86SubSuperRegister(reg64, MVT::i16, true);
-    const unsigned reg8  = getX86SubSuperRegister(reg64, MVT::i8, false);
-
-    // FIXME: computeRegisterLiveness seems to differentiate registers
-    // and subregisters, so we need a better way to compute this.
-    // Performance should be okay.
-    if (MachineBasicBlock::LQR_Dead !=
-        MBB->computeRegisterLiveness(TRI, reg64, MI, 100) ||
-        MachineBasicBlock::LQR_Dead !=
-        MBB->computeRegisterLiveness(TRI, reg32, MI, 100) ||
-        MachineBasicBlock::LQR_Dead !=
-        MBB->computeRegisterLiveness(TRI, reg16, MI, 100) ||
-        MachineBasicBlock::LQR_Dead !=
-        MBB->computeRegisterLiveness(TRI, reg8,  MI, 100)) {
-      ScratchRegs.erase(reg64);
+  for (auto it = MI->operands_begin(); it != MI->operands_end(); it++) {
+    if (it->isReg() && it->isUse() && it->getReg() != X86::RIP && (
+          X86::GR32RegClass.contains(it->getReg()) ||
+          X86::GR64RegClass.contains(it->getReg()) ||
+          X86::GR8RegClass.contains(it->getReg()))) {
+      ScratchRegs.erase(getX86SubSuperRegister(it->getReg(), MVT::i64, true));
     }
   }
+
   // R11 must be available even if no other GRegs are available
   ScratchRegs.insert(X86::R11);
 
   unsigned TargetReg;
   if (MI->getOpcode() == X86::JMP64r || MI->getOpcode() == X86::CALL64r) {
     TargetReg = MI->getOperand(0).getReg();
+    // search back the basic block and its predecessor to see if TargetReg
+    // is defined in this basic block. If negative, then we sandbox it.
+    bool DefFound = false;
+    MachineBasicBlock *DefMBB = MBB;
+    auto RIT = MBB->instr_rbegin(); // points to MI;
+    const TargetRegisterInfo *TRI = MF.getTarget().getRegisterInfo();
+    for (++RIT; RIT != MBB->instr_rend(); RIT++) {
+      if (RIT->definesRegister(TargetReg, TRI)) {
+        DefFound = true;
+        break;
+      }
+    }
+    if (!DefFound && MBB->pred_size() == 1) {
+      // often the definition of the target register is in MBB's previous
+      // BB for implementing if (target != 0) *target;
+      DefMBB = *MBB->pred_begin();
+      for (RIT = DefMBB->instr_rbegin(); RIT != DefMBB->instr_rend(); RIT++) {
+        if (RIT->definesRegister(TargetReg, TRI)) {
+          DefFound = true;
+          break;
+        }
+      }
+    }
+    if (DefFound) {
+      MachineBasicBlock::iterator DefI(*RIT);
+      if (DefI->getOpcode() == X86::MOV64rm) {
+        auto &MIB = BuildMI(*DefMBB, DefI, DL, TII->get(X86::MOV32rm))
+          .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Define);
+        for (auto idx = 1; idx < 6; idx++) // 5 machineoperands
+          MIB.addOperand(DefI->getOperand(idx));
+        DefMBB->erase(DefI);
+      } else {
+        DefFound = false; // be safe!
+      }
+    }
+
+    if (!DefFound) {
+      BuildMI(*MBB, MI, DL, TII->get(X86::MOV32rr))
+        .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Define)
+        .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Undef);
+    }
   } else { // JMP64m or CALL64m
     TargetReg = *ScratchRegs.begin();
     ScratchRegs.erase(TargetReg);
     // mov MemOperand, TargetReg
-    /*auto &MIB = BuildMI(*MBB, MI, DL, TII->get(X86::MOV32rm))
-      .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Define);*/
+    auto &MIB = BuildMI(*MBB, MI, DL, TII->get(X86::MOV32rm))
+      .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Define);
+    /* testing-use
     auto &MIB = BuildMI(*MBB, MI, DL, TII->get(X86::MOV64rm))
       .addReg(TargetReg, RegState::Define);
+    */
     for (auto idx = 0; idx < 5; idx++) // a memory operand consists of 5 machineoperands
       MIB.addOperand(MI->getOperand(idx));
   }

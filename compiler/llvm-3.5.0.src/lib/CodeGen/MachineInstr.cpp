@@ -1732,8 +1732,10 @@ void MachineInstr::print(raw_ostream &OS, const TargetMachine *TM,
   }
 
   OS << '\n';
-  if (IRInst)
+  if (IRInst) {
     IRInst->print(OS);
+    OS << '\n';
+  }
 }
 
 bool MachineInstr::addRegisterKilled(unsigned IncomingReg,
