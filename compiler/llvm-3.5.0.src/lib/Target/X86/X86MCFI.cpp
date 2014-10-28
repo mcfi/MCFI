@@ -56,8 +56,27 @@ private:
 
   // 64-bit
   bool MCFIx64(MachineFunction &MF);  // standard AMD64, LP64
+  void MCFIx64MBBs(MachineFunction &MF,
+                   MachineBasicBlock *MBB,
+                   const unsigned BIDReg,
+                   const unsigned TIDReg,
+                   const unsigned TargetReg,
+                   MachineBasicBlock *&IDCmpMBB,
+                   MachineBasicBlock *&ICJMBB,
+                   const unsigned CJOp,
+                   MachineBasicBlock *&IDValidityCheckMBB,
+                   MachineBasicBlock *&VerCheckMBB,
+                   MachineBasicBlock *&ReportMBB,
+                   bool SmallID);
+
   void MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
                   MachineBasicBlock::iterator &MI, bool SmallID);
+  void MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
+                           MachineBasicBlock::iterator &MI, bool SmallID);
+  void MCFIx64IndirectMemWrite(MachineFunction &MF, MachineBasicBlock *MBB,
+                               MachineBasicBlock::iterator &MI, bool SmallID);
+  void MCFIx64StackPointer(MachineFunction &MF, MachineBasicBlock *MBB,
+                           MachineBasicBlock::iterator &MI);
 
   void MCFIx64ICF(MachineFunction &MF, MachineBasicBlock *MBB,
                   MachineInstr *MI, bool SmallSandbox, bool SmallID);
@@ -68,9 +87,10 @@ private:
                     const unsigned TargetReg,
                     bool SmallID);
 
-  void MCFIx64IJmp(MachineFunction &MF,
-                                 MachineBasicBlock *MBB,
-                                 const unsigned TargetReg);
+  void MCFIx64ICJ(MachineFunction &MF,
+                  MachineBasicBlock *MBB,
+                  const unsigned CJOp,
+                  const unsigned TargetReg);
   
   void MCFIx64IDValidityCheck(MachineFunction &MF,
                               MachineBasicBlock *MBB,
@@ -148,15 +168,15 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
   BuildMI(*MBB, I, DL, TII->get(X86::JNE_4));
 }
 
-void MCFI::MCFIx64IJmp(MachineFunction &MF, MachineBasicBlock* MBB,
-                       const unsigned TargetReg) {
+void MCFI::MCFIx64ICJ(MachineFunction &MF, MachineBasicBlock* MBB,
+                      const unsigned CJOp, const unsigned TargetReg) {
   DebugLoc DL;
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
 
   MBB->addLiveIn(TargetReg);
   
   auto I = std::begin(*MBB);
-  BuildMI(*MBB, I, DL, TII->get(X86::JMP64r)).addReg(TargetReg);
+  BuildMI(*MBB, I, DL, TII->get(CJOp)).addReg(TargetReg);
 }
 
 void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
@@ -252,16 +272,66 @@ void MCFI::MCFIx64Report(MachineFunction &MF,
   BuildMI(*MBB, I, DL, TII->get(X86::HLT));
 }
 
+void MCFI::MCFIx64MBBs(MachineFunction &MF,
+                       MachineBasicBlock *MBB,
+                       const unsigned BIDReg,
+                       const unsigned TIDReg,
+                       const unsigned TargetReg,
+                       MachineBasicBlock *&IDCmpMBB,
+                       MachineBasicBlock *&ICJMBB,
+                       const unsigned CJOp,
+                       MachineBasicBlock *&IDValidityCheckMBB,
+                       MachineBasicBlock *&VerCheckMBB,
+                       MachineBasicBlock *&ReportMBB,
+                       bool SmallID) {
+  MachineFunction::iterator MBBI;
+  
+  IDCmpMBB = MF.CreateMachineBasicBlock();
+  MBBI = MBB;
+  MF.insert(++MBBI, IDCmpMBB); // original MBB to ICCmpMBB, fallthrough
+  MBB->addSuccessor(IDCmpMBB);
+  MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TargetReg, SmallID); // fill the IDCmp block
+  
+  ICJMBB = MF.CreateMachineBasicBlock();
+  MBBI = IDCmpMBB;
+  MF.insert(++MBBI, ICJMBB); // fall through ICJMBB
+  IDCmpMBB->addSuccessor(ICJMBB);
+  MCFIx64ICJ(MF, ICJMBB, CJOp, TargetReg); // fill ICJMBB
+  
+  IDValidityCheckMBB = MF.CreateMachineBasicBlock();
+  MF.push_back(IDValidityCheckMBB);
+  MCFIx64IDValidityCheck(MF, IDValidityCheckMBB, BIDReg,
+                         TIDReg, TargetReg, SmallID); // fill IDValCheck MBB
+  
+  IDCmpMBB->addSuccessor(IDValidityCheckMBB, UINT_MAX); // as far as possible
+
+  VerCheckMBB = MF.CreateMachineBasicBlock();
+  MF.push_back(VerCheckMBB);
+  MCFIx64IDVersionCheck(MF, VerCheckMBB, BIDReg, TIDReg, SmallID); // fill VerCheckMBB
+
+  ReportMBB = MF.CreateMachineBasicBlock();
+  MBBI = VerCheckMBB;
+  MF.insert(++MBBI, ReportMBB);
+  MCFIx64Report(MF, ReportMBB, IDCmpMBB, TargetReg); // fill report MBB
+  
+  IDValidityCheckMBB->addSuccessor(VerCheckMBB);
+  IDValidityCheckMBB->addSuccessor(ReportMBB);
+
+  VerCheckMBB->addSuccessor(IDCmpMBB);
+  VerCheckMBB->addSuccessor(ReportMBB);
+
+  MachineInstrBuilder(MF, &IDCmpMBB->instr_back()).addMBB(IDValidityCheckMBB);
+  MachineInstrBuilder(MF, &IDValidityCheckMBB->instr_back()).addMBB(ReportMBB);
+  MachineInstrBuilder(MF, &VerCheckMBB->instr_back()).addMBB(IDCmpMBB);
+}
+
 void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
                       MachineBasicBlock::iterator &MI, bool SmallID) {
   ++NumReturns;
-  MachineFunction::iterator MBBI;
- 
+
   DebugLoc DL = MI->getDebugLoc();
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-  // remove the return instruction
-  MI = MBB->erase(MI); // MI points std::end(MBB)
-  
+
   const unsigned BIDReg = X86::RDI;
   const unsigned TIDReg = X86::RSI;
   const unsigned TargetReg = X86::RCX;
@@ -276,45 +346,137 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
     .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Undef)
     .addReg(TargetReg, RegState::ImplicitDefine);
 
-  MachineBasicBlock* IDCmpMBB = MF.CreateMachineBasicBlock();
-  MBBI = MBB;
-  MF.insert(++MBBI, IDCmpMBB); // original MBB to ICCmpMBB, fallthrough
-  MBB->addSuccessor(IDCmpMBB);
-  MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TargetReg, SmallID); // fill the IDCmp block
-  
-  MachineBasicBlock* IJmpMBB = MF.CreateMachineBasicBlock();
-  MBBI = IDCmpMBB;
-  MF.insert(++MBBI, IJmpMBB); // fall through IJmpMBB
-  IDCmpMBB->addSuccessor(IJmpMBB);
-  MCFIx64IJmp(MF, IJmpMBB, TargetReg); // fill IJmpMBB
-  
-  MachineBasicBlock* IDValidityCheckMBB = MF.CreateMachineBasicBlock();
-  MF.push_back(IDValidityCheckMBB);
-  MCFIx64IDValidityCheck(MF, IDValidityCheckMBB, BIDReg,
-                         TIDReg, TargetReg, SmallID); // fill IDValCheck MBB
-  
-  IDCmpMBB->addSuccessor(IDValidityCheckMBB, UINT_MAX); // as far as possible :)
+  // remove the return instruction
+  MI = MBB->erase(MI); // MI points std::end(MBB)
 
-  MachineBasicBlock* VerCheckMBB = MF.CreateMachineBasicBlock();
-  MF.push_back(VerCheckMBB);
-  MCFIx64IDVersionCheck(MF, VerCheckMBB, BIDReg, TIDReg, SmallID); // fill VerCheckMBB
+  MachineBasicBlock *IDCmpMBB, *ICJMBB,
+    *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
-  MachineBasicBlock* ReportMBB = MF.CreateMachineBasicBlock();
-  MBBI = VerCheckMBB;
-  MF.insert(++MBBI, ReportMBB);
-  MCFIx64Report(MF, ReportMBB, IDCmpMBB, TargetReg); // fill report MBB
-  
-  IDValidityCheckMBB->addSuccessor(VerCheckMBB);
-  IDValidityCheckMBB->addSuccessor(ReportMBB);
+  MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, X86::JMP64r,
+              IDValidityCheckMBB, VerCheckMBB, ReportMBB, SmallID);
+}
 
-  VerCheckMBB->addSuccessor(IDCmpMBB);
-  VerCheckMBB->addSuccessor(ReportMBB);
+// get a general register that is neither Reg1 nor Reg2
+static unsigned getX64ScratchReg(const unsigned Reg1, const unsigned Reg2) {
+  static const std::set<unsigned> GRegs = {
+    X86::RAX, X86::RBX, X86::RCX, X86::RDX, X86::RDI, X86::RSI, X86::R8,
+    X86::R9, X86::R10, X86::R11, X86::R12, X86::R13, X86::R14, X86::R15
+  };
+  for (auto reg : GRegs)
+    if (Reg1 != reg && Reg2 != reg)
+      return reg;
+  llvm_unreachable("getX64ScratchReg does not find scratch registers.");
+}
 
-  MachineInstrBuilder(MF, &IDCmpMBB->back()).addMBB(IDValidityCheckMBB);
-  MachineInstrBuilder(MF, &IDValidityCheckMBB->back()).addMBB(VerCheckMBB);
-  MachineInstrBuilder(MF, &VerCheckMBB->back()).addMBB(IDCmpMBB);
+void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
+                               MachineBasicBlock::iterator &MI, bool SmallID) {
+  ++NumIndirectCall;
+  MachineFunction::iterator MBBI;
+  const Instruction* I = MI->getIRInst();
+  const unsigned CJOp =
+    (MI->getOpcode() == X86::CALL64r ||
+     MI->getOpcode() == X86::CALL64m) ? X86::CALL64r : X86::JMP64r;
 
-  MF.dump();
+  DebugLoc DL = MI->getDebugLoc();
+
+  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+  const TargetRegisterInfo* TRI = MF.getTarget().getRegisterInfo();
+
+  // MCFI needs three scratch registers.
+  std::set<unsigned> ScratchRegs = {
+    X86::RAX, X86::RCX, X86::RDX, X86::RDI, X86::RSI, X86::R8,
+    X86::R9, X86::R10};
+
+  for (auto reg64 : ScratchRegs) {
+    const unsigned reg32 = getX86SubSuperRegister(reg64, MVT::i32, true);
+    const unsigned reg16 = getX86SubSuperRegister(reg64, MVT::i16, true);
+    const unsigned reg8  = getX86SubSuperRegister(reg64, MVT::i8, false);
+
+    // FIXME: computeRegisterLiveness seems to differentiate registers
+    // and subregisters, so we need a better way to compute this.
+    // Performance should be okay.
+    if (MachineBasicBlock::LQR_Dead !=
+        MBB->computeRegisterLiveness(TRI, reg64, MI, 100) ||
+        MachineBasicBlock::LQR_Dead !=
+        MBB->computeRegisterLiveness(TRI, reg32, MI, 100) ||
+        MachineBasicBlock::LQR_Dead !=
+        MBB->computeRegisterLiveness(TRI, reg16, MI, 100) ||
+        MachineBasicBlock::LQR_Dead !=
+        MBB->computeRegisterLiveness(TRI, reg8,  MI, 100)) {
+      ScratchRegs.erase(reg64);
+    }
+  }
+  // R11 must be available even if no other GRegs are available
+  ScratchRegs.insert(X86::R11);
+
+  unsigned TargetReg;
+  if (MI->getOpcode() == X86::JMP64r || MI->getOpcode() == X86::CALL64r) {
+    TargetReg = MI->getOperand(0).getReg();
+  } else { // JMP64m or CALL64m
+    TargetReg = *ScratchRegs.begin();
+    ScratchRegs.erase(TargetReg);
+    // mov MemOperand, TargetReg
+    /*auto &MIB = BuildMI(*MBB, MI, DL, TII->get(X86::MOV32rm))
+      .addReg(getX86SubSuperRegister(TargetReg, MVT::i32, true), RegState::Define);*/
+    auto &MIB = BuildMI(*MBB, MI, DL, TII->get(X86::MOV64rm))
+      .addReg(TargetReg, RegState::Define);
+    for (auto idx = 0; idx < 5; idx++) // a memory operand consists of 5 machineoperands
+      MIB.addOperand(MI->getOperand(idx));
+  }
+  // remove IBMI
+  MI = MBB->erase(MI);
+
+  unsigned BIDRegXMM = 0;
+  unsigned TIDRegXMM = 0;
+  unsigned BIDReg;
+  unsigned TIDReg;
+
+  if (ScratchRegs.size() >= 2) {
+    BIDReg = *ScratchRegs.begin();
+    ScratchRegs.erase(BIDReg);
+    TIDReg = *ScratchRegs.begin();
+  } else if (ScratchRegs.size() == 1) {
+    BIDReg = *ScratchRegs.begin();
+    TIDReg = getX64ScratchReg(TargetReg, BIDReg);
+    TIDRegXMM = X86::XMM15;
+  } else { // no scratch register at all!!
+    BIDReg = getX64ScratchReg(TargetReg, TargetReg);
+    BIDRegXMM = X86::XMM14;
+    TIDReg = getX64ScratchReg(TargetReg, BIDReg);
+    TIDRegXMM = X86::XMM15;
+  }
+  // build the MCFI basic blocks
+  MachineBasicBlock *IDCmpMBB, *ICJMBB,
+    *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
+
+  MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, CJOp,
+              IDValidityCheckMBB, VerCheckMBB, ReportMBB, SmallID);
+
+  if (BIDRegXMM) {
+    BuildMI(*MBB, MI, DL, TII->get(X86::MOV64toPQIrr))
+      .addReg(BIDRegXMM, RegState::Define).addReg(BIDReg);
+    BuildMI(*ICJMBB, std::begin(*ICJMBB), DL, TII->get(X86::MOVPQIto64rr))
+      .addReg(BIDReg, RegState::Define).addReg(BIDRegXMM);
+  }
+
+  if (TIDRegXMM) {
+    BuildMI(*IDValidityCheckMBB, std::begin(*IDValidityCheckMBB),
+            DL, TII->get(X86::MOV64toPQIrr))
+      .addReg(TIDRegXMM, RegState::Define).addReg(TIDReg);
+    BuildMI(*ICJMBB, std::begin(*ICJMBB), DL, TII->get(X86::MOVPQIto64rr))
+      .addReg(TIDReg, RegState::Define).addReg(TIDRegXMM);
+  }
+
+  IDCmpMBB->instr_front().setIRInst(I); // transfer the IR to the BID read instruction.
+}
+
+void MCFI::MCFIx64IndirectMemWrite(MachineFunction &MF, MachineBasicBlock *MBB,
+                                   MachineBasicBlock::iterator &MI, bool SmallID) {
+  ++NumIndirectMemWrite;
+}
+
+void MCFI::MCFIx64StackPointer(MachineFunction &MF, MachineBasicBlock *MBB,
+                               MachineBasicBlock::iterator &MI) {
 }
 
 bool MCFI::MCFIx64(MachineFunction &MF) {
@@ -328,11 +490,37 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
     for (auto MI = std::begin(*MBB); MI != std::end(*MBB); MI++) {
       if (MI->getOpcode() == X86::RETQ) { // return instruction
         MCFIx64Ret(MF, MBB, MI, SmallID);
-        break;
-      } else if (MI->getIRInst()) { // indirect branch
+      } else if (MI->getIRInst()) {
+        const unsigned op = MI->getOpcode();
+        switch (op) {
+        case X86::CALL64m:
+        case X86::CALL64r:
+        {
+          MachineBasicBlock::iterator tmpMI = MI;
+          if (++tmpMI != std::end(*MBB)) {
+            // split the current basic block into two and make the CALL64[rm]
+            // instruction a terminator of MBB
+            MachineBasicBlock* newMBB = MF.CreateMachineBasicBlock();
+            MachineFunction::iterator MBBI = MBB;
+            MF.insert(++MBBI, newMBB);
+            newMBB->transferSuccessors(MBB);
+            MBB->addSuccessor(newMBB);
+            newMBB->splice(std::begin(*newMBB), MBB, tmpMI, std::end(*MBB));
+          }
+        }
+        case X86::JMP64m:
+        case X86::JMP64r:
+        {
+          MCFIx64IndirectCall(MF, MBB, MI, SmallID);
+          break;
+        }
+        }
       } else if (MI->mayStore() && !MI->memoperands_empty()) { // indirect memory write
-      } else if (MI->modifiesRegister(X86::RSP, TRI)) { // RSP register modification
-      } else {} // do nothing
+        MCFIx64IndirectMemWrite(MF, MBB, MI, SmallSandbox);
+      } else if (MI->definesRegister(X86::RSP, TRI)) { // RSP register modification
+        MCFIx64StackPointer(MF, MBB, MI);
+      }
+      if (MI == std::end(*MBB)) break;
     }
   }
   return false;
