@@ -920,11 +920,13 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     return;
 
   // MCFI requires each call instruction to be 4/8-byte aligned
+  case X86::CALLpcrel32:
   case X86::CALL64pcrel32:
   {
     if (isNoReturnFunction(MI->getOperand(0)))
       break;
   }
+  case X86::CALL32r:
   case X86::CALL64r:
   {
     MCSymbol *CallBeginSym =
@@ -940,6 +942,33 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   EmitToStreamer(OutStreamer, TmpInst);
 
   switch (MI->getOpcode()) {
+    // MCFI instrumentation completeness validation
+  case X86::RETW:
+  case X86::RETL:
+  case X86::RETQ:
+  case X86::TAILJMPm:
+  case X86::TAILJMPm64:
+  case X86::CALL32m:    
+  case X86::CALL64m:
+  {
+    llvm_unreachable(
+      "BUG: MCFI instrumentation for indirect branches is not complete!");
+  }
+  case X86::JMP32m:
+  case X86::JMP64m:
+  {
+    // must be a jump through a jump-table.
+    assert(MI->getOperand(3).isJTI());
+    break;
+  }
+  case X86::JMP32r:
+  case X86::JMP64r:
+  case X86::TAILJMPr:
+  case X86::TAILJMPr64:
+  {
+    assert(MI->hasBarySlot());
+    break;
+  }
     // MCFI BID read
   case X86::MOV32rm:
   case X86::MOV64rm:
@@ -950,25 +979,50 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
       const unsigned MCFIID = MI->getOperand(4).getImm();
       MCSymbol *MCFIIDSym = 
         OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
-                                     + StringRef("_mcfi_ib_") + std::to_string(MCFIID));
+                                     + StringRef("_mcfi_bary_") + std::to_string(MCFIID));
       OutStreamer.EmitLabel(MCFIIDSym);
     }
     break;
   }
-  
+
+  case X86::CALLpcrel32:
   case X86::CALL64pcrel32:
   {
     if (isNoReturnFunction(MI->getOperand(0)))
       break;
   }
+  case X86::CALL32r:
   case X86::CALL64r:
   {
     MCSymbol *CallEndSym =
-      OutContext.GetOrCreateSymbol(StringRef(
-                                     OutContext.CreateTempSymbol()->getName().str()
-                                     + std::string("_mcfi_callend")));
+      OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
+                                   + StringRef("_mcfi_callend"));
     OutStreamer.EmitValueToAlignment(SmallID ? 4 : 8, 0x90);
     OutStreamer.EmitLabel(CallEndSym);
+    if (MI->getOpcode() == X86::CALL64r ||
+        MI->getOpcode() == X86::CALL32r) {
+      assert(MI->hasBarySlot());
+      MCSymbol *RetAddrSym =
+        OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName().str()
+                                     + StringRef("_mcfi_icj_") +
+                                     std::to_string(MI->getBarySlot()));
+      OutStreamer.EmitLabel(RetAddrSym);
+    } else {
+      assert(MI->getOpcode() == X86::CALL64pcrel32 ||
+             MI->getOpcode() == X86::CALLpcrel32);
+      StringRef FuncName;
+      const MachineOperand &MO = MI->getOperand(0);
+      if (MO.isSymbol()) {
+        FuncName = MO.getSymbolName();
+      } else if (MO.isGlobal()) {
+        FuncName = MO.getGlobal()->getName();
+      }
+      assert(!FuncName.empty());
+      MCSymbol *RetAddrSym =
+        OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName().str()
+                                     + StringRef("_mcfi_dcj_") + FuncName);
+      OutStreamer.EmitLabel(RetAddrSym);
+    }
   }
   }
 }
@@ -978,8 +1032,7 @@ void X86AsmPrinter::EmitMCFIPadding(const MachineInstr *MI) {
   case X86::CALLpcrel32:
   case X86::CALL64pcrel32:
   {
-    const MachineOperand &MO = MI->getOperand(0);
-    if (isNoReturnFunction(MO))
+    if (isNoReturnFunction(MI->getOperand(0)))
       break;
   }
   case X86::CALL32r:

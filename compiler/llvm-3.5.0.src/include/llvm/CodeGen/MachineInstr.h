@@ -96,6 +96,8 @@ private:
   const Instruction* IRInst;            // correlated IR instruction used by
                                         // MCFI to associate types with each
                                         // indirect call/jump instruction.
+  unsigned BarySlot;                    // The ID to identify this instruciton
+                                        // in MCFI Bary table.
   
   MachineInstr(const MachineInstr&) LLVM_DELETED_FUNCTION;
   void operator=(const MachineInstr&) LLVM_DELETED_FUNCTION;
@@ -1112,7 +1114,18 @@ public:
   const Instruction* getIRInst() const {
     return IRInst;
   }
-  
+
+  void setBarySlot(const unsigned BarySlot) {
+    this->BarySlot = BarySlot;
+  }
+
+  unsigned getBarySlot() const {
+    return BarySlot;
+  }
+
+  bool hasBarySlot() const {
+    return (BarySlot != (unsigned)-1);
+  }
 private:
   /// getRegInfo - If this instruction is embedded into a MachineFunction,
   /// return the MachineRegisterInfo object for the current function, otherwise

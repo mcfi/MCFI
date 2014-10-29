@@ -43,6 +43,10 @@ STATISTIC(NumIndirectMemWrite, "Number of instrumented indirect memory writes");
 namespace {
 struct MCFI : public MachineFunctionPass {
   static char ID;
+
+  // Each indirect call/jmp or return has its own Bary Slot.
+  static unsigned BarySlot;
+
   MCFI() : MachineFunctionPass(ID) { M = nullptr; }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesAll();
@@ -116,6 +120,7 @@ private:
   bool MCFIx86(MachineFunction &MF);  // x86_32
 };
 char MCFI::ID = 0;
+unsigned MCFI::BarySlot = 0;
 }
 
 FunctionPass *llvm::createX86MCFIInstrumentation() { return new MCFI(); }
@@ -161,13 +166,10 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
     CmpOp = X86::CMP32mr;
   }
 
-  // Each indirect call/jmp or return has its own Bary Slot.
-  static unsigned BarySlot = 0;
-
   // mov %gs:BarySlot, BIDReg
   BuildMI(*MBB, I, DL, TII->get(BIDRegReadOp))
     .addReg(BIDReg, RegState::Define)
-    .addReg(0).addImm(1).addReg(0).addImm(BarySlot++).addReg(X86::GS);
+    .addReg(0).addImm(1).addReg(0).addImm(BarySlot).addReg(X86::GS);
   
   // cmp BIDReg, %gs:(TargetReg)
   BuildMI(*MBB, I, DL, TII->get(CmpOp))
@@ -185,6 +187,7 @@ void MCFI::MCFIx64ICJ(MachineFunction &MF, MachineBasicBlock* MBB,
   
   auto I = std::begin(*MBB);
   BuildMI(*MBB, I, DL, TII->get(CJOp)).addReg(TargetReg);
+  std::prev(I)->setBarySlot(BarySlot);
 }
 
 void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
@@ -365,6 +368,7 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, X86::JMP64r,
               IDValidityCheckMBB, VerCheckMBB, ReportMBB);
+  BarySlot++;
 }
 
 // get a general register that is neither Reg1 nor Reg2
@@ -519,6 +523,7 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   }
 
   IDCmpMBB->instr_front().setIRInst(I); // transfer the IR to the BID read instruction.
+  BarySlot++;
 }
 
 void MCFI::MCFIx64IndirectMemWrite(MachineFunction &MF, MachineBasicBlock *MBB,
