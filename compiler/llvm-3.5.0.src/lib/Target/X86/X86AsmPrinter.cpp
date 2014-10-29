@@ -47,6 +47,20 @@ using namespace llvm;
 /// runOnMachineFunction - Emit the function body.
 ///
 bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
+  const Module* newM = MF.getMMI().getModule();
+  if (M != newM) {
+    M = newM;
+    SmallSandbox = !M->getNamedMetadata("MCFILargeSandbox");
+    SmallID = !M->getNamedMetadata("MCFILargeID");
+    const NamedMDNode* NRMD = M->getNamedMetadata("MCFINoReturnFunctions");
+    if (NRMD) {
+      for (unsigned i = 0; i < NRMD->getNumOperands(); i++) {
+        const MDNode* NRF = NRMD->getOperand(i);
+        NoReturnFunctions.insert(NRF->getOperand(0)->getName());
+      }
+    }
+  }
+
   SetupMachineFunction(MF);
 
   if (Subtarget->isTargetCOFF()) {

@@ -1,0 +1,13 @@
+2014-10-12:
+
+  We need to correlate each indirect call/jmp to its IR-level call/invoke. In
+  the original MCFI toolchain implementation, we just assume that each machine
+  instruction basic block can be mapped onto an IR basic block, and the orders
+  of indirect calls and IR call/invoke are preserved by the LLVM backend.
+  However, the assumption is probably problematic in the future.
+
+  In the new implementation, we are seeking to modify the code generation logic
+  to propagate IR level information directly to the machine code level.
+
+  Each IR call/invoke instruction is lowered to machine call (in the DAG) in
+  lib/Target/X86/X86ISelLowering.cpp: X86TargetLowring::LowerCall, line 2999

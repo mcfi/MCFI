@@ -339,7 +339,7 @@ static void SimplifyShortMoveForm(X86AsmPrinter &Printer, MCInst &Inst,
 
 static unsigned getRetOpcode(const X86Subtarget &Subtarget)
 {
-	return Subtarget.is64Bit() ? X86::RETQ : X86::RETL;
+  return Subtarget.is64Bit() ? X86::RETQ : X86::RETL;
 }
 
 void X86MCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
@@ -918,9 +918,75 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::SEH_EndPrologue:
     OutStreamer.EmitWinCFIEndProlog();
     return;
+
+  // MCFI requires each call instruction to be 4/8-byte aligned
+  case X86::CALL64pcrel32:
+  {
+    if (isNoReturnFunction(MI->getOperand(0)))
+      break;
+  }
+  case X86::CALL64r:
+  {
+    MCSymbol *CallBeginSym =
+      OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
+                                   + StringRef("_mcfi_callbegin"));
+
+    OutStreamer.EmitLabel(CallBeginSym);
+  }
   }
 
   MCInst TmpInst;
   MCInstLowering.Lower(MI, TmpInst);
   EmitToStreamer(OutStreamer, TmpInst);
+
+  switch (MI->getOpcode()) {
+    // MCFI BID read
+  case X86::MOV32rm:
+  case X86::MOV64rm:
+  {
+    const unsigned BaseReg = MI->getOperand(1).getReg();
+    const unsigned SegReg = MI->getOperand(5).getReg();
+    if (!BaseReg && (SegReg == X86::GS || SegReg == X86::FS)) {
+      const unsigned MCFIID = MI->getOperand(4).getImm();
+      MCSymbol *MCFIIDSym = 
+        OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
+                                     + StringRef("_mcfi_ib_") + std::to_string(MCFIID));
+      OutStreamer.EmitLabel(MCFIIDSym);
+    }
+    break;
+  }
+  
+  case X86::CALL64pcrel32:
+  {
+    if (isNoReturnFunction(MI->getOperand(0)))
+      break;
+  }
+  case X86::CALL64r:
+  {
+    MCSymbol *CallEndSym =
+      OutContext.GetOrCreateSymbol(StringRef(
+                                     OutContext.CreateTempSymbol()->getName().str()
+                                     + std::string("_mcfi_callend")));
+    OutStreamer.EmitValueToAlignment(SmallID ? 4 : 8, 0x90);
+    OutStreamer.EmitLabel(CallEndSym);
+  }
+  }
+}
+
+void X86AsmPrinter::EmitMCFIPadding(const MachineInstr *MI) {
+  switch (MI->getOpcode()) {
+  case X86::CALLpcrel32:
+  case X86::CALL64pcrel32:
+  {
+    const MachineOperand &MO = MI->getOperand(0);
+    if (isNoReturnFunction(MO))
+      break;
+  }
+  case X86::CALL32r:
+  case X86::CALL64r:
+  {
+    OutStreamer.AddComment(StringRef("MCFI Padding Noop"));
+    OutStreamer.EmitRawText(StringRef("\tnop\n"));
+  }
+  }
 }

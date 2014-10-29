@@ -269,6 +269,10 @@ public:
     llvm_unreachable("EmitInstruction not implemented");
   }
 
+  /// Targets should implement this to emit MCFI padding noop if
+  /// a direct call appears as the last instruction
+  virtual void EmitMCFIPadding(const MachineInstr *) {}
+
   /// Return the symbol for the specified constant pool entry.
   virtual MCSymbol *GetCPISymbol(unsigned CPID) const;
 

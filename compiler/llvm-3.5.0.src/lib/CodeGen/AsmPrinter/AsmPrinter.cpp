@@ -743,6 +743,8 @@ void AsmPrinter::EmitFunctionBody() {
   // Print out code for the function.
   bool HasAnyRealCode = false;
   const MachineInstr *LastMI = nullptr;
+  const MachineInstr *LastRealMI = nullptr;
+
   for (auto &MBB : *MF) {
     // Print a label for the basic block.
     EmitBasicBlockStart(MBB);
@@ -792,6 +794,7 @@ void AsmPrinter::EmitFunctionBody() {
         if (isVerbose()) emitKill(&MI, *this);
         break;
       default:
+        LastRealMI = &MI;
         EmitInstruction(&MI);
         break;
       }
@@ -805,6 +808,8 @@ void AsmPrinter::EmitFunctionBody() {
       }
     }
   }
+
+  EmitMCFIPadding(LastRealMI);
 
   // If the last instruction was a prolog label, then we have a situation where
   // we emitted a prolog but no function body. This results in the ending prolog

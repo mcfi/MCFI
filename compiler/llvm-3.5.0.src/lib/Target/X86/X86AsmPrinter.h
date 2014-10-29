@@ -11,6 +11,7 @@
 #define X86ASMPRINTER_H
 
 #include "X86Subtarget.h"
+#include "llvm/IR/Module.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/Target/TargetMachine.h"
@@ -25,10 +26,30 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
 
   void GenerateExportDirective(const MCSymbol *Sym, bool IsData);
 
+  const Module *M;
+  bool SmallSandbox;
+  bool SmallID;
+  std::set<StringRef> NoReturnFunctions;
+
+  bool isNoReturnFunction(const MachineOperand &MO) {
+    if (MO.isSymbol()) {
+      if (NoReturnFunctions.find(MO.getSymbolName()) !=
+          NoReturnFunctions.end())
+        return true;
+    }
+    if (MO.isGlobal() && MO.getGlobal()->hasName()) {
+      if (NoReturnFunctions.find(MO.getGlobal()->getName()) !=
+          NoReturnFunctions.end())
+        return true;
+    }
+    return false;
+  }
+
  public:
   explicit X86AsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
     : AsmPrinter(TM, Streamer), SM(*this) {
     Subtarget = &TM.getSubtarget<X86Subtarget>();
+    M = nullptr;
   }
 
   const char *getPassName() const override {
@@ -42,6 +63,8 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
   void EmitEndOfAsmFile(Module &M) override;
 
   void EmitInstruction(const MachineInstr *MI) override;
+
+  void EmitMCFIPadding(const MachineInstr *MI) override;
 
   bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                        unsigned AsmVariant, const char *ExtraCode,

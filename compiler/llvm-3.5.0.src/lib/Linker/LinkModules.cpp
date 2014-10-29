@@ -1261,7 +1261,8 @@ bool ModuleLinker::linkNamedMDNodes() {
     if (I->getName().equals("MCFIDtorCxaThrow")) continue;
     if (I->getName().equals("MCFINoReturnFunctions")) continue;
     if (I->getName().equals("MCFILargeSandbox")) continue;
-    if (I->getName().equals("MCFILargeID")) continue; 
+    if (I->getName().equals("MCFILargeID")) continue;
+    if (I->getName().equals("llvm.ident")) continue; // do not link ident
     NamedMDNode *DestNMD = DstM->getOrInsertNamedMetadata(I->getName());
     // Add Src elements into Dest node.
     for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
