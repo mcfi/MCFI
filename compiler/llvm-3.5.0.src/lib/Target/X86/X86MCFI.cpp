@@ -80,8 +80,10 @@ private:
                   MachineBasicBlock::iterator &MI);
   void MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
                            MachineBasicBlock::iterator &MI);
-  void MCFIx64IndirectMemWrite(MachineFunction &MF, MachineBasicBlock *MBB,
-                               MachineBasicBlock::iterator &MI);
+
+  void MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *MBB);
+  void MCFIx64IndirectMemWriteLarge(MachineFunction &MF, MachineBasicBlock *MBB);
+    
   void MCFIx64StackPointer(MachineFunction &MF, MachineBasicBlock *MBB,
                            MachineBasicBlock::iterator &MI);
 
@@ -525,9 +527,177 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   IDCmpMBB->instr_front().setIRInst(I); // transfer the IR to the BID read instruction.
   BarySlot++;
 }
+/*
+static bool isMCFIx64SmallSandboxCheck(const MachineInstr* MI) {
+  return MI->isSandboxCheck() && MI->getOpcode() == X86::LEA64r;
+}
 
-void MCFI::MCFIx64IndirectMemWrite(MachineFunction &MF, MachineBasicBlock *MBB,
-                                   MachineBasicBlock::iterator &MI) {
+void findAndMarkMCFIx64SandboxedMW(MachineBasicBlock *MBB,
+                                   const unsigned AddrReg,
+                                   MachineBasicBlock::iterator MI) {
+  MachineBasicBlock::iterator MWI(MI);
+  for (++MWI; MWI != MBB->end(); ++MWI) {
+    if (!MWI->mayStore() || MI->getNumOperands() < 5 || MWI->isBranch())
+      continue;
+    
+    if (!MWI->getOperand(0).isReg() ||          // wtf?
+        MWI->getOperand(0).getReg() != AddrReg) // not using addr reg
+      continue;
+    if (!MWI->getOperand(1).isImm() ||
+        MWI->getOperand(1).getImm() != 0 ||     // scale
+        !MWI->getOperand(2).isReg() ||
+        MWI->getOperand(2).getReg() != 0)       // index reg exists
+      continue;
+    if (!MWI->getOperand(3).isImm())            // imm not translated
+      continue;
+    MWI->setSandboxed();
+  }
+}
+// FIXME: the optimization for write sandboxing needs more work.
+void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *MBB) {
+  ++NumIndirectMemWrite;
+  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+  const TargetRegisterInfo *TRI = MF.getTarget().getRegisterInfo();
+
+  MachineBasicBlock::iterator LastSandboxMI = nullptr;
+  MachineBasicBlock::iterator MI;
+  // check whether there are reused addresses in this basic block
+  // e.g., mov %gs:(%rax, %rdx, 8), %rdi
+  //       mov $1, 8(%rdi)
+  //       mov %gs:(%rax, %rdx, 8), %rdi  <= this can be removed
+  //       mov $2, 16(%rdi)
+  std::set<unsigned> AddrGenRegs;
+  bool AddrGenRegsChanged = true;
+  for (MI = MBB->begin(); MI != MBB->end(); ++MI) {
+    AddrGenRegsChanged = true;
+    if (isMCFIx64SmallSandboxCheck(MI)) {
+      const unsigned AddrReg = MI->getOperand(0).getReg();
+      // advance MI to the first instruction that uses MI-defined
+      // scratch register
+      findAndMarkMCFIx64SandboxedMW(MBB, AddrReg, MI);
+      AddrGenRegs.clear();
+      AddrGenRegs.insert(MI->getOperand(1).getReg());
+      AddrGenRegs.insert(MI->getOperand(3).getReg());
+      AddrGenRegs.erase(0);
+      
+      if (!LastSandboxMI) {
+        LastSandboxMI = MI;
+        AddrGenRegsChanged = false;
+      } else {
+        if (//LastSandboxMI->isIdenticalTo(MI) &&
+            !AddrGenRegsChanged) {
+          MBB->dump();
+          MI = MBB->erase(MI); // remove the redundant sandbox check
+          MI = std::prev(MI);  // back the iterator by one
+        } else {
+          LastSandboxMI = MI;
+        }
+      }
+      
+      if (LastSandboxMI == MI) {
+        // rewrite LastSandboxMI by replace movq %gs: to leaq
+        auto &MIB =
+          BuildMI(*MBB, LastSandboxMI, LastSandboxMI->getDebugLoc(),
+                  TII->get(X86::LEA64r)).addOperand(LastSandboxMI->getOperand(0));
+        for (unsigned i = 1; i < 5; i++) {
+          MIB.addOperand(LastSandboxMI->getOperand(i));
+        }
+        MIB.addReg(0); // %gs to none
+        MI = std::prev(LastSandboxMI);
+        LastSandboxMI = MBB->erase(LastSandboxMI);
+        if (LastSandboxMI != MBB->begin())
+          LastSandboxMI = std::prev(LastSandboxMI);
+      }
+    } else {
+      for (auto reg : AddrGenRegs) {
+        // in MCFI, callee-saved regs are not trusted
+        if (MI->getOpcode() == X86::CALL64pcrel32 ||
+            MI->definesRegister(reg, TRI) ||
+            MI->definesRegister(getX86SubSuperRegister(reg, MVT::i32, true), TRI) ||
+            MI->definesRegister(getX86SubSuperRegister(reg, MVT::i16, true), TRI) ||
+            MI->definesRegister(getX86SubSuperRegister(reg, MVT::i8, false), TRI)){
+          AddrGenRegsChanged = true;
+          break;
+        }
+      }
+    }
+  }
+}
+*/
+
+static unsigned XCHGOp(unsigned opcode)
+{
+  switch (opcode) {
+    // xchg is special
+  case X86::XCHG16rm: case X86::XCHG32rm:
+  case X86::XCHG64rm: case X86::XCHG8rm:
+    return 2;
+  }
+  return 0;
+}
+
+void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *MBB) {
+  ++NumIndirectMemWrite;
+  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+  const TargetRegisterInfo *TRI = MF.getTarget().getRegisterInfo();
+  
+  MachineBasicBlock::iterator MI;
+  for (auto MI = std::begin(*MBB); MI != std::end(*MBB); MI++) {
+    if (MI->mayStore() && MI->getNumOperands() >= 5 &&
+        !MI->isBranch() && !MI->isSandboxed()) {
+      if (MI->isInlineAsm()) {
+        MI->dump();
+        continue;
+      }
+        
+      const auto Opcode = MI->getOpcode();
+      const unsigned MemOpOffset = XCHGOp(Opcode);
+      const auto BaseReg = MI->getOperand(MemOpOffset).isReg() ?
+        MI->getOperand(MemOpOffset).getReg() : 0;
+
+      if (BaseReg == 0 || // direct mem write
+          BaseReg == X86::RIP) { // pc-relative
+        continue;
+      }
+
+      const auto Scale = MI->getOperand(MemOpOffset+1).getImm();
+      const auto IndexReg = MI->getOperand(MemOpOffset+2).getReg();
+      const auto Offset = MI->getOperand(MemOpOffset+3).isImm() ?
+        MI->getOperand(MemOpOffset+3).getImm() : -1;
+
+      // write on stack
+      if (BaseReg == X86::RSP && IndexReg == 0)
+        continue;
+
+      // The reason why 1 << 22 is in X86MCFIRegReserve
+      if (IndexReg == 0 && Offset >= 0 && Offset < (1 << 22)) {
+        // in-place sandboxing
+        BuildMI(*MBB, MI, MI->getDebugLoc(),
+                TII->get(X86::MOV64rr)).addReg(BaseReg).addReg(BaseReg);
+      } else {
+        if (MI->killsRegister(IndexReg, TRI)) {
+          BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::LEA64r))
+            .addReg(IndexReg, RegState::Define)
+            .addReg(BaseReg).addImm(Scale).addReg(IndexReg)
+            .addOperand(MI->getOperand(3)).addReg(0);
+          auto &MIB = BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(Opcode))
+            .addReg(IndexReg).addImm(0).addReg(0).addImm(0).addReg(0);
+          for (unsigned i = 5; i < MI->getNumOperands(); i++) {
+            if (MI->getOperand(i).isReg() && MI->getOperand(i).isImplicit())
+              continue;
+            MIB.addOperand(MI->getOperand(i));
+          }
+          MI = MBB->erase(MI);
+          MI = std::prev(MI);
+        } else {
+          MI->dump();
+        }
+      }
+    }
+  }
+}
+
+void MCFI::MCFIx64IndirectMemWriteLarge(MachineFunction &MF, MachineBasicBlock *MBB) {
   ++NumIndirectMemWrite;
 }
 
@@ -570,13 +740,19 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
           break;
         }
         }
-      } else if (MI->mayStore() && !MI->memoperands_empty()) { // indirect memory write
-        MCFIx64IndirectMemWrite(MF, MBB, MI);
       } else if (MI->definesRegister(X86::RSP, TRI)) { // RSP register modification
         MCFIx64StackPointer(MF, MBB, MI);
       }
       if (MI == std::end(*MBB)) break;
     }
+  }
+  
+  if (SmallSandbox) {
+    for (auto MBB = std::begin(MF); MBB != std::end(MF); MBB++)
+      MCFIx64IndirectMemWriteSmall(MF, MBB);
+  } else {
+    for (auto MBB = std::begin(MF); MBB != std::end(MF); MBB++)
+      MCFIx64IndirectMemWriteLarge(MF, MBB);
   }
   return false;
 }

@@ -512,6 +512,10 @@ void TargetPassConfig::addMachinePasses() {
   if (addPreRegAlloc())
     printAndVerify("After PreRegAlloc passes");
 
+  // Run MCFI Register Reservation
+  if (addMCFIRegReservePass())
+    printAndVerify("After MCFI Register Reservation pass");
+  
   // Run register allocation and passes that are tightly coupled with it,
   // including phi elimination and scheduling.
   if (getOptimizeRegAlloc())

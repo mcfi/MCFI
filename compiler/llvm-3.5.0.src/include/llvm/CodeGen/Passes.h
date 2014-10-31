@@ -320,6 +320,12 @@ protected:
     return false;
   }
 
+  /// addMCFIRegReservePass -
+  /// Scratch register reservation for indirect memory write sandboxing.
+  virtual bool addMCFIRegReservePass() {
+    return false;
+  }
+  
   /// addMCFIPass - This pass may be implemented by targets that want to emit
   /// MCFI instrumented programs.
   virtual bool addMCFIPass() {

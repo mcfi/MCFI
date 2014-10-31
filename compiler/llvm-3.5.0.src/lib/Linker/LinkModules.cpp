@@ -1259,7 +1259,6 @@ bool ModuleLinker::linkNamedMDNodes() {
     if (I->getName().equals("MCFIPureVirt")) continue;
     if (I->getName().equals("MCFIDtorCxaAtExit")) continue;
     if (I->getName().equals("MCFIDtorCxaThrow")) continue;
-    if (I->getName().equals("MCFINoReturnFunctions")) continue;
     if (I->getName().equals("MCFILargeSandbox")) continue;
     if (I->getName().equals("MCFILargeID")) continue;
     if (I->getName().equals("llvm.ident")) continue; // do not link ident
@@ -1274,7 +1273,6 @@ bool ModuleLinker::linkNamedMDNodes() {
   linkMCFINamedMDNodes("MCFIPureVirt");
   linkMCFINamedMDNodes("MCFIDtorCxaAtExit");
   linkMCFINamedMDNodes("MCFIDtorCxaThrow");
-  linkMCFINamedMDNodes("MCFINoReturnFunctions");
   if ((SrcM->getNamedMetadata("MCFILargeSandbox") &&
        !DstM->getNamedMetadata("MCFILargeSandbox")) ||
       (!SrcM->getNamedMetadata("MCFILargeSandbox") &&

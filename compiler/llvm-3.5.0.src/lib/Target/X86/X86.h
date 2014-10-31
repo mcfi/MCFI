@@ -77,6 +77,10 @@ FunctionPass *createX86PadShortFunctions();
 /// to eliminate execution delays in some Atom processors.
 FunctionPass *createX86FixupLEAs();
 
+/// createX86MCFIRegReserve - Returns a pass that instruments the machine
+/// code before register allocation to allocate scratch registers for
+/// indirect memory write
+FunctionPass *createX86MCFIRegReserve();
 /// createMCFIInstrumentation - Returns a pass that instruments the
 /// machine code with MCFI
 FunctionPass *createX86MCFIInstrumentation();

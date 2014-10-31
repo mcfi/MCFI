@@ -98,6 +98,9 @@ private:
                                         // indirect call/jump instruction.
   unsigned BarySlot;                    // The ID to identify this instruciton
                                         // in MCFI Bary table.
+
+  bool Sandboxed;                       // MCFI Sandboxed
+  bool SandboxCheck;                    // MCFI Sandbox check
   
   MachineInstr(const MachineInstr&) LLVM_DELETED_FUNCTION;
   void operator=(const MachineInstr&) LLVM_DELETED_FUNCTION;
@@ -1125,6 +1128,22 @@ public:
 
   bool hasBarySlot() const {
     return (BarySlot != (unsigned)-1);
+  }
+
+  void setSandboxed() {
+    Sandboxed = true;
+  }
+  
+  bool isSandboxed() const {
+    return Sandboxed;
+  }
+
+  void setSandboxCheck() {
+    SandboxCheck = true;
+  }
+
+  bool isSandboxCheck() const {
+    return SandboxCheck;
   }
 private:
   /// getRegInfo - If this instruction is embedded into a MachineFunction,

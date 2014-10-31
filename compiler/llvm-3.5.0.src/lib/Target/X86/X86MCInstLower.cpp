@@ -934,6 +934,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
                                    + StringRef("_mcfi_callbegin"));
 
     OutStreamer.EmitLabel(CallBeginSym);
+    //OutStreamer.EmitBundleLock(true);
   }
   }
 
@@ -999,6 +1000,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
                                    + StringRef("_mcfi_callend"));
     OutStreamer.EmitValueToAlignment(SmallID ? 4 : 8, 0x90);
     OutStreamer.EmitLabel(CallEndSym);
+    //OutStreamer.EmitBundleUnlock();
     if (MI->getOpcode() == X86::CALL64r ||
         MI->getOpcode() == X86::CALL32r) {
       assert(MI->hasBarySlot());
@@ -1039,7 +1041,9 @@ void X86AsmPrinter::EmitMCFIPadding(const MachineInstr *MI) {
   case X86::CALL64r:
   {
     OutStreamer.AddComment(StringRef("MCFI Padding Noop"));
-    OutStreamer.EmitRawText(StringRef("\tnop\n"));
+    MCInst TmpInst;
+    TmpInst.setOpcode(X86::NOOP);
+    EmitToStreamer(OutStreamer, TmpInst);
   }
   }
 }

@@ -71,16 +71,6 @@ namespace {
       createMetadata(Builder->DtorCxaAtExit, "MCFIDtorCxaAtExit");
       createMetadata(Builder->DtorCxaThrow, "MCFIDtorCxaThrow");
 
-      if (M) {
-        std::unordered_set<std::string> NoReturnFunctions;
-        for (auto it = M->begin(); it != M->end(); it++) {
-          if (it->doesNotReturn() && it->hasName()) {
-            NoReturnFunctions.insert(it->getName().str());
-          }
-        }
-        createMetadata(NoReturnFunctions, "MCFINoReturnFunctions");
-      }
-
       if (!CodeGenOpts.MCFISmallSandbox)
         assert(M->getOrInsertNamedMetadata("MCFILargeSandbox"));
       if (!CodeGenOpts.MCFISmallID)

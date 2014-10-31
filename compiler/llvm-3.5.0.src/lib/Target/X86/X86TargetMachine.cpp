@@ -117,6 +117,7 @@ public:
   bool addPreRegAlloc() override;
   bool addPostRegAlloc() override;
   bool addPreEmitPass() override;
+  bool addMCFIRegReservePass() override;
   bool addMCFIPass() override;
 };
 } // namespace
@@ -179,6 +180,10 @@ bool X86PassConfig::addPreEmitPass() {
   return ShouldPrint;
 }
 
+bool X86PassConfig::addMCFIRegReservePass() {
+  addPass(createX86MCFIRegReserve());
+  return true;
+}
 bool X86PassConfig::addMCFIPass() {
   addPass(createX86MCFIInstrumentation());
   return true;
