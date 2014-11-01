@@ -474,6 +474,9 @@ public:
   virtual void emitInlineAsmEnd(const MCSubtargetInfo &StartInfo,
                                 const MCSubtargetInfo *EndInfo) const;
 
+  /// Let the target do instrumentation for the inline asm
+  virtual void EmitInlineAsmInstrumentation(StringRef Str, const MDNode *LocMDNode,
+                                            InlineAsm::AsmDialect Dialect) {};
 private:
   /// Private state for PrintSpecial()
   // Assign a unique ID to this machine instruction.
@@ -489,7 +492,7 @@ private:
 
   /// This method formats and emits the specified machine instruction that is an
   /// inline asm.
-  void EmitInlineAsm(const MachineInstr *MI) const;
+  void EmitInlineAsm(const MachineInstr *MI);
 
   //===------------------------------------------------------------------===//
   // Internal Implementation Details

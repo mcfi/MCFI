@@ -1047,3 +1047,27 @@ void X86AsmPrinter::EmitMCFIPadding(const MachineInstr *MI) {
   }
   }
 }
+
+void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *LocMDNode,
+                                                 InlineAsm::AsmDialect Dialect) {
+  // we only take care of common InlineAsm and report unhandled asm instruction
+  // to developers
+  StringRef TrimedStr = Str.trim();
+  if (TrimedStr.startswith_lower("cld; rep;") ||
+      TrimedStr.startswith_lower("rep;") ||
+      TrimedStr.startswith_lower("cld; repne;") ||
+      TrimedStr.startswith_lower("repne;")){
+    MCInst TmpInst;
+    // sandboxing
+    if (SmallSandbox) {
+      TmpInst.setOpcode(X86::MOV64rr);
+      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::RDI));
+      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::RDI));
+      EmitToStreamer(OutStreamer, TmpInst);
+      return;
+    }
+  }
+  llvm::errs() << "MCFI Warning: InlineAsm\n\t"
+               << TrimedStr
+               << "\nshould be manually sandboxed!\n";
+}

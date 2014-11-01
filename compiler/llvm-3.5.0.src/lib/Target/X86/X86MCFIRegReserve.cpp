@@ -105,12 +105,12 @@ bool MCFIRegReserve::MCFIRRx64Small(MachineFunction &MF) {
         const auto IndexReg = MI->getOperand(MemOpOffset+2).getReg();
         const auto Offset = MI->getOperand(MemOpOffset+3).isImm() ?
           MI->getOperand(MemOpOffset+3).getImm() : -1;
-        // do not sandbox Offset(%rip) or Offset(%rsp)
+
         if (BaseReg == X86::RIP ||         // PC-relative
-            BaseReg == 0 ||                // direct memory write
-            (IndexReg == 0 && isMagicOffset(Offset)))
+            (BaseReg == 0 && IndexReg == 0)||   // direct memory write
+            (BaseReg != 0 && IndexReg == 0 && isMagicOffset(Offset))) // in-place sandboxing
           continue;
-        
+
         const auto ScratchReg = MRI.createVirtualRegister(RC);
         MCFIx64CheckMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg, false);
         MCFIx64RewriteMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg, false);

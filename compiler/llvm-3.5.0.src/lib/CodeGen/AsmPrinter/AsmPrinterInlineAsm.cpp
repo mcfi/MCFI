@@ -428,7 +428,7 @@ static void EmitGCCInlineAsmStr(const char *AsmStr, const MachineInstr *MI,
 
 /// EmitInlineAsm - This method formats and emits the specified machine
 /// instruction that is an inline asm.
-void AsmPrinter::EmitInlineAsm(const MachineInstr *MI) const {
+void AsmPrinter::EmitInlineAsm(const MachineInstr *MI) {
   assert(MI->isInlineAsm() && "printInlineAsm only works on inline asms");
 
   // Count the number of register definitions to find the asm string.
@@ -474,6 +474,7 @@ void AsmPrinter::EmitInlineAsm(const MachineInstr *MI) const {
   SmallString<256> StringData;
   raw_svector_ostream OS(StringData);
 
+  
   // The variant of the current asmprinter.
   int AsmPrinterVariant = MAI->getAssemblerDialect();
   InlineAsm::AsmDialect InlineAsmVariant = MI->getInlineAsmDialect();
@@ -484,6 +485,9 @@ void AsmPrinter::EmitInlineAsm(const MachineInstr *MI) const {
   else
     EmitMSInlineAsmStr(AsmStr, MI, MMI, InlineAsmVariant, AP, LocCookie, OS);
 
+  // EmitInlineAsmInstrumentation emits necessary instrumentation for InlineAsm
+  EmitInlineAsmInstrumentation(OS.str(), LocMD, MI->getInlineAsmDialect());  
+  
   EmitInlineAsm(OS.str(), LocMD, MI->getInlineAsmDialect());
 
   // Emit the #NOAPP end marker.  This has to happen even if verbose-asm isn't

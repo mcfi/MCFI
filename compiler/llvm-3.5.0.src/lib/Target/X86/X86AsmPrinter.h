@@ -73,6 +73,9 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
                              unsigned AsmVariant, const char *ExtraCode,
                              raw_ostream &OS) override;
 
+  void EmitInlineAsmInstrumentation(StringRef Str, const MDNode *LocMDNode,
+                                    InlineAsm::AsmDialect Dialect) override;
+  
   /// \brief Return the symbol for the specified constant pool entry.
   MCSymbol *GetCPISymbol(unsigned CPID) const override;
 

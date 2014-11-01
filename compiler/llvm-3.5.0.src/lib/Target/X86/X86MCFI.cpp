@@ -600,36 +600,27 @@ void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *
     // FIXME: for each machine instruction claimed to be sandboxed, we
     // should check whether it's actually sandboxed.
     if (MI->mayStore() && MI->getNumOperands() >= 5 &&
-        !MI->isBranch() && !MI->isSandboxed()) {
-      if (MI->isInlineAsm()) {
-        llvm::errs() << "MCFI Warning: InlineAsm\n  ";
-        MI->dump();
-        continue;
-      }
-
+        !MI->isBranch() && !MI->isSandboxed() && !MI->isInlineAsm()) {
       const auto Opcode = MI->getOpcode();
 
       if (RepOp(Opcode)) {  // in-place sandboxing
         MCFIx64CheckMemWriteInPlace(MBB, MI, TII, X86::RDI);
         continue;
       }
-      
+
       const unsigned MemOpOffset = XCHGOp(Opcode);
       const auto BaseReg = MI->getOperand(MemOpOffset).isReg() ?
         MI->getOperand(MemOpOffset).getReg() : 0;
+      const auto IndexReg = MI->getOperand(MemOpOffset+2).getReg();
 
-      if (BaseReg == 0 || // direct mem write
-          BaseReg == X86::RIP) { // pc-relative
+      if ((BaseReg == 0 && IndexReg == 0) || // direct mem write
+          (BaseReg == X86::RSP && IndexReg == 0) || // on stack write
+          BaseReg == X86::RIP) { // pc-relative write
         continue;
       }
 
-      const auto IndexReg = MI->getOperand(MemOpOffset+2).getReg();
       const auto Offset = MI->getOperand(MemOpOffset+3).isImm() ?
         MI->getOperand(MemOpOffset+3).getImm() : -1;
-
-      // write on stack
-      if (BaseReg == X86::RSP && IndexReg == 0)
-        continue;
 
       // The reason why 1 << 22 is in X86MCFIRegReserve
       if (IndexReg == 0 && isMagicOffset(Offset)) {
