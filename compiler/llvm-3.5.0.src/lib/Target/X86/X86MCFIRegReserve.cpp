@@ -108,16 +108,12 @@ bool MCFIRegReserve::MCFIRRx64Small(MachineFunction &MF) {
         // do not sandbox Offset(%rip) or Offset(%rsp)
         if (BaseReg == X86::RIP ||         // PC-relative
             BaseReg == 0 ||                // direct memory write
-            (IndexReg == 0 && Offset >= 0 &&
-             Offset < (1 << 22))) // The first 4MB in the sandbox are always
-                                  // unmapped or filled with non-writable data
-                                  // so in this case it allows in-place sandboxing
-                                  // because the base reg must contain a positive value
+            (IndexReg == 0 && isMagicOffset(Offset)))
           continue;
         
         const auto ScratchReg = MRI.createVirtualRegister(RC);
-        MCFIx64CheckMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg);
-        MCFIx64RewriteMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg);
+        MCFIx64CheckMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg, false);
+        MCFIx64RewriteMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg, false);
       }
     }
   }

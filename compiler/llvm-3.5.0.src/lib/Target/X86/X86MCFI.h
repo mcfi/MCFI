@@ -37,17 +37,35 @@ static unsigned XCHGOp(unsigned opcode)
   return 0;
 }
 
+// The first 4MB in the sandbox are always
+// unmapped or filled with non-writable data
+// so in this case it allows in-place sandboxing
+// because the base reg must contain a positive value
+static bool isMagicOffset(const int64_t Offset) {
+  return Offset >= 0 && Offset < (1 << 22);
+}
+
 static void MCFIx64CheckMemWrite(MachineBasicBlock* MBB,
                                  MachineBasicBlock::iterator &MI,
                                  const TargetInstrInfo *TII,
                                  const unsigned MemOpOffset,
-                                 const unsigned ScratchReg) {
+                                 const unsigned ScratchReg,
+                                 bool shouldConsiderMagicOffset) {
   auto &MIB = BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::LEA64r))
     .addReg(ScratchReg, RegState::Define);
-  
-  for (unsigned i = 0; i < 5; i++)
-    MIB.addOperand(MI->getOperand(MemOpOffset+i));
 
+  const auto Offset = MI->getOperand(MemOpOffset+3).isImm() ?
+    MI->getOperand(MemOpOffset+3).getImm() : -1;
+
+  if (!shouldConsiderMagicOffset || !isMagicOffset(Offset)) {
+    for (unsigned i = 0; i < 5; i++)
+      MIB.addOperand(MI->getOperand(MemOpOffset+i));
+  } else {
+    for (unsigned i = 0; i < 3; i++)
+      MIB.addOperand(MI->getOperand(MemOpOffset+i));
+    MIB.addImm(0); // MemOpOffset+3
+    MIB.addOperand(MI->getOperand(MemOpOffset+4));
+  }
   MIB->setSandboxCheck();
 }
 
@@ -55,13 +73,21 @@ static void MCFIx64RewriteMemWrite(MachineBasicBlock* MBB,
                                    MachineBasicBlock::iterator &MI,
                                    const TargetInstrInfo *TII,
                                    const unsigned MemOpOffset,
-                                   const unsigned ScratchReg) {
+                                   const unsigned ScratchReg,
+                                   bool shouldConsiderMagicOffset) {
   const unsigned Opcode = MI->getOpcode();
+  const auto Offset = MI->getOperand(MemOpOffset+3).isImm() ?
+    MI->getOperand(MemOpOffset+3).getImm() : -1;
 
   if (!MemOpOffset) {
     auto &MIB = BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(Opcode))
-      .addReg(ScratchReg).addImm(0).addReg(0).addImm(0).addReg(0);
-        
+      .addReg(ScratchReg).addImm(0).addReg(0);
+    if (!shouldConsiderMagicOffset || !isMagicOffset(Offset)) {
+      MIB.addImm(0).addReg(0);
+    } else {
+      MIB.addImm(Offset).addReg(0);
+    }
+
     for (unsigned i = 5; i < MI->getNumOperands(); i++) {
       if (MI->getOperand(i).isReg() && MI->getOperand(i).isImplicit())
         continue;
@@ -75,7 +101,12 @@ static void MCFIx64RewriteMemWrite(MachineBasicBlock* MBB,
         continue;
       MIB.addOperand(MI->getOperand(i));
     }
-    MIB.addReg(ScratchReg).addImm(0).addReg(0).addImm(0).addReg(0);
+    MIB.addReg(ScratchReg).addImm(0).addReg(0);
+    if (!shouldConsiderMagicOffset || !isMagicOffset(Offset)) {
+      MIB.addImm(0).addReg(0);
+    } else {
+      MIB.addImm(Offset).addReg(0);
+    }
     for (unsigned i = MemOpOffset + 5; i < MI->getNumOperands(); i++) {
       if (MI->getOperand(i).isReg() && MI->getOperand(i).isImplicit())
         continue;

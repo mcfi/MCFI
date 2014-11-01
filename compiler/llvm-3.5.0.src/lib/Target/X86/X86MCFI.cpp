@@ -566,10 +566,28 @@ static void MCFIx64CheckMemWriteInPlace(MachineBasicBlock* MBB,
           TII->get(X86::MOV64rr)).addReg(ScratchReg).addReg(ScratchReg);
 }
 
+static int64_t MCFIx64SpillInRedZone(MachineFunction& MF) {
+  const Function *Fn = MF.getFunction();
+  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  const X86Subtarget &STI = MF.getTarget().getSubtarget<X86Subtarget>();
+  const TargetRegisterInfo *RegInfo = MF.getTarget().getRegisterInfo();
+  bool IsWin64 = STI.isTargetWin64();
+
+  // if the stack does not need any adjustment in this function,
+  return (Fn->getAttributes().hasAttribute(AttributeSet::FunctionIndex,
+                                           Attribute::NoRedZone) &&
+          !RegInfo->needsStackRealignment(MF) &&
+          !MFI->hasVarSizedObjects() &&                     // No dynamic alloca.
+          !MFI->adjustsStack() &&                           // No calls.
+          !IsWin64 &&                                       // Win64 has no Red Zone
+          !MF.shouldSplitStack());                          // Regular stack
+}
+
 void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *MBB) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-
-  std::set<MachineBasicBlock::iterator> RegReload;
+  MachineBasicBlock::iterator LastRegReload = nullptr;
+  MachineBasicBlock::iterator LastInPlaceSandboxed = nullptr;
+  unsigned LastInPlaceSandboxedReg = 0;
   
   MachineBasicBlock::iterator MI;
   for (auto MI = std::begin(*MBB); MI != std::end(*MBB); MI++) {
@@ -614,9 +632,20 @@ void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *
         continue;
 
       // The reason why 1 << 22 is in X86MCFIRegReserve
-      if (IndexReg == 0 && Offset >= 0 && Offset < (1 << 22)) {
+      if (IndexReg == 0 && isMagicOffset(Offset)) {
+        bool NeedSandboxing = true;
+        if (MI != std::begin(*MBB)) {
+          auto PrevMI = std::prev(MI);
+          if (LastInPlaceSandboxed == PrevMI &&
+              BaseReg == LastInPlaceSandboxedReg)
+            NeedSandboxing = false; // the previous instruction
+        }
         // in-place sandboxing
-        MCFIx64CheckMemWriteInPlace(MBB, MI, TII, BaseReg);
+        if (NeedSandboxing) {
+          MCFIx64CheckMemWriteInPlace(MBB, MI, TII, BaseReg);
+          LastInPlaceSandboxedReg = BaseReg;
+        }
+        LastInPlaceSandboxed = MI;
       } else {
         std::set<unsigned> UsedRegSet;
         for (auto MO = MI->operands_begin(); MO != MI->operands_end(); ++MO) {
@@ -634,23 +663,53 @@ void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *
         bool NeedSpill = true;
         if (MI != std::begin(*MBB)) {
           auto PrevMI = std::prev(MI);
-          if (RegReload.find(PrevMI) != std::end(RegReload) &&
+          if (PrevMI == LastRegReload &&
               ScratchReg == PrevMI->getOperand(0).getReg()) {
             NeedSpill = false;
             MBB->erase(PrevMI); // delete the previous reg reload
           }
         }
-        // spill scratchreg, %rsp -8 goes beyond the frame end of this function.
-        if (NeedSpill)
-          MCFIx64SpillRegToStack(MBB, MI, TII, ScratchReg, -8);
+        bool redZoneAlreadyUsed = MCFIx64SpillInRedZone(MF);
+        // spill scratchreg
+        if (NeedSpill) {
+          if (redZoneAlreadyUsed) {
+            // if this leaf function already uses the red zone, then
+            // we can not simply use -128...-8(%rsp), because they
+            // might be occupied by local variables. Further, we can
+            // not use -136(%rsp) because its not in red zone and its
+            // integrity is not guaranteed by the system. We need to
+            // first subtract 8 from %rsp to make a the original
+            // -136(%rsp) in the red zone.
+            BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::SUB64ri8))
+              .addReg(X86::RSP).addReg(X86::RSP).addImm(-8);
+            MCFIx64SpillRegToStack(MBB, MI, TII, ScratchReg, -128);
+          } else {
+            MCFIx64SpillRegToStack(MBB, MI, TII, ScratchReg, -8);
+          }
+        }
         // load address
-        MCFIx64CheckMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg);
+        MCFIx64CheckMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg, true);
+        if (redZoneAlreadyUsed) {
+          // %rsp should never be an index reg.
+          assert(IndexReg != X86::RSP);
+          if (BaseReg == X86::RSP) {
+            // assume that %rsp is never spilled to memory.
+            BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::ADD64ri8))
+              .addReg(ScratchReg).addReg(ScratchReg).addImm(8);
+          }
+        }
         // mem write
-        MCFIx64RewriteMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg);
+        MCFIx64RewriteMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg, true);
         MI = std::next(MI);
-        MCFIx64ReloadRegFromStack(MBB, MI, TII, ScratchReg, -8);
+        if (redZoneAlreadyUsed) {
+          MCFIx64ReloadRegFromStack(MBB, MI, TII, ScratchReg, -128);
+          BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::ADD64ri8))
+            .addReg(X86::RSP).addReg(X86::RSP).addImm(-8);
+        } else {
+          MCFIx64ReloadRegFromStack(MBB, MI, TII, ScratchReg, -8);
+        }
         MI = std::prev(MI);
-        RegReload.insert(MI);
+        LastRegReload = MI;
       }
     }
   }
