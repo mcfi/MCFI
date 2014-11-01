@@ -9,6 +9,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "X86.h"
+#include "X86MCFI.h"
 #include "X86InstrInfo.h"
 #include "X86Subtarget.h"
 #include "X86InstrBuilder.h"
@@ -19,6 +20,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
@@ -38,7 +40,6 @@ using namespace llvm;
 
 STATISTIC(NumIndirectCall, "Number of instrumented indirect calls");
 STATISTIC(NumReturns, "Number of instrumented returns");
-STATISTIC(NumIndirectMemWrite, "Number of instrumented indirect memory writes");
 
 namespace {
 struct MCFI : public MachineFunctionPass {
@@ -385,6 +386,38 @@ static unsigned getX64ScratchReg(const unsigned Reg1, const unsigned Reg2) {
   llvm_unreachable("getX64ScratchReg does not find scratch registers.");
 }
 
+// get a general register that is not in RegSet
+static unsigned getX64ScratchReg(const std::set<unsigned> RegSet) {
+  static const std::set<unsigned> GRegs = {
+    X86::RAX, X86::RBX, X86::RCX, X86::RDX, X86::RDI, X86::RSI, X86::R8,
+    X86::R9, X86::R10, X86::R11, X86::R12, X86::R13, X86::R14, X86::R15
+  };
+  for (auto reg : GRegs)
+    if (RegSet.find(reg) == std::end(RegSet))
+      return reg;
+  llvm_unreachable("getX64ScratchReg does not find scratch registers.");
+}
+
+static void MCFIx64SpillRegToStack(MachineBasicBlock* MBB,
+                                   MachineBasicBlock::iterator &MI,
+                                   const TargetInstrInfo *TII,
+                                   const unsigned ScratchReg,
+                                   const int64_t Offset) {
+  BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::MOV64mr))
+    .addReg(X86::RSP).addImm(1).addReg(0).addImm(Offset).addReg(0)
+    .addReg(ScratchReg);
+}
+
+static void MCFIx64ReloadRegFromStack(MachineBasicBlock* MBB,
+                                      MachineBasicBlock::iterator &MI,
+                                      const TargetInstrInfo *TII,
+                                      const unsigned ScratchReg,
+                                      const int64_t Offset) {
+  BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::MOV64rm))
+    .addReg(ScratchReg)
+    .addReg(X86::RSP).addImm(1).addReg(0).addImm(Offset).addReg(0);
+}
+
 void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
                                MachineBasicBlock::iterator &MI) {
   ++NumIndirectCall;
@@ -483,8 +516,8 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   // remove IBMI
   MI = MBB->erase(MI);
 
-  unsigned BIDRegXMM = 0;
-  unsigned TIDRegXMM = 0;
+  bool BIDRegSpill = false;
+  bool TIDRegSpill = false;
   unsigned BIDReg;
   unsigned TIDReg;
 
@@ -495,12 +528,12 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   } else if (ScratchRegs.size() == 1) {
     BIDReg = *ScratchRegs.begin();
     TIDReg = getX64ScratchReg(TargetReg, BIDReg);
-    TIDRegXMM = X86::XMM15;
+    TIDRegSpill = true;
   } else { // no scratch register at all!!
     BIDReg = getX64ScratchReg(TargetReg, TargetReg);
-    BIDRegXMM = X86::XMM14;
+    BIDRegSpill = true;
     TIDReg = getX64ScratchReg(TargetReg, BIDReg);
-    TIDRegXMM = X86::XMM15;
+    TIDRegSpill = true;
   }
   // build the MCFI basic blocks
   MachineBasicBlock *IDCmpMBB, *ICJMBB,
@@ -509,148 +542,60 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, CJOp,
               IDValidityCheckMBB, VerCheckMBB, ReportMBB);
 
-  if (BIDRegXMM) {
-    BuildMI(*MBB, MI, DL, TII->get(X86::MOV64toPQIrr))
-      .addReg(BIDRegXMM, RegState::Define).addReg(BIDReg);
-    BuildMI(*ICJMBB, std::begin(*ICJMBB), DL, TII->get(X86::MOVPQIto64rr))
-      .addReg(BIDReg, RegState::Define).addReg(BIDRegXMM);
+  if (BIDRegSpill) {
+    MCFIx64SpillRegToStack(MBB, MI, TII, BIDReg, -8);
+    auto ICJBegin = std::begin(*ICJMBB);
+    MCFIx64ReloadRegFromStack(ICJMBB, ICJBegin, TII, BIDReg, -8);
   }
 
-  if (TIDRegXMM) {
-    BuildMI(*IDValidityCheckMBB, std::begin(*IDValidityCheckMBB),
-            DL, TII->get(X86::MOV64toPQIrr))
-      .addReg(TIDRegXMM, RegState::Define).addReg(TIDReg);
-    BuildMI(*ICJMBB, std::begin(*ICJMBB), DL, TII->get(X86::MOVPQIto64rr))
-      .addReg(TIDReg, RegState::Define).addReg(TIDRegXMM);
+  if (TIDRegSpill) {
+    MCFIx64SpillRegToStack(MBB, MI, TII, TIDReg, -16);
+    auto ICJBegin = std::begin(*ICJMBB);
+    MCFIx64ReloadRegFromStack(ICJMBB, ICJBegin, TII, TIDReg, -16);
   }
 
   IDCmpMBB->instr_front().setIRInst(I); // transfer the IR to the BID read instruction.
   BarySlot++;
 }
-/*
-static bool isMCFIx64SmallSandboxCheck(const MachineInstr* MI) {
-  return MI->isSandboxCheck() && MI->getOpcode() == X86::LEA64r;
-}
 
-void findAndMarkMCFIx64SandboxedMW(MachineBasicBlock *MBB,
-                                   const unsigned AddrReg,
-                                   MachineBasicBlock::iterator MI) {
-  MachineBasicBlock::iterator MWI(MI);
-  for (++MWI; MWI != MBB->end(); ++MWI) {
-    if (!MWI->mayStore() || MI->getNumOperands() < 5 || MWI->isBranch())
-      continue;
-    
-    if (!MWI->getOperand(0).isReg() ||          // wtf?
-        MWI->getOperand(0).getReg() != AddrReg) // not using addr reg
-      continue;
-    if (!MWI->getOperand(1).isImm() ||
-        MWI->getOperand(1).getImm() != 0 ||     // scale
-        !MWI->getOperand(2).isReg() ||
-        MWI->getOperand(2).getReg() != 0)       // index reg exists
-      continue;
-    if (!MWI->getOperand(3).isImm())            // imm not translated
-      continue;
-    MWI->setSandboxed();
-  }
-}
-// FIXME: the optimization for write sandboxing needs more work.
-void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *MBB) {
-  ++NumIndirectMemWrite;
-  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-  const TargetRegisterInfo *TRI = MF.getTarget().getRegisterInfo();
-
-  MachineBasicBlock::iterator LastSandboxMI = nullptr;
-  MachineBasicBlock::iterator MI;
-  // check whether there are reused addresses in this basic block
-  // e.g., mov %gs:(%rax, %rdx, 8), %rdi
-  //       mov $1, 8(%rdi)
-  //       mov %gs:(%rax, %rdx, 8), %rdi  <= this can be removed
-  //       mov $2, 16(%rdi)
-  std::set<unsigned> AddrGenRegs;
-  bool AddrGenRegsChanged = true;
-  for (MI = MBB->begin(); MI != MBB->end(); ++MI) {
-    AddrGenRegsChanged = true;
-    if (isMCFIx64SmallSandboxCheck(MI)) {
-      const unsigned AddrReg = MI->getOperand(0).getReg();
-      // advance MI to the first instruction that uses MI-defined
-      // scratch register
-      findAndMarkMCFIx64SandboxedMW(MBB, AddrReg, MI);
-      AddrGenRegs.clear();
-      AddrGenRegs.insert(MI->getOperand(1).getReg());
-      AddrGenRegs.insert(MI->getOperand(3).getReg());
-      AddrGenRegs.erase(0);
-      
-      if (!LastSandboxMI) {
-        LastSandboxMI = MI;
-        AddrGenRegsChanged = false;
-      } else {
-        if (//LastSandboxMI->isIdenticalTo(MI) &&
-            !AddrGenRegsChanged) {
-          MBB->dump();
-          MI = MBB->erase(MI); // remove the redundant sandbox check
-          MI = std::prev(MI);  // back the iterator by one
-        } else {
-          LastSandboxMI = MI;
-        }
-      }
-      
-      if (LastSandboxMI == MI) {
-        // rewrite LastSandboxMI by replace movq %gs: to leaq
-        auto &MIB =
-          BuildMI(*MBB, LastSandboxMI, LastSandboxMI->getDebugLoc(),
-                  TII->get(X86::LEA64r)).addOperand(LastSandboxMI->getOperand(0));
-        for (unsigned i = 1; i < 5; i++) {
-          MIB.addOperand(LastSandboxMI->getOperand(i));
-        }
-        MIB.addReg(0); // %gs to none
-        MI = std::prev(LastSandboxMI);
-        LastSandboxMI = MBB->erase(LastSandboxMI);
-        if (LastSandboxMI != MBB->begin())
-          LastSandboxMI = std::prev(LastSandboxMI);
-      }
-    } else {
-      for (auto reg : AddrGenRegs) {
-        // in MCFI, callee-saved regs are not trusted
-        if (MI->getOpcode() == X86::CALL64pcrel32 ||
-            MI->definesRegister(reg, TRI) ||
-            MI->definesRegister(getX86SubSuperRegister(reg, MVT::i32, true), TRI) ||
-            MI->definesRegister(getX86SubSuperRegister(reg, MVT::i16, true), TRI) ||
-            MI->definesRegister(getX86SubSuperRegister(reg, MVT::i8, false), TRI)){
-          AddrGenRegsChanged = true;
-          break;
-        }
-      }
-    }
-  }
-}
-*/
-
-static unsigned XCHGOp(unsigned opcode)
-{
-  switch (opcode) {
-    // xchg is special
-  case X86::XCHG16rm: case X86::XCHG32rm:
-  case X86::XCHG64rm: case X86::XCHG8rm:
-    return 2;
-  }
-  return 0;
+static void MCFIx64CheckMemWriteInPlace(MachineBasicBlock* MBB,
+                                        MachineBasicBlock::iterator &MI,
+                                        const TargetInstrInfo *TII,
+                                        const unsigned ScratchReg) {
+  BuildMI(*MBB, MI, MI->getDebugLoc(),
+          TII->get(X86::MOV64rr)).addReg(ScratchReg).addReg(ScratchReg);
 }
 
 void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *MBB) {
-  ++NumIndirectMemWrite;
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-  const TargetRegisterInfo *TRI = MF.getTarget().getRegisterInfo();
+
+  std::set<MachineBasicBlock::iterator> RegReload;
   
   MachineBasicBlock::iterator MI;
   for (auto MI = std::begin(*MBB); MI != std::end(*MBB); MI++) {
+    if (MI->getOpcode() == X86::LOCK_PREFIX ||
+        MI->getOpcode() == X86::REPNE_PREFIX ||
+        MI->getOpcode() == X86::REP_PREFIX) {
+      llvm_unreachable("MCFI Error: Indirect memory rewriting encounters lock or rep prefix.");
+    }
+
+    // FIXME: for each machine instruction claimed to be sandboxed, we
+    // should check whether it's actually sandboxed.
     if (MI->mayStore() && MI->getNumOperands() >= 5 &&
         !MI->isBranch() && !MI->isSandboxed()) {
       if (MI->isInlineAsm()) {
+        llvm::errs() << "MCFI Warning: InlineAsm\n  ";
         MI->dump();
         continue;
       }
-        
+
       const auto Opcode = MI->getOpcode();
+
+      if (RepOp(Opcode)) {  // in-place sandboxing
+        MCFIx64CheckMemWriteInPlace(MBB, MI, TII, X86::RDI);
+        continue;
+      }
+      
       const unsigned MemOpOffset = XCHGOp(Opcode);
       const auto BaseReg = MI->getOperand(MemOpOffset).isReg() ?
         MI->getOperand(MemOpOffset).getReg() : 0;
@@ -660,7 +605,6 @@ void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *
         continue;
       }
 
-      const auto Scale = MI->getOperand(MemOpOffset+1).getImm();
       const auto IndexReg = MI->getOperand(MemOpOffset+2).getReg();
       const auto Offset = MI->getOperand(MemOpOffset+3).isImm() ?
         MI->getOperand(MemOpOffset+3).getImm() : -1;
@@ -672,33 +616,48 @@ void MCFI::MCFIx64IndirectMemWriteSmall(MachineFunction &MF, MachineBasicBlock *
       // The reason why 1 << 22 is in X86MCFIRegReserve
       if (IndexReg == 0 && Offset >= 0 && Offset < (1 << 22)) {
         // in-place sandboxing
-        BuildMI(*MBB, MI, MI->getDebugLoc(),
-                TII->get(X86::MOV64rr)).addReg(BaseReg).addReg(BaseReg);
+        MCFIx64CheckMemWriteInPlace(MBB, MI, TII, BaseReg);
       } else {
-        if (MI->killsRegister(IndexReg, TRI)) {
-          BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::LEA64r))
-            .addReg(IndexReg, RegState::Define)
-            .addReg(BaseReg).addImm(Scale).addReg(IndexReg)
-            .addOperand(MI->getOperand(3)).addReg(0);
-          auto &MIB = BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(Opcode))
-            .addReg(IndexReg).addImm(0).addReg(0).addImm(0).addReg(0);
-          for (unsigned i = 5; i < MI->getNumOperands(); i++) {
-            if (MI->getOperand(i).isReg() && MI->getOperand(i).isImplicit())
-              continue;
-            MIB.addOperand(MI->getOperand(i));
+        std::set<unsigned> UsedRegSet;
+        for (auto MO = MI->operands_begin(); MO != MI->operands_end(); ++MO) {
+          if (MO->isReg()) {
+            const unsigned reg = MO->getReg();
+            if (reg != X86::RIP && (
+                  X86::GR8RegClass.contains(reg) ||
+                  X86::GR16RegClass.contains(reg) ||
+                  X86::GR32RegClass.contains(reg) ||
+                  X86::GR64RegClass.contains(reg)))
+              UsedRegSet.insert(getX86SubSuperRegister(MO->getReg(), MVT::i64, true));
           }
-          MI = MBB->erase(MI);
-          MI = std::prev(MI);
-        } else {
-          MI->dump();
         }
+        const unsigned ScratchReg = getX64ScratchReg(UsedRegSet);
+        bool NeedSpill = true;
+        if (MI != std::begin(*MBB)) {
+          auto PrevMI = std::prev(MI);
+          if (RegReload.find(PrevMI) != std::end(RegReload) &&
+              ScratchReg == PrevMI->getOperand(0).getReg()) {
+            NeedSpill = false;
+            MBB->erase(PrevMI); // delete the previous reg reload
+          }
+        }
+        // spill scratchreg, %rsp -8 goes beyond the frame end of this function.
+        if (NeedSpill)
+          MCFIx64SpillRegToStack(MBB, MI, TII, ScratchReg, -8);
+        // load address
+        MCFIx64CheckMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg);
+        // mem write
+        MCFIx64RewriteMemWrite(MBB, MI, TII, MemOpOffset, ScratchReg);
+        MI = std::next(MI);
+        MCFIx64ReloadRegFromStack(MBB, MI, TII, ScratchReg, -8);
+        MI = std::prev(MI);
+        RegReload.insert(MI);
       }
     }
   }
 }
 
-void MCFI::MCFIx64IndirectMemWriteLarge(MachineFunction &MF, MachineBasicBlock *MBB) {
-  ++NumIndirectMemWrite;
+void MCFI::MCFIx64IndirectMemWriteLarge(MachineFunction &MF,
+                                        MachineBasicBlock *MBB) {
 }
 
 void MCFI::MCFIx64StackPointer(MachineFunction &MF, MachineBasicBlock *MBB,
