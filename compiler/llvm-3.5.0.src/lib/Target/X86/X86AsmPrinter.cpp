@@ -53,10 +53,13 @@ bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
     SmallSandbox = !M->getNamedMetadata("MCFILargeSandbox");
     SmallID = !M->getNamedMetadata("MCFILargeID");
     NoReturnFunctions.clear();
+    NoReturnFunctions =
+      {"_Unwind_Resume",
+       "__cxa_throw",
+       "__cxa_rethrow"};
     for (auto it = M->begin(); it != M->end(); it++) {
       if (it->doesNotReturn() && it->hasName()) {
         NoReturnFunctions.insert(it->getName());
-        //llvm::errs() << it->getName() << '\n';
       }
     }
   }

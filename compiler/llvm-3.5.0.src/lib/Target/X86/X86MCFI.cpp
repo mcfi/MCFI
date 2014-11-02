@@ -755,13 +755,20 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
       if (MI == std::end(*MBB)) break;
     }
   }
-  
-  if (SmallSandbox) {
-    for (auto MBB = std::begin(MF); MBB != std::end(MF); MBB++)
+
+  for (auto MBB = std::begin(MF); MBB != std::end(MF); MBB++) {
+    // sandboxing
+    if (SmallSandbox) {
       MCFIx64IndirectMemWriteSmall(MF, MBB);
-  } else {
-    for (auto MBB = std::begin(MF); MBB != std::end(MF); MBB++)
+    } else {
       MCFIx64IndirectMemWriteLarge(MF, MBB);
+    }
+
+    // alignment of landing pad
+    if (MBB->isLandingPad()) {
+      auto alignment = SmallID ? 2 : 3;
+      MBB->setAlignment(std::max<unsigned>(MBB->getAlignment(), alignment));
+    }
   }
   return false;
 }
