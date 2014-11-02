@@ -569,7 +569,7 @@ MachineInstr::MachineInstr(MachineFunction &MF, const MachineInstr &MI)
   : MCID(&MI.getDesc()), Parent(nullptr), Operands(nullptr), NumOperands(0),
     Flags(0), AsmPrinterFlags(0),
     NumMemRefs(MI.NumMemRefs), MemRefs(MI.MemRefs),
-    debugLoc(MI.getDebugLoc()), IRInst(nullptr),
+    debugLoc(MI.getDebugLoc()), IRInst(MI.IRInst),
     BarySlot(-1), Sandboxed(false), SandboxCheck(false) {
   CapOperands = OperandCapacity::get(MI.getNumOperands());
   Operands = MF.allocateOperandArray(CapOperands);
