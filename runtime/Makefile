@@ -2,12 +2,15 @@
 
 CC = gcc
 AS = as
-CFLAGS = -O0 -ggdb -fno-strict-aliasing -I./include -nostdinc -fPIC
+CFLAGS = -O2 -ggdb -fno-strict-aliasing -I./include -nostdinc -fPIC
 
 SRCS = $(sort $(wildcard src/*.c src/*/*.c))
 OBJS = $(SRCS:.c=.o)
 OBJS += src/start.o
 RTIME = rock
+
+LD = ld
+LDFLAGS = -dynamic-linker rock -nostdlib -pie -e _start -Bsymbolic -Bsymbolic-functions
 
 .PHONY: runtime clean
 
@@ -24,5 +27,4 @@ clean:
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 runtime: $(OBJS)
-	$(CC) $(CFLAGS) -nostdlib -pie -Wl,-e,_start \
-	-Wl,-Bsymbolic -Wl,-Bsymbolic-functions -o $(RTIME) $(OBJS)
+	$(LD) $(LDFLAGS) -o $(RTIME) $(OBJS)
