@@ -26,3 +26,13 @@ void *memset(void *dest, int c, size_t n) {
   for (; n; n--, s++) *s = c;
   return dest;
 }
+
+size_t strnlen(const char* s, size_t maxlen) {
+  const char *es = s;
+  while (*es && maxlen) {
+    es++;
+    maxlen--;
+  }
+
+  return (es - s);
+}

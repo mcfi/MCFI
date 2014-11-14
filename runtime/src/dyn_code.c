@@ -18,17 +18,28 @@ struct code_region_t {
 char* code_heap = 0;
 
 int create_code_heap(size_t sz) {
+  return 0;
 }
 
-/* code installation and modification are both handled
-   by dyncode_cover, which covers the code heap area with new content.
+/* code installation
 */
-int dyncode_cover(const char *content, /* mixture of code + data */
-                  char *area,          /* which code heap area is to cover */
-                  size_t len,          /* how many bytes */
-                  const char *bitmap   /* differentiates code from data */) {
+int dyncode_install(const char *content, /* mixture of code + data */
+                    char *area,          /* which code heap area is to install */
+                    size_t len,          /* how many bytes */
+                    const char *bitmap   /* differentiates code from data */) {
+  return 0;
+}
+
+/* code modification
+ */
+int dyncode_modify(const char *content, /* mixture of code + data */
+                   char *area,          /* which code heap area is to replace */
+                   size_t len,          /* how many bytes */
+                   const char *bitmap   /* differentiates code from data */) {
+  return 0;
 }
 
 int dyncode_delete(const char *area, /* mixture of code + data */
                    size_t len        /* how many bytes */) {
+  return 0;
 }

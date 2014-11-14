@@ -1,15 +1,15 @@
-#define SYS_brk         12
-#define SYS_ftruncate   77
-#define SYS_madvise     28
-#define SYS_mmap        9
-#define SYS_munmap      11
-#define SYS_mremap      25
-#define SYS_mprotect    10
-#define SYS_open        2
 #define SYS_read        0
 #define SYS_write       1
+#define SYS_open        2
 #define SYS_close       3
 #define SYS_lseek       8
+#define SYS_mmap        9
+#define SYS_mprotect    10
+#define SYS_munmap      11
+#define SYS_brk         12
+#define SYS_mremap      25
+#define SYS_madvise     28
+#define SYS_ftruncate   77
 #define SYS_unlink      87
 #define SYS_arch_prctl  158
 #define SYS_exit_group  231
@@ -81,3 +81,6 @@ static inline long __syscall6(long n, long a1, long a2, long a3, long a4, long a
 						  "d"(a3), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
 	return ret;
 }
+
+int arch_prctl(int code, unsigned long addr);
+void quit(int status);

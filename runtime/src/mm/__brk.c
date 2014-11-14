@@ -1,6 +1,7 @@
+#include <def.h>
 #include <syscall.h>
 
-void* __brk(void* newbrk)
+uintptr_t __brk(uintptr_t newbrk)
 {
-  return __syscall1(SYS_brk, newbrk);
+  return (uintptr_t)__syscall1(SYS_brk, (long)newbrk);
 }

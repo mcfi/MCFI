@@ -65,4 +65,6 @@ void *malloc(size_t n);
 void *realloc(void *p, size_t n);
 void free(void *p);
 
+uintptr_t __brk(uintptr_t);
+
 #endif

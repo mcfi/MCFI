@@ -22,6 +22,9 @@
 #define __NEED_intptr_t
 #define __NEED_off_t
 #define __NEED_mode_t
+#define __NEED_uintptr_t
+#define __NEED_ptrdiff_t
+#define __NEED_intptr_t
 
 #include <alltypes.h>
 
@@ -140,5 +143,17 @@ typedef uint32_t uint_fast32_t;
 #endif
 
 #define PAGE_SIZE 4096
+#define true 1
+#define false 0
+
+typedef char bool;
+typedef unsigned char u8;
+typedef signed short s16;
+
+#define INT_MAX INT32_MAX
+
+#define SixtyFourKB      ((unsigned long)(1UL << 16))
+#define OneTwentyEightKB ((unsigned long)(1UL << 17))
+#define FourGB           ((unsigned long)(1UL << 32))
 
 #endif

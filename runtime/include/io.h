@@ -73,6 +73,7 @@
 #endif
 
 #include <def.h>
+#include <stdarg.h>
 
 int open(const char *filename, int flags, mode_t mode);
 ssize_t read(int fd, void *buf, size_t count);
@@ -83,5 +84,8 @@ off_t lseek(int fd, off_t offset, int whence);
 int shm_open(const char *name, int flag, mode_t mode);
 int shm_unlink(const char *name);
 int ftruncate(int fd, off_t length);
+
+int sprintf(char *buf, const char *fmt, ...);
+int dprintf(int fd, const char *fmt, ...);
 
 #endif
