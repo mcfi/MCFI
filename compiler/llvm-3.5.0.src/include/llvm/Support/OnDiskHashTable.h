@@ -171,7 +171,7 @@ public:
 
     // Pad with zeros so that we can start the hashtable at an aligned address.
     offset_type TableOff = Out.tell();
-    uint64_t N = llvm::OffsetToAlignment(TableOff, alignOf<offset_type>());
+    uint64_t N = llvm::OffsetToAlignment(TableOff, alignOf<offset_type>(), 0);
     TableOff += N;
     while (N--)
       LE.write<uint8_t>(0);

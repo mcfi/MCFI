@@ -294,7 +294,7 @@ PTHEntry PTHWriter::LexTokens(Lexer& L) {
   using namespace llvm::support;
   endian::Writer<little> LE(Out);
   uint32_t TokenOff = Out.tell();
-  for (uint64_t N = llvm::OffsetToAlignment(TokenOff, 4); N; --N, ++TokenOff)
+  for (uint64_t N = llvm::OffsetToAlignment(TokenOff, 4, 0); N; --N, ++TokenOff)
     LE.write<uint8_t>(0);
 
   // Keep track of matching '#if' ... '#endif'.

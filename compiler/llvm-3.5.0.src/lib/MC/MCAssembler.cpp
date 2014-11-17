@@ -535,7 +535,7 @@ uint64_t MCAssembler::computeFragmentSize(const MCAsmLayout &Layout,
   case MCFragment::FT_Align: {
     const MCAlignFragment &AF = cast<MCAlignFragment>(F);
     unsigned Offset = Layout.getFragmentOffset(&AF);
-    unsigned Size = OffsetToAlignment(Offset, AF.getAlignment());
+    unsigned Size = OffsetToAlignment(Offset, AF.getAlignment(), AF.getExtra());
     // If we are padding with nops, force the padding to be larger than the
     // minimum nop size.
     if (Size > 0 && AF.hasEmitNops()) {

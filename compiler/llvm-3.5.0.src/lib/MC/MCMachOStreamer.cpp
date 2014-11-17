@@ -375,7 +375,7 @@ void MCMachOStreamer::EmitZerofill(const MCSection *Section, MCSymbol *Symbol,
 
   // Emit an align fragment if necessary.
   if (ByteAlignment != 1)
-    new MCAlignFragment(ByteAlignment, 0, 0, ByteAlignment, &SectData);
+    new MCAlignFragment(ByteAlignment, 0, 0, ByteAlignment, 0, &SectData);
 
   MCFragment *F = new MCFillFragment(0, 0, Size, &SectData);
   SD.setFragment(F);

@@ -107,9 +107,11 @@ public:
   void EmitBytes(StringRef Data) override;
   void EmitValueToAlignment(unsigned ByteAlignment, int64_t Value = 0,
                             unsigned ValueSize = 1,
-                            unsigned MaxBytesToEmit = 0) override;
+                            unsigned MaxBytesToEmit = 0,
+                            unsigned Extra = 0) override;
   void EmitCodeAlignment(unsigned ByteAlignment,
-                         unsigned MaxBytesToEmit = 0) override;
+                         unsigned MaxBytesToEmit = 0,
+                         unsigned Extra = 0) override;
   bool EmitValueToOffset(const MCExpr *Offset, unsigned char Value) override;
   void EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
                              unsigned Column, unsigned Flags,

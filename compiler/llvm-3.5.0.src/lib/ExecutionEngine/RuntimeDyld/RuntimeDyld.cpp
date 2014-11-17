@@ -380,7 +380,7 @@ void RuntimeDyldImpl::emitCommonSymbols(ObjectImage &Obj,
     it->first.getName(Name);
     if (Align) {
       // This symbol has an alignment requirement.
-      uint64_t AlignOffset = OffsetToAlignment((uint64_t)Addr, Align);
+      uint64_t AlignOffset = OffsetToAlignment((uint64_t)Addr, Align, 0);
       Addr += AlignOffset;
       Offset += AlignOffset;
       DEBUG(dbgs() << "Allocating common symbol " << Name << " address "

@@ -304,10 +304,11 @@ void MCObjectStreamer::EmitBytes(StringRef Data) {
 void MCObjectStreamer::EmitValueToAlignment(unsigned ByteAlignment,
                                             int64_t Value,
                                             unsigned ValueSize,
-                                            unsigned MaxBytesToEmit) {
+                                            unsigned MaxBytesToEmit,
+                                            unsigned Extra) {
   if (MaxBytesToEmit == 0)
     MaxBytesToEmit = ByteAlignment;
-  insert(new MCAlignFragment(ByteAlignment, Value, ValueSize, MaxBytesToEmit));
+  insert(new MCAlignFragment(ByteAlignment, Value, ValueSize, MaxBytesToEmit, Extra));
 
   // Update the maximum alignment on the current section if necessary.
   if (ByteAlignment > getCurrentSectionData()->getAlignment())
@@ -315,8 +316,9 @@ void MCObjectStreamer::EmitValueToAlignment(unsigned ByteAlignment,
 }
 
 void MCObjectStreamer::EmitCodeAlignment(unsigned ByteAlignment,
-                                         unsigned MaxBytesToEmit) {
-  EmitValueToAlignment(ByteAlignment, 0, 1, MaxBytesToEmit);
+                                         unsigned MaxBytesToEmit,
+                                         unsigned Extra) {
+  EmitValueToAlignment(ByteAlignment, 0, 1, MaxBytesToEmit, Extra);
   cast<MCAlignFragment>(getCurrentFragment())->setEmitNops(true);
 }
 

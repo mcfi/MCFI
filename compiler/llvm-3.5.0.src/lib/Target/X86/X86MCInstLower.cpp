@@ -923,18 +923,27 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::CALLpcrel32:
   case X86::CALL64pcrel32:
   {
-    if (isNoReturnFunction(MI->getOperand(0)))
-      break;
+    if (!isNoReturnFunction(MI->getOperand(0))) {
+      OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 5);
+    }
+    break;
   }
   case X86::CALL32r:
+  {
+    OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
+    break;
+  }
   case X86::CALL64r:
   {
-    MCSymbol *CallBeginSym =
-      OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
-                                   + StringRef("_mcfi_callbegin"));
-
-    OutStreamer.EmitLabel(CallBeginSym);
-    //OutStreamer.EmitBundleLock(true);
+    const unsigned reg = MI->getOperand(0).getReg();
+    switch (reg) {
+    case X86::R8: case X86::R9: case X86::R10: case X86::R11:
+    case X86::R12: case X86::R13: case X86::R14: case X86::R15:
+      OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 3);
+    default:
+      OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
+    }
+    break;
   }
   }
 
@@ -996,12 +1005,6 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::CALL32r:
   case X86::CALL64r:
   {
-    MCSymbol *CallEndSym =
-      OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
-                                   + StringRef("_mcfi_callend"));
-    OutStreamer.EmitValueToAlignment(SmallID ? 4 : 8, 0x90);
-    OutStreamer.EmitLabel(CallEndSym);
-    //OutStreamer.EmitBundleUnlock();
     if (MI->getOpcode() == X86::CALL64r ||
         MI->getOpcode() == X86::CALL32r) {
       assert(MI->hasBarySlot());

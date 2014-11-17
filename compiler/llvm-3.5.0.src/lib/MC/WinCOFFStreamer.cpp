@@ -210,7 +210,7 @@ void MCWinCOFFStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 
   if (ByteAlignment != 1)
     new MCAlignFragment(ByteAlignment, /*_Value=*/0, /*_ValueSize=*/0,
-                        ByteAlignment, &SectionData);
+                        ByteAlignment, /*_Extra=*/0, &SectionData);
 
   MCFillFragment *Fragment =
       new MCFillFragment(/*_Value=*/0, /*_ValueSize=*/0, Size, &SectionData);

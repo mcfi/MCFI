@@ -120,7 +120,7 @@ uint64_t MachObjectWriter::getPaddingSize(const MCSectionData *SD,
   const MCSectionData &NextSD = *Layout.getSectionOrder()[Next];
   if (NextSD.getSection().isVirtualSection())
     return 0;
-  return OffsetToAlignment(EndAddr, NextSD.getAlignment());
+  return OffsetToAlignment(EndAddr, NextSD.getAlignment(), 0);
 }
 
 void MachObjectWriter::WriteHeader(unsigned NumLoadCommands,
@@ -443,7 +443,7 @@ void MachObjectWriter::WriteLinkerOptionsLoadCommand(
   }
 
   // Pad to a multiple of the pointer size.
-  WriteBytes("", OffsetToAlignment(BytesWritten, is64Bit() ? 8 : 4));
+  WriteBytes("", OffsetToAlignment(BytesWritten, is64Bit() ? 8 : 4, 0));
 
   assert(OS.tell() - Start == Size);
 }
@@ -846,7 +846,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
   // The section data is padded to 4 bytes.
   //
   // FIXME: Is this machine dependent?
-  unsigned SectionDataPadding = OffsetToAlignment(SectionDataFileSize, 4);
+  unsigned SectionDataPadding = OffsetToAlignment(SectionDataFileSize, 4, 0);
   SectionDataFileSize += SectionDataPadding;
 
   // Write the prolog, starting with the header and load command...
@@ -988,7 +988,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
 #endif
     Asm.getLOHContainer().Emit(*this, Layout);
     // Pad to a multiple of the pointer size.
-    WriteBytes("", OffsetToAlignment(LOHRawSize, is64Bit() ? 8 : 4));
+    WriteBytes("", OffsetToAlignment(LOHRawSize, is64Bit() ? 8 : 4, 0));
     assert(OS.tell() - Start == LOHSize);
   }
 

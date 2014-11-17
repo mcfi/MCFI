@@ -616,7 +616,8 @@ public:
   /// emitted.
   virtual void EmitValueToAlignment(unsigned ByteAlignment, int64_t Value = 0,
                                     unsigned ValueSize = 1,
-                                    unsigned MaxBytesToEmit = 0);
+                                    unsigned MaxBytesToEmit = 0,
+                                    unsigned Extra = 0);
 
   /// EmitCodeAlignment - Emit nops until the byte alignment @p ByteAlignment
   /// is reached.
@@ -629,8 +630,11 @@ public:
   /// @param MaxBytesToEmit - The maximum numbers of bytes to emit, or 0. If
   /// the alignment cannot be reached in this many bytes, no bytes are
   /// emitted.
+  /// @param Extra - Alignment should reach x, where x + Extra is Aligned at
+  /// ByteAlignment
   virtual void EmitCodeAlignment(unsigned ByteAlignment,
-                                 unsigned MaxBytesToEmit = 0);
+                                 unsigned MaxBytesToEmit = 0,
+                                 unsigned Extra = 0);
 
   /// EmitValueToOffset - Emit some number of copies of @p Value until the
   /// byte offset @p Offset is reached.

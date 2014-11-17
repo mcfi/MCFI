@@ -1638,7 +1638,7 @@ void ELFObjectWriter::WriteDataSectionData(MCAssembler &Asm,
                                            const MCSectionELF &Section) {
   const MCSectionData &SD = Asm.getOrCreateSectionData(Section);
 
-  uint64_t Padding = OffsetToAlignment(OS.tell(), SD.getAlignment());
+  uint64_t Padding = OffsetToAlignment(OS.tell(), SD.getAlignment(), 0);
   WriteZeros(Padding);
 
   if (IsELFMetaDataSection(SD)) {
@@ -1807,7 +1807,7 @@ void ELFObjectWriter::WriteObject(MCAssembler &Asm,
   for (unsigned i = 0; i < NumRegularSections + 1; ++i)
     WriteDataSectionData(Asm, Layout, *Sections[i]);
 
-  uint64_t Padding = OffsetToAlignment(OS.tell(), NaturalAlignment);
+  uint64_t Padding = OffsetToAlignment(OS.tell(), NaturalAlignment, 0);
   WriteZeros(Padding);
 
   // ... then the section header table ...

@@ -282,11 +282,12 @@ void MCELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
 void MCELFStreamer::EmitValueToAlignment(unsigned ByteAlignment,
                                          int64_t Value,
                                          unsigned ValueSize,
-                                         unsigned MaxBytesToEmit) {
+                                         unsigned MaxBytesToEmit,
+                                         unsigned Extra) {
   if (getCurrentSectionData()->isBundleLocked())
     report_fatal_error("Emitting values inside a locked bundle is forbidden");
   MCObjectStreamer::EmitValueToAlignment(ByteAlignment, Value,
-                                         ValueSize, MaxBytesToEmit);
+                                         ValueSize, MaxBytesToEmit, Extra);
 }
 
 // Add a symbol for the file name of this module. They start after the
@@ -520,7 +521,7 @@ void MCELFStreamer::Flush() {
     const MCSection &Section = Symbol.getSection();
 
     MCSectionData &SectData = getAssembler().getOrCreateSectionData(Section);
-    new MCAlignFragment(ByteAlignment, 0, 1, ByteAlignment, &SectData);
+    new MCAlignFragment(ByteAlignment, 0, 1, ByteAlignment, 0, &SectData);
 
     MCFragment *F = new MCFillFragment(0, 0, Size, &SectData);
     SD->setFragment(F);

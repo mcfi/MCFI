@@ -356,6 +356,9 @@ class MCAlignFragment : public MCFragment {
   /// cannot be satisfied in this width then this fragment is ignored.
   unsigned MaxBytesToEmit;
 
+  /// Extra - The current number of bytes + Extra should be aligned to Alignment
+  unsigned Extra;
+  
   /// EmitNops - Flag to indicate that (optimal) NOPs should be emitted instead
   /// of using the provided value. The exact interpretation of this flag is
   /// target dependent.
@@ -363,10 +366,10 @@ class MCAlignFragment : public MCFragment {
 
 public:
   MCAlignFragment(unsigned _Alignment, int64_t _Value, unsigned _ValueSize,
-                  unsigned _MaxBytesToEmit, MCSectionData *SD = nullptr)
+                  unsigned _MaxBytesToEmit, unsigned _Extra, MCSectionData *SD = nullptr)
     : MCFragment(FT_Align, SD), Alignment(_Alignment),
       Value(_Value),ValueSize(_ValueSize),
-      MaxBytesToEmit(_MaxBytesToEmit), EmitNops(false) {}
+      MaxBytesToEmit(_MaxBytesToEmit), Extra(_Extra), EmitNops(false) {}
 
   /// @name Accessors
   /// @{
@@ -379,6 +382,7 @@ public:
 
   unsigned getMaxBytesToEmit() const { return MaxBytesToEmit; }
 
+  unsigned getExtra() const { return Extra; }
   bool hasEmitNops() const { return EmitNops; }
   void setEmitNops(bool Value) { EmitNops = Value; }
 

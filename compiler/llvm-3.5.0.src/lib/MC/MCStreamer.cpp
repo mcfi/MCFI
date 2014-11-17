@@ -679,9 +679,11 @@ void MCStreamer::EmitULEB128Value(const MCExpr *Value) {}
 void MCStreamer::EmitSLEB128Value(const MCExpr *Value) {}
 void MCStreamer::EmitValueToAlignment(unsigned ByteAlignment, int64_t Value,
                                       unsigned ValueSize,
-                                      unsigned MaxBytesToEmit) {}
+                                      unsigned MaxBytesToEmit,
+                                      unsigned Extra) {}
 void MCStreamer::EmitCodeAlignment(unsigned ByteAlignment,
-                                   unsigned MaxBytesToEmit) {}
+                                   unsigned MaxBytesToEmit,
+                                   unsigned Extra) {}
 bool MCStreamer::EmitValueToOffset(const MCExpr *Offset, unsigned char Value) {
   return false;
 }

@@ -76,7 +76,7 @@ public:
 
   void EmitIdent(StringRef IdentString) override;
 
-  void EmitValueToAlignment(unsigned, int64_t, unsigned, unsigned) override;
+  void EmitValueToAlignment(unsigned, int64_t, unsigned, unsigned, unsigned) override;
 
   void Flush() override;
 

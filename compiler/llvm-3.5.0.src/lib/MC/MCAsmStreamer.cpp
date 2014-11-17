@@ -176,10 +176,12 @@ public:
 
   void EmitValueToAlignment(unsigned ByteAlignment, int64_t Value = 0,
                             unsigned ValueSize = 1,
-                            unsigned MaxBytesToEmit = 0) override;
+                            unsigned MaxBytesToEmit = 0,
+                            unsigned Extra = 0) override;
 
   void EmitCodeAlignment(unsigned ByteAlignment,
-                         unsigned MaxBytesToEmit = 0) override;
+                         unsigned MaxBytesToEmit = 0,
+                         unsigned Extra = 0) override;
 
   bool EmitValueToOffset(const MCExpr *Offset,
                          unsigned char Value = 0) override;
@@ -748,7 +750,12 @@ void MCAsmStreamer::EmitFill(uint64_t NumBytes, uint8_t FillValue) {
 
 void MCAsmStreamer::EmitValueToAlignment(unsigned ByteAlignment, int64_t Value,
                                          unsigned ValueSize,
-                                         unsigned MaxBytesToEmit) {
+                                         unsigned MaxBytesToEmit,
+                                         unsigned Extra) {
+  // When assembly files are output, output .align directives to align calls
+  // is wrong, so we don't output the directives.
+  if (Extra)
+    return;
   // Some assemblers don't support non-power of two alignments, so we always
   // emit alignments as a power of two if possible.
   if (isPowerOf2_32(ByteAlignment)) {
@@ -802,10 +809,11 @@ void MCAsmStreamer::EmitValueToAlignment(unsigned ByteAlignment, int64_t Value,
 }
 
 void MCAsmStreamer::EmitCodeAlignment(unsigned ByteAlignment,
-                                      unsigned MaxBytesToEmit) {
+                                      unsigned MaxBytesToEmit,
+                                      unsigned Extra) {
   // Emit with a text fill value.
   EmitValueToAlignment(ByteAlignment, MAI->getTextAlignFillValue(),
-                       1, MaxBytesToEmit);
+                       1, MaxBytesToEmit, Extra);
 }
 
 bool MCAsmStreamer::EmitValueToOffset(const MCExpr *Offset,
