@@ -170,9 +170,10 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
   }
 
   // mov %gs:BarySlot, BIDReg
-  BuildMI(*MBB, I, DL, TII->get(BIDRegReadOp))
+  auto &MIB = BuildMI(*MBB, I, DL, TII->get(BIDRegReadOp))
     .addReg(BIDReg, RegState::Define)
     .addReg(0).addImm(1).addReg(0).addImm(BarySlot).addReg(X86::GS);
+  MIB->setBarySlot(BarySlot);
   
   // cmp BIDReg, %gs:(TargetReg)
   BuildMI(*MBB, I, DL, TII->get(CmpOp))
@@ -753,21 +754,6 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
         MCFIx64StackPointer(MF, MBB, MI);
       }
       if (MI == std::end(*MBB)) break;
-    }
-  }
-
-  for (auto MBB = std::begin(MF); MBB != std::end(MF); MBB++) {
-    // sandboxing
-    if (SmallSandbox) {
-      MCFIx64IndirectMemWriteSmall(MF, MBB);
-    } else {
-      MCFIx64IndirectMemWriteLarge(MF, MBB);
-    }
-
-    // alignment of landing pad
-    if (MBB->isLandingPad()) {
-      auto alignment = SmallID ? 2 : 3;
-      MBB->setAlignment(std::max<unsigned>(MBB->getAlignment(), alignment));
     }
   }
   return false;

@@ -513,8 +513,10 @@ void TargetPassConfig::addMachinePasses() {
     printAndVerify("After PreRegAlloc passes");
 
   // Run MCFI Register Reservation
-  if (addMCFIRegReservePass())
-    printAndVerify("After MCFI Register Reservation pass");
+  // Not needed any more, since we use address-size change prefix 0x67 to
+  // force 32-bit addressing.
+  // if (addMCFIRegReservePass())
+  //   printAndVerify("After MCFI Register Reservation pass");
   
   // Run register allocation and passes that are tightly coupled with it,
   // including phi elimination and scheduling.

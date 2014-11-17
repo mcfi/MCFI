@@ -976,7 +976,8 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   {
     const unsigned BaseReg = MI->getOperand(1).getReg();
     const unsigned SegReg = MI->getOperand(5).getReg();
-    if (!BaseReg && (SegReg == X86::GS || SegReg == X86::FS)) {
+    if (!BaseReg && (SegReg == X86::GS || SegReg == X86::FS) &&
+        MI->hasBarySlot()) {
       const unsigned MCFIID = MI->getOperand(4).getImm();
       MCSymbol *MCFIIDSym = 
         OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
