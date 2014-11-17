@@ -58,7 +58,7 @@ int semget(key_t, int, int);
 int semop(int, struct sembuf *, size_t);
 
 #ifdef _GNU_SOURCE
-int semtimedop(int, struct sembuf *, size_t, const struct timespec *);
+int semtimedop(int, struct sembuf *, size_t, struct timespec *);
 #endif
 
 #ifdef __cplusplus

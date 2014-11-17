@@ -3,5 +3,5 @@
 
 int getrusage(int who, struct rusage *ru)
 {
-	return syscall(SYS_getrusage, who, ru);
+  return syscall(SYS_getrusage, who, mcfi_sandbox_mask(ru));
 }

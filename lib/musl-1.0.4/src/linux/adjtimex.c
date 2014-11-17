@@ -3,5 +3,5 @@
 
 int adjtimex(struct timex *tx)
 {
-	return syscall(SYS_adjtimex, tx);
+  return syscall(SYS_adjtimex, mcfi_sandbox_mask(tx));
 }

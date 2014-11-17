@@ -30,15 +30,15 @@ static const unsigned long app_mask[] = {
 
 void __block_all_sigs(void *set)
 {
-	__syscall(SYS_rt_sigprocmask, SIG_BLOCK, &all_mask, set, _NSIG/8);
+  __syscall(SYS_rt_sigprocmask, SIG_BLOCK, mcfi_sandbox_mask(&all_mask), mcfi_sandbox_mask(set), _NSIG/8);
 }
 
 void __block_app_sigs(void *set)
 {
-	__syscall(SYS_rt_sigprocmask, SIG_BLOCK, &app_mask, set, _NSIG/8);
+  __syscall(SYS_rt_sigprocmask, SIG_BLOCK, mcfi_sandbox_mask(&app_mask), mcfi_sandbox_mask(set), _NSIG/8);
 }
 
 void __restore_sigs(void *set)
 {
-	__syscall(SYS_rt_sigprocmask, SIG_SETMASK, set, 0, _NSIG/8);
+  __syscall(SYS_rt_sigprocmask, SIG_SETMASK, mcfi_sandbox_mask(set), 0, _NSIG/8);
 }

@@ -16,7 +16,7 @@ int fchmodat(int fd, const char *path, mode_t mode, int flag)
 	int ret, fd2;
 	char proc[15+3*sizeof(int)];
 
-	if ((ret = __syscall(SYS_fstatat, fd, path, &st, flag)))
+	if ((ret = __syscall(SYS_fstatat, fd, path, mcfi_sandbox_mask(&st), flag)))
 		return __syscall_ret(ret);
 	if (S_ISLNK(st.st_mode))
 		return __syscall_ret(-EOPNOTSUPP);
@@ -28,7 +28,7 @@ int fchmodat(int fd, const char *path, mode_t mode, int flag)
 	}
 
 	__procfdname(proc, fd2);
-	if (!(ret = __syscall(SYS_stat, proc, &st)) && !S_ISLNK(st.st_mode))
+	if (!(ret = __syscall(SYS_stat, proc, mcfi_sandbox_mask(&st))) && !S_ISLNK(st.st_mode))
 		ret = __syscall(SYS_chmod, proc, mode);
 
 	__syscall(SYS_close, fd2);

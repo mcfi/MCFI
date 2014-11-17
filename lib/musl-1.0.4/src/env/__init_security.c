@@ -22,7 +22,7 @@ void __init_security(size_t *aux)
 	if (aux[AT_UID]==aux[AT_EUID] && aux[AT_GID]==aux[AT_EGID]
 		&& !aux[AT_SECURE]) return;
 
-	__syscall(SYS_poll, pfd, 3, 0);
+	__syscall(SYS_poll, mcfi_sandbox_mask(pfd), 3, 0);
 	for (i=0; i<3; i++) if (pfd[i].revents&POLLNVAL)
 		if (__syscall(SYS_open, "/dev/null", O_RDWR|O_LARGEFILE)<0)
 			a_crash();

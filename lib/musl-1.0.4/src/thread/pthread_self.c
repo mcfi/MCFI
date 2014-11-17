@@ -1,5 +1,5 @@
 #include "pthread_impl.h"
-
+#include "syscall.h"
 static struct pthread *main_thread = &(struct pthread){0};
 
 /* pthread_key_create.c overrides this */
@@ -9,14 +9,14 @@ weak_alias(dummy, __pthread_tsd_main);
 static int init_main_thread()
 {
 	__syscall(SYS_rt_sigprocmask, SIG_UNBLOCK,
-		SIGPT_SET, 0, _NSIG/8);
+                  mcfi_sandbox_mask(SIGPT_SET), 0, _NSIG/8);
 	if (__set_thread_area(TP_ADJ(main_thread)) < 0) return -1;
 	main_thread->canceldisable = libc.canceldisable;
 	main_thread->tsd = (void **)__pthread_tsd_main;
 	main_thread->errno_ptr = __errno_location();
 	main_thread->self = main_thread;
 	main_thread->tid = main_thread->pid =
-		__syscall(SYS_set_tid_address, &main_thread->tid);
+          __syscall(SYS_set_tid_address, mcfi_sandbox_mask(&main_thread->tid));
 	if (!main_thread->dtv)
 		main_thread->dtv = (void *)dummy;
 	libc.main_thread = main_thread;

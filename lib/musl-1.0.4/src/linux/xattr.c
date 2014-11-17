@@ -3,37 +3,37 @@
 
 ssize_t getxattr(const char *path, const char *name, void *value, size_t size)
 {
-	return syscall(SYS_getxattr, path, name, value, size);
+  return syscall(SYS_getxattr, path, name, mcfi_sandbox_mask(value), size);
 }
 
 ssize_t lgetxattr(const char *path, const char *name, void *value, size_t size)
 {
-	return syscall(SYS_lgetxattr, path, name, value, size);
+  return syscall(SYS_lgetxattr, path, name, mcfi_sandbox_mask(value), size);
 }
 
 ssize_t fgetxattr(int filedes, const char *name, void *value, size_t size)
 {
-	return syscall(SYS_fgetxattr, filedes, name, value, size);
+  return syscall(SYS_fgetxattr, filedes, name, mcfi_sandbox_mask(value), size);
 }
 
 ssize_t listxattr(const char *path, char *list, size_t size)
 {
-	return syscall(SYS_listxattr, path, list, size);
+  return syscall(SYS_listxattr, path, mcfi_sandbox_mask(list), size);
 }
 
 ssize_t llistxattr(const char *path, char *list, size_t size)
 {
-	return syscall(SYS_llistxattr, path, list, size);
+  return syscall(SYS_llistxattr, path, mcfi_sandbox_mask(list), size);
 }
 
 ssize_t flistxattr(int filedes, char *list, size_t size)
 {
-	return syscall(SYS_flistxattr, filedes, list, size);
+  return syscall(SYS_flistxattr, filedes, mcfi_sandbox_mask(list), size);
 }
 
 int setxattr(const char *path, const char *name, const void *value, size_t size, int flags)
 {
-	return syscall(SYS_setxattr, path, name, value, size, flags);
+  return syscall(SYS_setxattr, path, name, value, size, flags);
 }
 
 int lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags)

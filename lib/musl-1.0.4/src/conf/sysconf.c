@@ -229,13 +229,13 @@ long sysconf(int name)
 	} else if (values[name] == CPUCNT) {
 		unsigned char set[128] = {1};
 		int i, cnt;
-		__syscall(SYS_sched_getaffinity, 0, sizeof set, set);
+		__syscall(SYS_sched_getaffinity, 0, sizeof set, mcfi_sandbox_mask(set));
 		for (i=cnt=0; i<sizeof set; i++)
 			for (; set[i]; set[i]&=set[i]-1, cnt++);
 		return cnt;
 	} else if (values[name] < OFLOW) {
 		long lim[2];
-		__syscall(SYS_getrlimit, values[name]&16383, lim);
+		__syscall(SYS_getrlimit, values[name]&16383, mcfi_sandbox_mask(lim));
 		return lim[0] < 0 ? LONG_MAX : lim[0];
 	}
 	return values[name];

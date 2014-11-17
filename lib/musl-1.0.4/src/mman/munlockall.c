@@ -3,5 +3,5 @@
 
 int munlockall(void)
 {
-	return syscall(SYS_munlockall);
+  return munlock((void*)0x10000, 0xffff0000UL);
 }

@@ -8,10 +8,10 @@ int timerfd_create(int clockid, int flags)
 
 int timerfd_settime(int fd, int flags, const struct itimerspec *new, struct itimerspec *old)
 {
-	return syscall(SYS_timerfd_settime, fd, flags, new, old);
+  return syscall(SYS_timerfd_settime, fd, flags, new, mcfi_sandbox_mask(old));
 }
 
 int timerfd_gettime(int fd, struct itimerspec *cur)
 {
-	return syscall(SYS_timerfd_gettime, fd, cur);
+  return syscall(SYS_timerfd_gettime, fd, mcfi_sandbox_mask(cur));
 }

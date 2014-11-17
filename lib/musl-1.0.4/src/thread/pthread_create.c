@@ -100,7 +100,7 @@ static int start(void *p)
 	}
 	if (self->unblock_cancel)
 		__syscall(SYS_rt_sigprocmask, SIG_UNBLOCK,
-			SIGPT_SET, 0, _NSIG/8);
+                          mcfi_sandbox_mask(SIGPT_SET), 0, _NSIG/8);
 	pthread_exit(self->start(self->start_arg));
 	return 0;
 }

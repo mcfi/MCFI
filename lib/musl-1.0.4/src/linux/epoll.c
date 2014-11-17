@@ -14,15 +14,15 @@ int epoll_create1(int flags)
 
 int epoll_ctl(int fd, int op, int fd2, struct epoll_event *ev)
 {
-	return syscall(SYS_epoll_ctl, fd, op, fd2, ev);
+  return syscall(SYS_epoll_ctl, fd, op, fd2, mcfi_sandbox_mask(ev));
 }
 
 int epoll_pwait(int fd, struct epoll_event *ev, int cnt, int to, const sigset_t *sigs)
 {
-	return syscall(SYS_epoll_pwait, fd, ev, cnt, to, sigs, _NSIG/8);
+  return syscall(SYS_epoll_pwait, fd, mcfi_sandbox_mask(ev), cnt, to, sigs, _NSIG/8);
 }
 
 int epoll_wait(int fd, struct epoll_event *ev, int cnt, int to)
 {
-	return syscall(SYS_epoll_wait, fd, ev, cnt, to);
+  return syscall(SYS_epoll_wait, fd, mcfi_sandbox_mask(ev), cnt, to);
 }

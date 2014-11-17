@@ -13,11 +13,12 @@ int fcntl(int fd, int cmd, ...)
 	arg = va_arg(ap, unsigned long);
 	va_end(ap);
 	if (cmd == F_SETFL) arg |= O_LARGEFILE;
-	if (cmd == F_SETLKW) return syscall_cp(SYS_fcntl, fd, cmd, (void *)arg);
+	if (cmd == F_SETLKW) return syscall_cp(SYS_fcntl, fd, cmd, (void *)mcfi_sandbox_mask(arg));
 	if (cmd == F_GETOWN) {
 		struct f_owner_ex ex;
-		int ret = __syscall(SYS_fcntl, fd, F_GETOWN_EX, &ex);
-		if (ret == -EINVAL) return __syscall(SYS_fcntl, fd, cmd, (void *)arg);
+		int ret = __syscall(SYS_fcntl, fd, F_GETOWN_EX, mcfi_sandbox_mask(&ex));
+		if (ret == -EINVAL) return __syscall(SYS_fcntl, fd, cmd,
+                                                     (void *)mcfi_sandbox_mask(arg));
 		if (ret) return __syscall_ret(ret);
 		return ex.type == F_OWNER_PGRP ? -ex.pid : ex.pid;
 	}
@@ -43,7 +44,7 @@ int fcntl(int fd, int cmd, ...)
 	case F_GETLK:
 	case F_GETOWN_EX:
 	case F_SETOWN_EX:
-		return syscall(SYS_fcntl, fd, cmd, (void *)arg);
+          return syscall(SYS_fcntl, fd, cmd, (void *)mcfi_sandbox_mask(arg));
 	default:
 		return syscall(SYS_fcntl, fd, cmd, arg);
 	}

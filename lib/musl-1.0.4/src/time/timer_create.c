@@ -71,7 +71,7 @@ static void *start(void *arg)
 	pthread_barrier_wait(&args->b);
 	if ((id = self->timer_id) >= 0) {
 		__syscall(SYS_rt_sigprocmask, SIG_UNBLOCK,
-			SIGTIMER_SET, 0, _NSIG/8);
+                          mcfi_sandbox_mask(SIGTIMER_SET), 0, _NSIG/8);
 		__wait(&self->timer_id, 0, id, 1);
 		__syscall(SYS_timer_delete, id);
 	}
@@ -99,7 +99,7 @@ int timer_create(clockid_t clk, struct sigevent *restrict evp, timer_t *restrict
 			ksev.sigev_tid = 0;
 			ksevp = &ksev;
 		}
-		if (syscall(SYS_timer_create, clk, ksevp, &timerid) < 0)
+		if (syscall(SYS_timer_create, clk, mcfi_sandbox_mask(ksevp), mcfi_sandbox_mask(&timerid)) < 0)
 			return -1;
 		*res = (void *)(intptr_t)timerid;
 		break;
@@ -125,7 +125,7 @@ int timer_create(clockid_t clk, struct sigevent *restrict evp, timer_t *restrict
 		ksev.sigev_signo = SIGTIMER;
 		ksev.sigev_notify = 4; /* SIGEV_THREAD_ID */
 		ksev.sigev_tid = td->tid;
-		if (syscall(SYS_timer_create, clk, &ksev, &timerid) < 0)
+		if (syscall(SYS_timer_create, clk, mcfi_sandbox_mask(&ksev), mcfi_sandbox_mask(&timerid)) < 0)
 			timerid = -1;
 		td->timer_id = timerid;
 		pthread_barrier_wait(&args.b);

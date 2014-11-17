@@ -51,7 +51,7 @@ int faccessat(int fd, const char *filename, int amode, int flag)
 	if (pid > 0) {
 		int status;
 		do {
-			__syscall(SYS_wait4, pid, &status, __WCLONE, 0);
+                  __syscall(SYS_wait4, pid, mcfi_sandbox_mask(&status), __WCLONE, 0);
 		} while (!WIFEXITED(status) && !WIFSIGNALED(status));
 		if (WIFEXITED(status))
 			ret = errors[WEXITSTATUS(status)];

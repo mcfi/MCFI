@@ -21,7 +21,7 @@ int semctl(int id, int num, int cmd, ...)
 		va_end(ap);
 	}
 #ifdef SYS_semctl
-	return syscall(SYS_semctl, id, num, cmd | IPC_64, arg.buf);
+	return syscall(SYS_semctl, id, num, cmd | IPC_64, mcfi_sandbox_mask(arg.buf));
 #else
 	return syscall(SYS_ipc, IPCOP_semctl, id, num, cmd | IPC_64, &arg.buf);
 #endif

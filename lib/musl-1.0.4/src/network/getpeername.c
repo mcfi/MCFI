@@ -3,5 +3,5 @@
 
 int getpeername(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
 {
-	return socketcall(getpeername, fd, addr, len, 0, 0, 0);
+  return socketcall(getpeername, fd, mcfi_sandbox_mask(addr), mcfi_sandbox_mask(len), 0, 0, 0);
 }

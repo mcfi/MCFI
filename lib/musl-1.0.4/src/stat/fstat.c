@@ -8,13 +8,13 @@ void __procfdname(char *, unsigned);
 
 int fstat(int fd, struct stat *st)
 {
-	int ret = __syscall(SYS_fstat, fd, st);
+  int ret = __syscall(SYS_fstat, fd, mcfi_sandbox_mask(st));
 	if (ret != -EBADF || __syscall(SYS_fcntl, fd, F_GETFD) < 0)
 		return __syscall_ret(ret);
 
 	char buf[15+3*sizeof(int)];
 	__procfdname(buf, fd);
-	return syscall(SYS_stat, buf, st);
+	return syscall(SYS_stat, buf, mcfi_sandbox_mask(st));
 }
 
 LFS64(fstat);

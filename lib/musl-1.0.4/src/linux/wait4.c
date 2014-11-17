@@ -5,5 +5,5 @@
 
 pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
 {
-	return syscall(SYS_wait4, pid, status, options, usage);
+  return syscall(SYS_wait4, pid, mcfi_sandbox_mask(status), options, mcfi_sandbox_mask(usage));
 }

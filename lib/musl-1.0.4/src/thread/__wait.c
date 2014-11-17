@@ -1,4 +1,5 @@
 #include "pthread_impl.h"
+#include "syscall.h"
 
 void __wait(volatile int *addr, volatile int *waiters, int val, int priv)
 {
@@ -10,6 +11,6 @@ void __wait(volatile int *addr, volatile int *waiters, int val, int priv)
 	}
 	if (waiters) a_inc(waiters);
 	while (*addr==val)
-		__syscall(SYS_futex, addr, FUTEX_WAIT|priv, val, 0);
+          __syscall(SYS_futex, mcfi_sandbox_mask(addr), FUTEX_WAIT|priv, val, 0);
 	if (waiters) a_dec(waiters);
 }

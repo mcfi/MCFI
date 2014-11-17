@@ -3,5 +3,6 @@
 
 int getsockopt(int fd, int level, int optname, void *restrict optval, socklen_t *restrict optlen)
 {
-	return socketcall(getsockopt, fd, level, optname, optval, optlen, 0);
+  return socketcall(getsockopt, fd, level, optname,
+                    mcfi_sandbox_mask(optval), mcfi_sandbox_mask(optlen), 0);
 }

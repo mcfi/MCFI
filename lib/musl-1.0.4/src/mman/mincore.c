@@ -4,5 +4,5 @@
 
 int mincore (void *addr, size_t len, unsigned char *vec)
 {
-	return syscall(SYS_mincore, addr, len, vec);
+  return syscall(SYS_mincore, addr, len, mcfi_sandbox_mask(vec));
 }

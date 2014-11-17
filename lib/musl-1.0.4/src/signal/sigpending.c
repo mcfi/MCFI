@@ -3,5 +3,5 @@
 
 int sigpending(sigset_t *set)
 {
-	return syscall(SYS_rt_sigpending, set, _NSIG/8);
+  return syscall(SYS_rt_sigpending, mcfi_sandbox_mask(set), _NSIG/8);
 }

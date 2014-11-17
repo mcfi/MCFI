@@ -6,7 +6,7 @@
 int pipe2(int fd[2], int flag)
 {
 	if (!flag) return pipe(fd);
-	int ret = __syscall(SYS_pipe2, fd, flag);
+	int ret = __syscall(SYS_pipe2,mcfi_sandbox_mask(fd), flag);
 	if (ret != -ENOSYS) return __syscall_ret(ret);
 	ret = pipe(fd);
 	if (ret) return ret;

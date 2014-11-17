@@ -15,5 +15,5 @@ mqd_t mq_open(const char *name, int flags, ...)
 		attr = va_arg(ap, struct mq_attr *);
 		va_end(ap);
 	}
-	return syscall(SYS_mq_open, name, flags, mode, attr);
+	return syscall(SYS_mq_open, name, flags, mode, mcfi_sandbox_mask(attr));
 }

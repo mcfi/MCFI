@@ -87,7 +87,7 @@ int pthread_barrier_wait(pthread_barrier_t *b)
 			a_spin();
 		a_inc(&inst->finished);
 		while (inst->finished == 1)
-			__syscall(SYS_futex, &inst->finished, FUTEX_WAIT,1,0);
+                  __syscall(SYS_futex, mcfi_sandbox_mask(&inst->finished), FUTEX_WAIT,1,0);
 		return PTHREAD_BARRIER_SERIAL_THREAD;
 	}
 

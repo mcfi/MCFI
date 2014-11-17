@@ -4,5 +4,5 @@
 
 pid_t waitpid(pid_t pid, int *status, int options)
 {
-	return syscall_cp(SYS_wait4, pid, status, options, 0);
+  return syscall_cp(SYS_wait4, pid, mcfi_sandbox_mask(status), options, 0);
 }

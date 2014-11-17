@@ -172,4 +172,21 @@ long __syscall_ret(unsigned long), __syscall(syscall_arg_t, ...),
 #define SYS_sendfile SYS_sendfile64
 #endif
 
+#ifndef SANDBOX_MASK
+#define SANDBOX_MASK 0xFFFFFFFFUL
+#endif
+
+extern void __report_invalid_sandbox_escape(const char* file, const unsigned line) __attribute__((noreturn));
+
+#ifndef mcfi_sandbox_check
+#define mcfi_sandbox_check(target) do {                         \
+    if ((unsigned long)target > SANDBOX_MASK)                   \
+      __report_invalid_sandbox_escape(__FILE__, __LINE__);      \
+  } while (0);
+#endif
+
+#ifndef mcfi_sandbox_mask
+#define mcfi_sandbox_mask(target) ((unsigned long)target & SANDBOX_MASK)
+#endif
+
 #endif

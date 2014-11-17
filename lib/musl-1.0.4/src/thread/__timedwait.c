@@ -22,7 +22,7 @@ static int do_wait(volatile int *addr, int val,
 		top = &to;
 	}
 
-	r = -__syscall_cp(SYS_futex, addr, FUTEX_WAIT, val, top);
+	r = -__syscall_cp(SYS_futex, mcfi_sandbox_mask(addr), FUTEX_WAIT, val, mcfi_sandbox_mask(top));
 	if (r == EINTR || r == EINVAL || r == ETIMEDOUT) return r;
 	return 0;
 }

@@ -3,5 +3,5 @@
 
 int getitimer(int which, struct itimerval *old)
 {
-	return syscall(SYS_getitimer, which, old);
+  return syscall(SYS_getitimer, which, mcfi_sandbox_mask(old));
 }

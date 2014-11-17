@@ -1,4 +1,5 @@
 #include "pthread_impl.h"
+#include "syscall.h"
 
 int pthread_getschedparam(pthread_t t, int *restrict policy, struct sched_param *restrict param)
 {
@@ -7,7 +8,7 @@ int pthread_getschedparam(pthread_t t, int *restrict policy, struct sched_param 
 	if (t->dead) {
 		r = ESRCH;
 	} else {
-		r = -__syscall(SYS_sched_getparam, t->tid, param);
+          r = -__syscall(SYS_sched_getparam, t->tid, mcfi_sandbox_mask(param));
 		if (!r) {
 			*policy = __syscall(SYS_sched_getscheduler, t->tid);
 		}
