@@ -753,7 +753,6 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
       Stubs.clear();
     }
     EmitMCFIInfo(".MCFICHA", M);
-    EmitMCFIInfo(".MCFIPureVirt", M);
     EmitMCFIInfo(".MCFIDtorCxaAtExit", M);
     EmitMCFIInfo(".MCFIDtorCxaThrow", M);
     EmitMCFIInfo(".MCFIFuncInfo", M);

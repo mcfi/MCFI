@@ -3402,7 +3402,7 @@ std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
   if (!MCFIDefCompleted(MD)) {
     return std::string();
   }
-  std::string MPV("~P~");
+  std::string MPV("{ ");
   std::string OStr;
   llvm::raw_string_ostream Out(OStr);
   getCXXABI().getMangleContext().mangleName(MD, Out);
@@ -3410,18 +3410,18 @@ std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
   int status = 0;
   char* result = abi::__cxa_demangle(OStr.c_str(), 0, 0, &status);
   MPV += OStr;
-  MPV += "@";
+  MPV += "\n";
   assert(result);
-  MPV += std::string(result);
+  MPV += std::string("DN ") + std::string(result);
   free(result);
-  MPV += "@";
+  MPV += "\n";
   OStr.clear();
   llvm::raw_string_ostream TypeOut(OStr);
   const CGFunctionInfo &FI = getTypes().arrangeCXXMethodDeclaration(MD);
   llvm::FunctionType * FT = getTypes().GetFunctionType(FI);
   FT->print(TypeOut);
   TypeOut.flush();
-  MPV += OStr;
+  MPV += std::string("TY ") + OStr + std::string("\n}");
   return MPV;
 }
 
