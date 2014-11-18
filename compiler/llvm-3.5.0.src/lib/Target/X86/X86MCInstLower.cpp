@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "X86AsmPrinter.h"
+#include "X86MCFI.h"
 #include "X86RegisterInfo.h"
 #include "InstPrinter/X86ATTInstPrinter.h"
 #include "MCTargetDesc/X86BaseInfo.h"
@@ -987,10 +988,9 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     const unsigned SegReg = MI->getOperand(5).getReg();
     if (!BaseReg && (SegReg == X86::GS || SegReg == X86::FS) &&
         MI->hasBarySlot()) {
-      const unsigned MCFIID = MI->getOperand(4).getImm();
+      const unsigned long MCFIID = MI->getBarySlot();
       MCSymbol *MCFIIDSym = 
-        OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName()
-                                     + StringRef("_mcfi_bary_") + std::to_string(MCFIID));
+        OutContext.GetOrCreateSymbol(StringRef("__mcfi_bary_") + to_hex(MCFIID));
       OutStreamer.EmitLabel(MCFIIDSym);
     }
     break;
@@ -1005,13 +1005,15 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::CALL32r:
   case X86::CALL64r:
   {
+    static unsigned long Seq;
     if (MI->getOpcode() == X86::CALL64r ||
         MI->getOpcode() == X86::CALL32r) {
       assert(MI->hasBarySlot());
       MCSymbol *RetAddrSym =
-        OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName().str()
-                                     + StringRef("_mcfi_icj_") +
-                                     std::to_string(MI->getBarySlot()));
+        OutContext.GetOrCreateSymbol(StringRef("__mcfi_icj_")
+                                     + to_hex(++Seq)
+                                     + std::string("_")
+                                     + to_hex(MI->getBarySlot()));
       OutStreamer.EmitLabel(RetAddrSym);
     } else {
       assert(MI->getOpcode() == X86::CALL64pcrel32 ||
@@ -1025,8 +1027,10 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
       }
       assert(!FuncName.empty());
       MCSymbol *RetAddrSym =
-        OutContext.GetOrCreateSymbol(OutContext.CreateTempSymbol()->getName().str()
-                                     + StringRef("_mcfi_dcj_") + FuncName);
+        OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
+                                     + to_hex(++Seq)
+                                     + std::string("_")
+                                     + FuncName);
       OutStreamer.EmitLabel(RetAddrSym);
     }
   }

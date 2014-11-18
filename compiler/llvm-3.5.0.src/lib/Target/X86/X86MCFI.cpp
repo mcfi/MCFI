@@ -34,6 +34,10 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
+#include <random>
+#include <vector>
+#include <cxxabi.h>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "x86-mcfi"
@@ -61,8 +65,79 @@ struct MCFI : public MachineFunctionPass {
 private:
   bool SmallSandbox;
   bool SmallID;
-  const Module *M;
+  Module *M;
+  unsigned long ModuleID;
+  
+  std::vector<std::string> Returns;
+  std::vector<std::string> IndirectTailCalls;
+  std::vector<std::string> DirectTailCalls;
+  
+  std::vector<std::string> IndirectCalls;
 
+  std::string CXXDemangledName(const char* MangledName) const {
+    int status = 0;
+    char* result = abi::__cxa_demangle(MangledName, 0, 0, &status);
+    
+    if (result) {
+      std::string DemangledName(result);
+      free(result);
+      size_t Start = 0;
+      // for thunks, we don't output the annoying "virtual thunk to" things
+      if (DemangledName.find("virtual thunk to ") != std::string::npos)
+        Start = 17;
+      else if (DemangledName.find("non-virtual thunk to ") != std::string::npos)
+        Start = 21;
+      return DemangledName.substr(Start);
+    }
+    return std::string("");
+  }
+
+  std::string TypeStr(const Type *Ty) const {
+    std::string result;
+    raw_string_ostream TStr(result);
+    Ty->print(TStr);
+    TStr.flush();
+    return result;
+  }
+  
+  void MCFIFuncInfo(const MachineFunction &MF) {
+    std::string FuncInfo("{ ");
+    FuncInfo += MF.getName().str() + '\n';
+    std::string DemangledName = CXXDemangledName(MF.getName().data());
+
+    if (DemangledName.size()) {
+      FuncInfo += std::string("DN ") + DemangledName + '\n';
+    }
+
+    FuncInfo += std::string("TY ") +
+      TypeStr(MF.getFunction()->getFunctionType()) + '\n';
+#define addList(name, list) do {                \
+      if (list.size()) {                        \
+        FuncInfo += std::string(name);          \
+        for (const auto & s: list) {            \
+          FuncInfo += std::string(" ") + s;     \
+        }                                       \
+        FuncInfo += '\n';                       \
+      }} while (0);
+    addList("RT", Returns);
+    addList("DT", DirectTailCalls);
+    addList("IT", IndirectTailCalls);
+#undef addList
+    FuncInfo += "}";
+    Returns.clear();
+    DirectTailCalls.clear();
+    IndirectTailCalls.clear();
+    NamedMDNode *MD = M->getOrInsertNamedMetadata("MCFIFuncInfo");
+    MD->addOperand(MDNode::get(M->getContext(),
+                               MDString::get(M->getContext(), FuncInfo.c_str())));
+    
+    MD = M->getOrInsertNamedMetadata("MCFIIndirectCalls");    
+    for (const auto & s: IndirectCalls) {
+      MD->addOperand(MDNode::get(M->getContext(),
+                                 MDString::get(M->getContext(), s.c_str())));
+    }
+    IndirectCalls.clear();
+  }
   // 64-bit
   bool MCFIx64(MachineFunction &MF);  // standard AMD64, LP64
   void MCFIx64MBBs(MachineFunction &MF,
@@ -129,13 +204,19 @@ unsigned MCFI::BarySlot = 0;
 FunctionPass *llvm::createX86MCFIInstrumentation() { return new MCFI(); }
 
 bool MCFI::runOnMachineFunction(MachineFunction &MF) {
-  const Module* newM = MF.getMMI().getModule();
+  Module* newM = const_cast<Module*>(MF.getMMI().getModule());
   if (M != newM) {
     M = newM;
     SmallSandbox = !M->getNamedMetadata("MCFILargeSandbox");
     SmallID = !M->getNamedMetadata("MCFILargeID");
+    
+    std::random_device rd;
+    std::mt19937_64 e2(rd());
+    std::uniform_int_distribution<unsigned long>
+      dist(std::llround(0), std::llround(std::pow(2, 64)));
+    ModuleID = dist(e2);
   }
-  // we only standard AMD64
+  // we only support AMD64
   if (MF.getTarget().getSubtarget<X86Subtarget>().isTarget64BitLP64())
     return MCFIx64(MF);  
   else if (MF.getTarget().getSubtarget<X86Subtarget>().isTarget64BitILP32())
@@ -173,7 +254,7 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
   auto &MIB = BuildMI(*MBB, I, DL, TII->get(BIDRegReadOp))
     .addReg(BIDReg, RegState::Define)
     .addReg(0).addImm(1).addReg(0).addImm(BarySlot).addReg(X86::GS);
-  MIB->setBarySlot(BarySlot);
+  MIB->setBarySlot(ModuleID + BarySlot);
   
   // cmp BIDReg, %gs:(TargetReg)
   BuildMI(*MBB, I, DL, TII->get(CmpOp))
@@ -191,7 +272,7 @@ void MCFI::MCFIx64ICJ(MachineFunction &MF, MachineBasicBlock* MBB,
   
   auto I = std::begin(*MBB);
   BuildMI(*MBB, I, DL, TII->get(CJOp)).addReg(TargetReg);
-  std::prev(I)->setBarySlot(BarySlot);
+  std::prev(I)->setBarySlot(ModuleID + BarySlot);
 }
 
 void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
@@ -372,6 +453,7 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, X86::JMP64r,
               IDValidityCheckMBB, VerCheckMBB, ReportMBB);
+  Returns.push_back(to_hex(ModuleID + BarySlot));
   BarySlot++;
 }
 
@@ -556,6 +638,36 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   }
 
   IDCmpMBB->instr_front().setIRInst(I); // transfer the IR to the BID read instruction.
+  if (CJOp == X86::TAILJMPr64) {
+    IndirectTailCalls.push_back(to_hex(ModuleID + BarySlot));
+  }
+  {
+    // indirect call types
+    std::string ICStr(to_hex(ModuleID + BarySlot));
+    ICStr += ' ';
+    const CallInst *CI = dyn_cast<CallInst>(I);
+    const InvokeInst *II = dyn_cast<InvokeInst>(I);
+    assert(CI || II);
+    const Value *CV = CI ? CI->getCalledValue() : II->getCalledValue();
+    const PointerType *PTy = cast<PointerType>(CV->getType());
+    const FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
+    
+    if (I->hasMetadata()) {
+      const MDNode* mdNode = I->getMetadata("CXXVirtual");
+      if (mdNode) {
+        const Value *V = mdNode->getOperand(0);
+        const std::string VStr = cast<MDString>(V)->getString().str();
+        if (VStr.find("PM") != 0) { // virtual call or virtual destructor
+          ICStr += VStr;
+          goto AddToList;
+        }
+      }
+    }
+    ICStr += "IC ";
+    ICStr += TypeStr(FTy);
+    AddToList:
+    IndirectCalls.push_back(ICStr);
+  }
   BarySlot++;
 }
 
@@ -723,6 +835,14 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
     for (auto MI = std::begin(*MBB); MI != std::end(*MBB); MI++) {
       if (MI->getOpcode() == X86::RETQ) { // return instruction
         MCFIx64Ret(MF, MBB, MI);
+      } else if (MI->getOpcode() == X86::TAILJMPd64) {
+        const MachineOperand &MOP = MI->getOperand(0);
+        if (MOP.isGlobal()) {
+          const GlobalValue *GV = MOP.getGlobal();
+          DirectTailCalls.push_back(GV->getName());
+        } else if (MOP.isSymbol()) {
+          DirectTailCalls.push_back(MOP.getSymbolName());
+        }
       } else if (MI->getIRInst()) {
         const unsigned op = MI->getOpcode();
         switch (op) {
@@ -756,6 +876,7 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
       if (MI == std::end(*MBB)) break;
     }
   }
+  MCFIFuncInfo(MF);
   return false;
 }
 

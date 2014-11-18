@@ -96,7 +96,7 @@ private:
   const Instruction* IRInst;            // correlated IR instruction used by
                                         // MCFI to associate types with each
                                         // indirect call/jump instruction.
-  unsigned BarySlot;                    // The ID to identify this instruciton
+  unsigned long BarySlot;               // The ID to identify this instruciton
                                         // in MCFI Bary table.
 
   bool Sandboxed;                       // MCFI Sandboxed
@@ -1118,16 +1118,16 @@ public:
     return IRInst;
   }
 
-  void setBarySlot(const unsigned BarySlot) {
+  void setBarySlot(const unsigned long BarySlot) {
     this->BarySlot = BarySlot;
   }
 
-  unsigned getBarySlot() const {
+  unsigned long getBarySlot() const {
     return BarySlot;
   }
 
   bool hasBarySlot() const {
-    return (BarySlot != (unsigned)-1);
+    return (BarySlot != (unsigned long)-1);
   }
 
   void setSandboxed() {

@@ -7,6 +7,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/Target/TargetInstrInfo.h"
+#include <sstream>
 
 using namespace llvm;
 
@@ -118,4 +119,9 @@ static void MCFIx64RewriteMemWrite(MachineBasicBlock* MBB,
   MI->setSandboxed();
 }
 
+static std::string to_hex(unsigned long num) {
+  std::stringstream sstream;
+  sstream << std::hex << num;
+  return sstream.str();
+}
 #endif

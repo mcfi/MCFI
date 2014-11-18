@@ -34,6 +34,7 @@
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/Support/COFF.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -750,6 +751,40 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
                                     TD->getPointerSize());
       }
       Stubs.clear();
+    }
+    EmitMCFIInfo(".MCFICHA", M);
+    EmitMCFIInfo(".MCFIPureVirt", M);
+    EmitMCFIInfo(".MCFIDtorCxaAtExit", M);
+    EmitMCFIInfo(".MCFIDtorCxaThrow", M);
+    EmitMCFIInfo(".MCFIFuncInfo", M);
+    EmitMCFIInfo(".MCFIIndirectCalls", M);
+    // Aliases
+    NamedMDNode *MD = M.getOrInsertNamedMetadata("MCFIAliases");
+    for (const auto &Alias : M.aliases()) {
+      std::string AliasStr;
+      const MCSymbol *Name = getSymbol(&Alias);
+      AliasStr += Name->getName().str() + ' ';
+      AliasStr += Alias.getAliasee()->getName().str();
+      MD->addOperand(MDNode::get(M.getContext(),
+                                 MDString::get(M.getContext(), AliasStr.c_str())));      
+    }
+    EmitMCFIInfo(".MCFIAliases", M);
+  }
+}
+
+void X86AsmPrinter::EmitMCFIInfo(const StringRef SectName, const Module& M) {
+  const MCSection *TheSection =
+    OutContext.getELFSection(SectName,
+                             ELF::SHT_PROGBITS, 0, SectionKind::getReadOnly());
+  OutStreamer.SwitchSection(TheSection);
+  const NamedMDNode *NMNode = M.getNamedMetadata(SectName.ltrim("."));
+  if (NMNode) {
+    for (unsigned i = 0, e = NMNode->getNumOperands(); i != e; ++i) {
+      const MDNode* mdNode = NMNode->getOperand(i);
+      if (mdNode)
+        for (unsigned j = 0, je = mdNode->getNumOperands(); j != je; ++j)
+          OutStreamer.EmitBytes(((MDString*)mdNode->getOperand(j))->getString().str()
+                                + std::string("\n"));
     }
   }
 }
