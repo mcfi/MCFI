@@ -538,7 +538,7 @@ elf_x86_64_write_core_note (bfd *abfd, char *buf, int *bufsiz,
 
 /* The size in bytes of an entry in the procedure linkage table.  */
 
-#define PLT_ENTRY_SIZE 16
+#define PLT_ENTRY_SIZE 32
 
 /* The first entry in a procedure linkage table looks like this.  See the
    SVR4 ABI i386 supplement and the x86-64 ABI to see how this works.  */
@@ -547,6 +547,10 @@ static const bfd_byte elf_x86_64_plt0_entry[PLT_ENTRY_SIZE] =
 {
   0xff, 0x35, 8, 0, 0, 0,	/* pushq GOT+8(%rip)  */
   0xff, 0x25, 16, 0, 0, 0,	/* jmpq *GOT+16(%rip) */
+  0x0f, 0x1f, 0x40, 0x00,       /* nopl 0(%rax)       */
+  0x0f, 0x1f, 0x40, 0x00,	/* nopl 0(%rax)       */
+  0x0f, 0x1f, 0x40, 0x00,	/* nopl 0(%rax)       */
+  0x0f, 0x1f, 0x40, 0x00,	/* nopl 0(%rax)       */
   0x0f, 0x1f, 0x40, 0x00	/* nopl 0(%rax)       */
 };
 
@@ -556,6 +560,10 @@ static const bfd_byte elf_x86_64_plt_entry[PLT_ENTRY_SIZE] =
 {
   0xff, 0x25,	/* jmpq *name@GOTPC(%rip) */
   0, 0, 0, 0,	/* replaced with offset to this symbol in .got.	 */
+  0x4c, 0x8d, 0x1d, /* leaq PLTn(%rip), %r11 */
+  0xf3, 0xff, 0xff, 0xff,
+  0x64, 0x4c, 0x89, 0x1c, 0x25, /* movq %r11, %fs:20 */
+  0x20, 0x00, 0x00, 0x00,
   0x68,		/* pushq immediate */
   0, 0, 0, 0,	/* replaced with index into relocation table.  */
   0xe9,		/* jmp relative */
@@ -591,12 +599,12 @@ static const bfd_byte elf_x86_64_eh_frame_plt[] =
   DW_CFA_def_cfa_offset, 16,	/* DW_CFA_def_cfa_offset: 16 */
   DW_CFA_advance_loc + 6,	/* DW_CFA_advance_loc: 6 to __PLT__+6 */
   DW_CFA_def_cfa_offset, 24,	/* DW_CFA_def_cfa_offset: 24 */
-  DW_CFA_advance_loc + 10,	/* DW_CFA_advance_loc: 10 to __PLT__+16 */
+  DW_CFA_advance_loc + 26,	/* DW_CFA_advance_loc: 26 to __PLT__+32 */
   DW_CFA_def_cfa_expression,	/* DW_CFA_def_cfa_expression */
   11,				/* Block length */
   DW_OP_breg7, 8,		/* DW_OP_breg7 (rsp): 8 */
   DW_OP_breg16, 0,		/* DW_OP_breg16 (rip): 0 */
-  DW_OP_lit15, DW_OP_and, DW_OP_lit11, DW_OP_ge,
+  DW_OP_lit31, DW_OP_and, DW_OP_lit27, DW_OP_ge,
   DW_OP_lit3, DW_OP_shl, DW_OP_plus,
   DW_CFA_nop, DW_CFA_nop, DW_CFA_nop, DW_CFA_nop
 };
@@ -656,8 +664,8 @@ static const struct elf_x86_64_backend_data elf_x86_64_arch_bed =
     8,                                  /* plt0_got2_offset */
     12,                                 /* plt0_got2_insn_end */
     2,                                  /* plt_got_offset */
-    7,                                  /* plt_reloc_offset */
-    12,                                 /* plt_plt_offset */
+    23,                                 /* plt_reloc_offset */
+    28,                                 /* plt_plt_offset */
     6,                                  /* plt_got_insn_size */
     PLT_ENTRY_SIZE,                     /* plt_plt_insn_end */
     6,                                  /* plt_lazy_offset */
