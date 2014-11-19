@@ -1074,6 +1074,8 @@ void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *Lo
       EmitToStreamer(OutStreamer, TmpInst);
       return;
     }
+  } else if (TrimedStr.startswith_lower("pmovmskb")) {
+    return;
   }
   llvm::errs() << "MCFI Warning: InlineAsm\n\t"
                << TrimedStr
