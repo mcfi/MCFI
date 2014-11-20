@@ -131,7 +131,7 @@ private:
     MD->addOperand(MDNode::get(M->getContext(),
                                MDString::get(M->getContext(), FuncInfo.c_str())));
     
-    MD = M->getOrInsertNamedMetadata("MCFIIndirectCalls");    
+    MD = M->getOrInsertNamedMetadata("MCFIIndirectCalls");
     for (const auto & s: IndirectCalls) {
       MD->addOperand(MDNode::get(M->getContext(),
                                  MDString::get(M->getContext(), s.c_str())));
@@ -150,7 +150,8 @@ private:
                    const unsigned CJOp,
                    MachineBasicBlock *&IDValidityCheckMBB,
                    MachineBasicBlock *&VerCheckMBB,
-                   MachineBasicBlock *&ReportMBB);
+                   MachineBasicBlock *&ReportMBB,
+                   DebugLoc &DL);
 
   void MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
                   MachineBasicBlock::iterator &MI);
@@ -169,28 +170,33 @@ private:
   void MCFIx64IDCmp(MachineFunction &MF,
                     MachineBasicBlock *MBB,
                     unsigned BIDReg,
-                    const unsigned TargetReg);
+                    const unsigned TargetReg,
+                    DebugLoc& DL);
 
   void MCFIx64ICJ(MachineFunction &MF,
                   MachineBasicBlock *MBB,
                   const unsigned CJOp,
-                  const unsigned TargetReg);
+                  const unsigned TargetReg,
+                  DebugLoc& DL);
   
   void MCFIx64IDValidityCheck(MachineFunction &MF,
                               MachineBasicBlock *MBB,
                               unsigned BIDReg,
                               unsigned TIDReg,
-                              const unsigned TargetReg);
+                              const unsigned TargetReg,
+                              DebugLoc& DL);
   
   void MCFIx64IDVersionCheck(MachineFunction &MF,
                              MachineBasicBlock *MBB,
                              unsigned BIDReg,
-                             unsigned TIDReg);
+                             unsigned TIDReg,
+                             DebugLoc& DL);
 
   void MCFIx64Report(MachineFunction &MF,
                      MachineBasicBlock *MBB,
                      MachineBasicBlock *IDCmpMBB,
-                     const unsigned TargetReg);
+                     const unsigned TargetReg,
+                     DebugLoc& DL);
   
   bool MCFIx32(MachineFunction &MF);  // x86_64 with ILP32
 
@@ -232,9 +238,8 @@ bool MCFI::runOnMachineFunction(MachineFunction &MF) {
 void MCFI::MCFIx64IDCmp(MachineFunction &MF,
                         MachineBasicBlock* MBB,
                         unsigned BIDReg,
-                        const unsigned TargetReg) {
-  DebugLoc DL;
-
+                        const unsigned TargetReg,
+                        DebugLoc &DL) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
   
   MBB->addLiveIn(TargetReg);
@@ -264,8 +269,8 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
 }
 
 void MCFI::MCFIx64ICJ(MachineFunction &MF, MachineBasicBlock* MBB,
-                      const unsigned CJOp, const unsigned TargetReg) {
-  DebugLoc DL;
+                      const unsigned CJOp, const unsigned TargetReg,
+                      DebugLoc &DL) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
 
   MBB->addLiveIn(TargetReg);
@@ -279,8 +284,8 @@ void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
                                   MachineBasicBlock *MBB,
                                   unsigned BIDReg,
                                   unsigned TIDReg,
-                                  const unsigned TargetReg) {
-  DebugLoc DL;
+                                  const unsigned TargetReg,
+                                  DebugLoc &DL) {
   
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
 
@@ -312,9 +317,8 @@ void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
 void MCFI::MCFIx64IDVersionCheck(MachineFunction &MF,
                                  MachineBasicBlock *MBB,
                                  unsigned BIDReg,
-                                 unsigned TIDReg) {
-  DebugLoc DL;
-  
+                                 unsigned TIDReg,
+                                 DebugLoc &DL) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
 
   MBB->addLiveIn(BIDReg);
@@ -344,9 +348,8 @@ void MCFI::MCFIx64IDVersionCheck(MachineFunction &MF,
 void MCFI::MCFIx64Report(MachineFunction &MF,
                          MachineBasicBlock *MBB,
                          MachineBasicBlock *IDCmpMBB,
-                         const unsigned TargetReg) {
-  DebugLoc DL;
-  
+                         const unsigned TargetReg,
+                         DebugLoc &DL) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
 
   MBB->addLiveIn(TargetReg);
@@ -376,36 +379,37 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
                        const unsigned CJOp,
                        MachineBasicBlock *&IDValidityCheckMBB,
                        MachineBasicBlock *&VerCheckMBB,
-                       MachineBasicBlock *&ReportMBB) {
+                       MachineBasicBlock *&ReportMBB,
+                       DebugLoc &DL) {
   MachineFunction::iterator MBBI;
   
   IDCmpMBB = MF.CreateMachineBasicBlock();
   MBBI = MBB;
   MF.insert(++MBBI, IDCmpMBB); // original MBB to ICCmpMBB, fallthrough
   
-  MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TargetReg); // fill the IDCmp block
+  MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TargetReg, DL); // fill the IDCmp block
   
   ICJMBB = MF.CreateMachineBasicBlock();
   MBBI = IDCmpMBB;
   MF.insert(++MBBI, ICJMBB); // fall through ICJMBB
   IDCmpMBB->addSuccessor(ICJMBB);
-  MCFIx64ICJ(MF, ICJMBB, CJOp, TargetReg); // fill ICJMBB
+  MCFIx64ICJ(MF, ICJMBB, CJOp, TargetReg, DL); // fill ICJMBB
   
   IDValidityCheckMBB = MF.CreateMachineBasicBlock();
   MF.push_back(IDValidityCheckMBB);
   MCFIx64IDValidityCheck(MF, IDValidityCheckMBB, BIDReg,
-                         TIDReg, TargetReg); // fill IDValCheck MBB
+                         TIDReg, TargetReg, DL); // fill IDValCheck MBB
   
   IDCmpMBB->addSuccessor(IDValidityCheckMBB, UINT_MAX); // as far as possible
 
   VerCheckMBB = MF.CreateMachineBasicBlock();
   MF.push_back(VerCheckMBB);
-  MCFIx64IDVersionCheck(MF, VerCheckMBB, BIDReg, TIDReg); // fill VerCheckMBB
+  MCFIx64IDVersionCheck(MF, VerCheckMBB, BIDReg, TIDReg, DL); // fill VerCheckMBB
 
   ReportMBB = MF.CreateMachineBasicBlock();
   MBBI = VerCheckMBB;
   MF.insert(++MBBI, ReportMBB);
-  MCFIx64Report(MF, ReportMBB, IDCmpMBB, TargetReg); // fill report MBB
+  MCFIx64Report(MF, ReportMBB, IDCmpMBB, TargetReg, DL); // fill report MBB
   
   IDValidityCheckMBB->addSuccessor(VerCheckMBB);
   IDValidityCheckMBB->addSuccessor(ReportMBB);
@@ -452,7 +456,7 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
     *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, X86::JMP64r,
-              IDValidityCheckMBB, VerCheckMBB, ReportMBB);
+              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL);
   Returns.push_back(to_hex(ModuleID + BarySlot));
   BarySlot++;
 }
@@ -623,7 +627,7 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
     *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, CJOp,
-              IDValidityCheckMBB, VerCheckMBB, ReportMBB);
+              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL);
 
   if (BIDRegSpill) {
     MCFIx64SpillRegToStack(MBB, MI, TII, BIDReg, -8);

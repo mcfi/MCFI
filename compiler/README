@@ -1,0 +1,82 @@
+In our PLDI'14 paper, we use three scratch registers to instrument an indirect
+branch. However, we may use only two to get the same job done, and the analysis
+is shown below.
+
+Try:
+  popq %rcx
+  movq %gs:Idx, %rdi
+1:cmpq %rdi, %gs:(%rcx)
+  jne  Lcheck
+  jmpq *%rcx
+
+Lcheck:
+2:movq  %gs:(%rcx), %rsi
+  testb $1, %sil
+  jne   Lreport
+  cmpl  %esi, %ecx
+  jne   Try
+Lreport:
+  leaq  Try, %rdi    # which indirect branch
+  movq  %rcx, %rsi   # intentional control-flow target
+  movq  $Idx, %rdx   # which BID entry
+                     # BID
+                     # TID
+  jmp   MCFIViolationReport
+
+The following cases might happen:
+
+* BID == TID, check passed.
+
+* 1=>TID.validity == 0, should halt
+
+  2=>BID == TID, hlt
+  2=>TID.validity == 0, hlt
+  2=>TID.version != BID.version, retry
+  2=>TID.ECN != TID.ECN, impossible
+
+* 1=>TID.version != BID.version, should retry
+
+  2=>BID == TID, impossible
+  2=>TID.validity == 0, the target code has been deleted.
+     if this control-flow transfer is supposed to happen, then
+     TID.validity should not happen, because there should be
+     checks that ensure all the code has decremented the reference
+     count of the deleted code, so this control-flow transfer is
+     not supposed to happen, then hlt is the deserved action
+     otherwise, hlt is also deserved.
+  2=>TID.version != BID.version, retry
+  2=>TID.ECN != TID.ECN, impossible
+
+* 1=>TID.ECN != BID.ECN, should halt
+
+  2=>BID == TID, impossible
+  2=>TID.validity == 0, hlt
+  2=>TID.version != BID.version, retry
+  2=>TID.ECN != TID.ECN, hlt
+
+Procedure Linkage Entry (PLT) Design
+
+When two ELF program binaries are linked, they are linked through
+a special PLT section, which are usually like below
+
+1: jmpq this_call(%rip)
+2: push$ this_call_index
+3: jmpq dynamic_loader
+
+Line 1 is an indirect jump through memory which actually references
+its relevant entry in the GOT table in section .got.plt. Initially
+The entry contains the address of line 2 above, which subsequently
+invokes the dynamic_loader (line 3) to resolve the actual library
+value and replace the old entry value. Since line 1 is also an indirect
+jump whose target depends on attacker-controllable memory, it should
+be protected by MCFI. However, we can use some memory mapping tricks
+to avoid instrumentation of the PLT entry.
+
+In detail, we put section .got.plt in its own set of memory pages. These
+memory pages are mapped read-only so that modification of them would
+crash the program. Further, we create virtual pages outside of the
+MCFI sandbox and map them to the same physical pages where the
+.got.plt section is mapped to. All modification to these pages are
+conducted by the trusted rock runtime. In this way, the PLT entries are
+as fast as their native counterparts if the GOT entry has been resolved.
+
