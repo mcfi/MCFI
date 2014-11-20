@@ -10482,9 +10482,13 @@ static SDValue LowerToTLSExecModel(GlobalAddressSDNode *GA, SelectionDAG &DAG,
                          MachinePointerInfo::getGOT(), false, false, false, 0);
   }
 
+  // In MCFI, the pointer to TLS should be loaded from %fs:0 first
+  SDValue MCFIThreadPointer =
+    DAG.getLoad(PtrVT, dl, DAG.getEntryNode(), ThreadPointer,
+    MachinePointerInfo(), false, false, false, 0);
   // The address of the thread local variable is the add of the thread
   // pointer with the offset of the variable.
-  return DAG.getNode(ISD::ADD, dl, PtrVT, ThreadPointer, Offset);
+  return DAG.getNode(ISD::ADD, dl, PtrVT, MCFIThreadPointer, Offset);
 }
 
 SDValue
