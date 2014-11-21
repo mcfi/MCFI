@@ -948,6 +948,18 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
   }
 
+  // memory sandboxing
+  if (MI->mayStore() &&
+      !MI->isBranch() && // calls also change store mem, but no need to sandbox
+      !MI->isInlineAsm()) {// inlined asm is taken care of by another function
+    if (MI->getNumOperands() >= 5 || // if this instruction has a memory operand
+        RepOp(MI->getOpcode())) {    // if this instruction is a rep prefixed mov/store
+      // 0x67 prefix will replace the default 64-bit address size with 32-bit address size
+      OutStreamer.EmitIntValue(0x67, 1);
+    }
+    // other memory store instructions like push is safe if %rsp is within the guard region
+  }
+
   MCInst TmpInst;
   MCInstLowering.Lower(MI, TmpInst);
   EmitToStreamer(OutStreamer, TmpInst);
@@ -1068,9 +1080,9 @@ void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *Lo
     MCInst TmpInst;
     // sandboxing
     if (SmallSandbox) {
-      TmpInst.setOpcode(X86::MOV64rr);
-      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::RDI));
-      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::RDI));
+      TmpInst.setOpcode(X86::MOV32rr);
+      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::EDI));
+      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::EDI));
       EmitToStreamer(OutStreamer, TmpInst);
       return;
     }

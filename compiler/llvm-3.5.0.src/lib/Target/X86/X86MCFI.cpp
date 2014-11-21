@@ -675,6 +675,7 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   BarySlot++;
 }
 
+#if 0
 static void MCFIx64CheckMemWriteInPlace(MachineBasicBlock* MBB,
                                         MachineBasicBlock::iterator &MI,
                                         const TargetInstrInfo *TII,
@@ -827,8 +828,77 @@ void MCFI::MCFIx64IndirectMemWriteLarge(MachineFunction &MF,
                                         MachineBasicBlock *MBB) {
 }
 
+#endif
+
+// RSP modification is unsafe except the following instructions
+// LLVM-dependent routines
+static bool SafeStackPointerModification(const unsigned opcode) {
+  // push
+  if (opcode >= X86::PUSH16i8 && opcode <= X86::PUSHi32)
+    return true;
+  // pop
+  if (opcode >= X86::POP16r && opcode <= X86::POPA32)
+    return true;
+  if (opcode >= X86::POPDS16 && opcode <= X86::POPSS32)
+    return true;
+  return false;
+}
+
+// turn 64-bit RSP definition to 32-bit
+static unsigned RspToEspDef(unsigned opcode)
+{
+  switch (opcode) {
+  case X86::ADD64ri32: return X86::ADD32ri;
+  case X86::ADD64ri8:  return X86::ADD32ri8;
+  case X86::ADD64rm:   return X86::ADD32rm;
+  case X86::ADD64rr:   return X86::ADD32rr;
+  case X86::SUB64ri32: return X86::SUB32ri;
+  case X86::SUB64ri8:  return X86::SUB32ri8;
+  case X86::SUB64rm:   return X86::SUB32rm;
+  case X86::SUB64rr:   return X86::SUB32rr;
+  case X86::AND64ri32: return X86::AND32ri;
+  case X86::AND64ri8:  return X86::AND32ri8;
+  case X86::AND64rm:   return X86::AND32rm;
+  case X86::AND64rr:   return X86::AND32rr;
+  case X86::OR64ri32:  return X86::OR32ri;
+  case X86::OR64ri8:   return X86::OR32ri8;
+  case X86::OR64rm:    return X86::OR32rm;
+  case X86::OR64rr:    return X86::OR32rr;
+  case X86::LEA64r:    return X86::LEA64_32r;
+  case X86::MOV64rr:   return X86::MOV32rr;
+  case X86::MOV64rm:   return X86::MOV32rm;
+  default:
+    return 0;
+  }
+}
+
 void MCFI::MCFIx64StackPointer(MachineFunction &MF, MachineBasicBlock *MBB,
                                MachineBasicBlock::iterator &MI) {
+  const unsigned opcode = MI->getOpcode();
+  if (SafeStackPointerModification(opcode))
+    return;
+  const unsigned newopcode = RspToEspDef(opcode);
+  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+  if (!newopcode) {
+    // we add a movl %esp, %esp after MI to sandbox %rsp
+    auto nextMI = std::next(MI);
+    BuildMI(*MBB, nextMI, MI->getDebugLoc(), TII->get(X86::MOV32rr))
+      .addReg(X86::ESP, RegState::Define).addReg(X86::ESP);
+    MI = std::next(MI);
+  } else {
+    auto &MIB = BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(newopcode))
+      .addReg(X86::ESP, RegState::Define);
+    for (unsigned i = 1; i < MI->getNumOperands(); i++) {
+      if (MI->getOperand(i).isReg() &&
+          MI->getOperand(i).getReg() == X86::RSP &&
+          MI->getOperand(i).isTied())
+        MIB.addReg(X86::ESP);
+      else
+        MIB.addOperand(MI->getOperand(i));
+    }
+    MI = MBB->erase(MI); // remove the old instruction
+    MI = std::prev(MI);  // back the iterator to the newly inserted instruction
+  }
 }
 
 bool MCFI::MCFIx64(MachineFunction &MF) {
@@ -874,7 +944,8 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
           break;
         }
         }
-      } else if (MI->definesRegister(X86::RSP, TRI)) { // RSP register modification
+      } else if (MI->definesRegister(X86::RSP, TRI) && // RSP register modification
+                 !MI->isCall() && !MI->isReturn()) { // but not function calls or returns
         MCFIx64StackPointer(MF, MBB, MI);
       }
       if (MI == std::end(*MBB)) break;

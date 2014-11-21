@@ -25,6 +25,7 @@ static bool RepOp(unsigned opcode) {
   return false;
 }
 
+#if 0
 static unsigned XCHGOp(unsigned opcode)
 {
   switch (opcode) {
@@ -118,6 +119,8 @@ static void MCFIx64RewriteMemWrite(MachineBasicBlock* MBB,
   MI = std::prev(MI);
   MI->setSandboxed();
 }
+
+#endif
 
 static std::string to_hex(unsigned long num) {
   std::stringstream sstream;

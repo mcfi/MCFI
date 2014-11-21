@@ -8,10 +8,9 @@
 // sandboxing.
 //
 //===----------------------------------------------------------------------===//
-
 #include "X86.h"
 #include "X86InstrInfo.h"
-#include "X86MCFI.h"
+//#include "X86MCFI.h"
 #include "X86Subtarget.h"
 #include "X86InstrBuilder.h"
 #include "llvm/ADT/DepthFirstIterator.h"
@@ -83,6 +82,7 @@ bool MCFIRegReserve::runOnMachineFunction(MachineFunction &MF) {
 }
 
 bool MCFIRegReserve::MCFIRRx64Small(MachineFunction &MF) {
+#if 0
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
   const TargetLowering *TLI = MF.getTarget().getTargetLowering();
   const TargetRegisterClass *RC = TLI->getRegClassFor(MVT::i64);
@@ -117,6 +117,7 @@ bool MCFIRegReserve::MCFIRRx64Small(MachineFunction &MF) {
       }
     }
   }
+#endif  
   return false;
 }
 
