@@ -4369,6 +4369,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_Const:
     handleSimpleAttribute<ConstAttr>(S, D, Attr);
     break;
+  case AttributeList::AT_SignalHandler:
+    handleSimpleAttribute<SignalHandlerAttr>(S, D, Attr);
+    break;
+  case AttributeList::AT_ThreadEntry:
+    handleSimpleAttribute<ThreadEntryAttr>(S, D, Attr);
+    break;
   case AttributeList::AT_Pure:
     handleSimpleAttribute<PureAttr>(S, D, Attr);
     break;

@@ -113,6 +113,8 @@ public:
     UWTable,               ///< Function must be in a unwind table
     ZExt,                  ///< Zero extended before/after call
 
+    SignalHandler,         ///< Signal handler
+    ThreadEntry,           ///< Thread function entry
     EndAttrKinds           ///< Sentinal value useful for loops
   };
 private:

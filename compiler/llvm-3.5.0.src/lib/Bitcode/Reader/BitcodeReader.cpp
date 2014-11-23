@@ -630,6 +630,10 @@ static Attribute::AttrKind GetAttrFromCode(uint64_t Code) {
     return Attribute::UWTable;
   case bitc::ATTR_KIND_Z_EXT:
     return Attribute::ZExt;
+  case bitc::ATTR_KIND_SIGNAL_HANDLER:
+    return Attribute::SignalHandler;
+  case bitc::ATTR_KIND_THREAD_ENTRY:
+    return Attribute::ThreadEntry;
   }
 }
 

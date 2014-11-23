@@ -140,6 +140,9 @@ namespace lltok {
     kw_uwtable,
     kw_zeroext,
 
+    kw_signalhandler,
+    kw_threadentry,
+
     kw_type,
     kw_opaque,
 

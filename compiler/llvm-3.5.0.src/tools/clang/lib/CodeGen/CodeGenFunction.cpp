@@ -553,6 +553,14 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       Fn->addFnAttr(llvm::Attribute::NoInline);
   }
 
+  if (D->hasAttr<SignalHandlerAttr>()) {
+    Fn->addFnAttr(llvm::Attribute::SignalHandler);
+  }
+
+  if (D->hasAttr<ThreadEntryAttr>()) {
+    Fn->addFnAttr(llvm::Attribute::ThreadEntry);
+  }
+
   if (getLangOpts().OpenCL) {
     // Add metadata for a kernel function.
     if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D))

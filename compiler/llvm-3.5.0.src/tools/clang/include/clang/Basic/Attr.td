@@ -506,6 +506,16 @@ def Const : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def SignalHandler : InheritableAttr {
+  let Spellings = [GCC<"signalhandler">];
+  let Documentation = [Undocumented];
+}
+
+def ThreadEntry : InheritableAttr {
+  let Spellings = [GCC<"threadentry">];
+  let Documentation = [Undocumented];
+}
+
 def Constructor : InheritableAttr {
   let Spellings = [GCC<"constructor">];
   let Args = [DefaultIntArgument<"Priority", 65535>];

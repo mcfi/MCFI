@@ -109,8 +109,17 @@ private:
       FuncInfo += std::string("DN ") + DemangledName + '\n';
     }
 
-    FuncInfo += std::string("TY ") +
-      TypeStr(MF.getFunction()->getFunctionType()) + '\n';
+    FuncInfo += std::string("TY ");
+    const Function *F = MF.getFunction();
+    if (F->hasFnAttribute(Attribute::SignalHandler)) {
+      FuncInfo += "SignalHandler\n";
+    } else if (F->hasFnAttribute(Attribute::ThreadEntry)) {
+      FuncInfo += "ThreadEntry\n";
+    } else if (MF.getName().startswith("_GLOBAL__sub_I")) {
+      FuncInfo += "GlobalConstructor\n";
+    } else {
+      FuncInfo += TypeStr(MF.getFunction()->getFunctionType()) + '\n';
+    }
 #define addList(name, list) do {                \
       if (list.size()) {                        \
         FuncInfo += std::string(name);          \
@@ -434,6 +443,7 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
 
   DebugLoc DL = MI->getDebugLoc();
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+  const Function *F = MF.getFunction();
 
   const unsigned BIDReg = X86::RDI;
   const unsigned TIDReg = X86::RSI;
@@ -442,6 +452,15 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
   // popq %rcx
   BuildMI(*MBB, MI, DL, TII->get(X86::POP64r))
     .addReg(TargetReg, RegState::Define);
+
+  // signal handlers' return are replaced with a direct sigreturn system call
+  if (F->hasFnAttribute(Attribute::SignalHandler)) {
+    BuildMI(*MBB, MI, DL, TII->get(X86::MOV64ri32))
+      .addReg(X86::RAX).addImm(15); // sigreturn system call number is 15
+    BuildMI(*MBB, MI, DL, TII->get(X86::SYSCALL));
+    MI = MBB->erase(MI); // MI points std::end(MBB)
+    return;
+  }
 
   // movl %ecx, %ecx
   BuildMI(*MBB, MI, DL, TII->get(X86::MOV32rr))

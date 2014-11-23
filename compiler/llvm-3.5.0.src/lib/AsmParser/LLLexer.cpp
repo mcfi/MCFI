@@ -630,6 +630,8 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(noredzone);
   KEYWORD(noreturn);
   KEYWORD(nounwind);
+  KEYWORD(signalhandler);
+  KEYWORD(threadentry);
   KEYWORD(optnone);
   KEYWORD(optsize);
   KEYWORD(readnone);

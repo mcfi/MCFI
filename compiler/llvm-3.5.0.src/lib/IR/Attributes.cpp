@@ -249,6 +249,10 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "zeroext";
   if (hasAttribute(Attribute::Cold))
     return "cold";
+  if (hasAttribute(Attribute::SignalHandler))
+    return "signalhandler";
+  if (hasAttribute(Attribute::ThreadEntry))
+    return "threadentry";
 
   // FIXME: These should be output like this:
   //
@@ -426,6 +430,8 @@ uint64_t AttributeImpl::getAttrMask(Attribute::AttrKind Val) {
   case Attribute::InAlloca:        return 1ULL << 43;
   case Attribute::NonNull:         return 1ULL << 44;
   case Attribute::JumpTable:       return 1ULL << 45;
+  case Attribute::SignalHandler:   return 1ULL << 46;
+  case Attribute::ThreadEntry:     return 1ULL << 47;
   case Attribute::Dereferenceable:
     llvm_unreachable("dereferenceable attribute not supported in raw format");
   }

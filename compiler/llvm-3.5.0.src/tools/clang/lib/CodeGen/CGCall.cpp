@@ -1152,6 +1152,10 @@ void CodeGenModule::ConstructAttributeList(const CGFunctionInfo &FI,
     FuncAttrs.addAttribute("stack-protector-buffer-size",
                            llvm::utostr(CodeGenOpts.SSPBufferSize));
 
+    if (TargetDecl->hasAttr<SignalHandlerAttr>()) {
+      FuncAttrs.addAttribute("disable-tail-calls", "true");
+    }
+
     if (!CodeGenOpts.StackRealignment)
       FuncAttrs.addAttribute("no-realign-stack");
   }
