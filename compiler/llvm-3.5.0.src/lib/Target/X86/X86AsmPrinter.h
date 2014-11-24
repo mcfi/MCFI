@@ -30,6 +30,18 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
   bool SmallSandbox;
   bool SmallID;
   std::set<StringRef> NoReturnFunctions;
+  std::set<std::string> AddrTakenFunctions;
+
+  // test if ID is an identifier in C
+  bool isID(const std::string &ID) {
+    if (ID[0] != '_' && !isalpha(ID[0]))
+      return false;
+    for (const auto c : ID) {
+      if (c != '_' && !isalnum(c))
+        return false;
+    }
+    return true;
+  }
 
   bool isNoReturnFunction(const MachineOperand &MO) {
     if (MO.isSymbol()) {

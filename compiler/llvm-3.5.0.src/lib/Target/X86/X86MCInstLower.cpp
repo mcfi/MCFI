@@ -964,6 +964,25 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   MCInstLowering.Lower(MI, TmpInst);
   EmitToStreamer(OutStreamer, TmpInst);
 
+  // get the address taken function
+  if (!MI->isBranch()) {
+    for (unsigned i = 1; i < TmpInst.getNumOperands(); ++i) {
+      const MCOperand &MO = TmpInst.getOperand(i);
+      if (MO.isExpr()) {
+        const MCExpr *ME = MO.getExpr();
+        std::string MEStr;
+        raw_string_ostream OS(MEStr);
+        ME->print(OS);
+        OS.flush();
+        if (isID(MEStr)) {
+          // This might include global variables, but it's fine, since later
+          // we will intersection the AddrTakenFunction set with all the actual
+          // functions.
+          AddrTakenFunctions.insert(MEStr);
+        }
+      }
+    }
+  }
   switch (MI->getOpcode()) {
     // MCFI instrumentation completeness validation
   case X86::RETW:

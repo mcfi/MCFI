@@ -271,12 +271,45 @@ void MCELFStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
   EmitCommonSymbol(Symbol, Size, ByteAlignment);
 }
 
+// test if ID is an identifier in C
+static bool isID(const std::string &ID) {
+  if (ID[0] != '_' && !isalpha(ID[0]))
+    return false;
+  for (const auto c : ID) {
+    if (c != '_' && !isalnum(c))
+      return false;
+  }
+  return true;
+}
+
 void MCELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
                                   const SMLoc &Loc) {
   if (getCurrentSectionData()->isBundleLocked())
     report_fatal_error("Emitting values inside a locked bundle is forbidden");
   fixSymbolsInTLSFixups(Value);
   MCObjectStreamer::EmitValueImpl(Value, Size, Loc);
+  std::string MEStr;
+  raw_string_ostream OS(MEStr);
+  Value->print(OS);
+  OS.flush();
+  if (isID(MEStr)) {
+    // This might include global variables, but it's fine, since later
+    // we will intersection the AddrTakenFunction set with all the actual
+    // functions.
+    static std::set<std::string> AddrTakenSet;
+    if (AddrTakenSet.find(MEStr) == AddrTakenSet.end()) {
+      const MCSection *MCFIAddrTaken =
+        getAssembler().getContext()
+        .getELFSection(".MCFIAddrTaken",
+                       ELF::SHT_PROGBITS, 0, SectionKind::getReadOnly());
+      PushSection();
+      SwitchSection(MCFIAddrTaken);
+      EmitBytes(MEStr);
+      EmitBytes("\n");
+      PopSection();
+      AddrTakenSet.insert(MEStr);
+    }
+  }
 }
 
 void MCELFStreamer::EmitValueToAlignment(unsigned ByteAlignment,

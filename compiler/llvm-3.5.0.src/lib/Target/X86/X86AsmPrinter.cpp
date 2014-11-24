@@ -51,13 +51,26 @@ bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   const Module* newM = MF.getMMI().getModule();
   if (M != newM) {
     M = newM;
+    AddrTakenFunctions.clear();
     SmallSandbox = !M->getNamedMetadata("MCFILargeSandbox");
     SmallID = !M->getNamedMetadata("MCFILargeID");
     NoReturnFunctions.clear();
     NoReturnFunctions =
       {"_Unwind_Resume",
        "__cxa_throw",
-       "__cxa_rethrow"};
+       "__cxa_rethrow",
+       "__clang_call_terminate",
+       "__cxa_bad_cast",
+       "__cxa_bad_typeid",
+       "__cxa_pure_virtual",
+       "__cxa_deleted_virtual",
+       "__cxa_call_unexpected",
+       "_ZSt9terminatev",
+       "_ZSt10unexpectedv",
+       "_ZSt11__terminatePFvvE",
+       "_ZSt12__unexpectedPFvvE",
+       "_ZL25default_terminate_handlerv",
+       "_ZL26default_unexpected_handlerv"};
     for (auto it = M->begin(); it != M->end(); it++) {
       if (it->doesNotReturn() && it->hasName()) {
         NoReturnFunctions.insert(it->getName());
@@ -768,6 +781,13 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
                                  MDString::get(M.getContext(), AliasStr.c_str())));      
     }
     EmitMCFIInfo(".MCFIAliases", M);
+    // AddrTakenFunctions
+    MD = M.getOrInsertNamedMetadata("MCFIAddrTaken");
+    for (const auto &FN: AddrTakenFunctions) {
+      MD->addOperand(MDNode::get(M.getContext(),
+                                 MDString::get(M.getContext(), FN.c_str())));
+    }
+    EmitMCFIInfo(".MCFIAddrTaken", M);
   }
 }
 
