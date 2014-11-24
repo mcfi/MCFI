@@ -762,7 +762,7 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
         }
       }
     }
-    ICStr += "@" + FuncTypeStr(FTy);
+    ICStr += "-" + FuncTypeStr(FTy);
 #undef selectInst
     AddToList:
     IndirectCalls.push_back(ICStr);
