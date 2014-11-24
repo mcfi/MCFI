@@ -67,6 +67,8 @@ private:
   bool SmallID;
   Module *M;
   unsigned long ModuleID;
+  std::set<StringRef> GlobalCtors;
+  std::set<StringRef> GlobalDtors;
   
   std::vector<std::string> Returns;
   std::vector<std::string> IndirectTailCalls;
@@ -74,51 +76,105 @@ private:
   
   std::vector<std::string> IndirectCalls;
 
-  std::string CXXDemangledName(const char* MangledName) const {
+  void extractGlobalArray(const StringRef ArrayName,
+                          std::set<StringRef> &StrSet);
+
+  const std::string CXXDemangledName(const char* MangledName) const {
     int status = 0;
     char* result = abi::__cxa_demangle(MangledName, 0, 0, &status);
-    
+
     if (result) {
-      std::string DemangledName(result);
+      const std::string DemangledName(result);
       free(result);
       size_t Start = 0;
+      const std::string VirtualThunk("virtual thunk to ");
+      const std::string NonVirtualThunk("non-virtual thunk to ");
       // for thunks, we don't output the annoying "virtual thunk to" things
-      if (DemangledName.find("virtual thunk to ") != std::string::npos)
-        Start = 17;
-      else if (DemangledName.find("non-virtual thunk to ") != std::string::npos)
-        Start = 21;
+      if (DemangledName.find(VirtualThunk) != std::string::npos)
+        Start = VirtualThunk.size();
+      else if (DemangledName.find(NonVirtualThunk) != std::string::npos)
+        Start = NonVirtualThunk.size();
       return DemangledName.substr(Start);
     }
     return std::string("");
   }
 
-  std::string TypeStr(const Type *Ty) const {
+  const std::string SanitizeTypeStr(const std::string TStr,
+                                    const std::string StructStr) const {
+    std::string postpro_result;
+    size_t pos;
+    size_t resultPos = 0;
+    do {
+      pos = TStr.find(StructStr, resultPos);
+      if (pos == std::string::npos)
+        break;
+      pos += StructStr.size();
+      while (pos < TStr.size() &&
+             (isalnum(TStr[pos]) || TStr[pos] == '_' || TStr[pos] == ':'))
+        ++pos;// advance until the end of the id
+      if (pos >= TStr.size())
+        break;
+      postpro_result += TStr.substr(resultPos, pos);
+      if (TStr[pos] == '.') {
+        while (pos < TStr.size() &&
+               (TStr[pos] == '.' || isalnum(TStr[pos])))
+          ++pos;
+      }
+      resultPos = pos;
+    } while (true);
+    return postpro_result + TStr.substr(resultPos);
+  }
+
+  const std::string TypeStr(const Type *Ty) const {
     std::string result;
     raw_string_ostream TStr(result);
     Ty->print(TStr);
     TStr.flush();
+    // Clang emits different types identifiers for the same struct
+    // For example, struct.op.1324 and struct.op.1423 are actually the
+    // same struct definition, but compiled in different files. We need
+    // to process the type string to remove the trailing digits.
+    result = SanitizeTypeStr(result, "%struct.");
+    result = SanitizeTypeStr(result, "%\"class.");
     return result;
+  }
+
+  const std::string FuncTypeStr(const FunctionType *FTy) const {
+    std::string FTStr;
+    FTStr += TypeStr(FTy->getReturnType()) + '!';
+    for (FunctionType::param_iterator PI = FTy->param_begin();
+         PI != FTy->param_end(); ++PI) {
+      FTStr += TypeStr(*PI) + '@';
+    }
+    if (FTy->isVarArg()) {
+      FTStr += '$';
+    }
+    return FTStr;
   }
   
   void MCFIFuncInfo(const MachineFunction &MF) {
+    StringRef FuncName = MF.getName();
     std::string FuncInfo("{ ");
-    FuncInfo += MF.getName().str() + '\n';
-    std::string DemangledName = CXXDemangledName(MF.getName().data());
+    FuncInfo += FuncName.str() + '\n';
+    std::string DemangledName = CXXDemangledName(FuncName.data());
 
     if (DemangledName.size()) {
       FuncInfo += std::string("DN ") + DemangledName + '\n';
     }
-
-    FuncInfo += std::string("TY ");
     const Function *F = MF.getFunction();
+    FuncInfo += std::string("TY ");
     if (F->hasFnAttribute(Attribute::SignalHandler)) {
       FuncInfo += "SignalHandler\n";
     } else if (F->hasFnAttribute(Attribute::ThreadEntry)) {
       FuncInfo += "ThreadEntry\n";
-    } else if (MF.getName().startswith("_GLOBAL__sub_I")) {
+    } else if (GlobalCtors.find(FuncName) != std::end(GlobalCtors)) {
       FuncInfo += "GlobalConstructor\n";
+    } else if (GlobalDtors.find(FuncName) != std::end(GlobalDtors)) {
+      FuncInfo += "GlobalDestructor\n";
+    } else if (FuncName.equals("main")) {
+      FuncInfo += "MAIN\n";
     } else {
-      FuncInfo += TypeStr(MF.getFunction()->getFunctionType()) + '\n';
+      FuncInfo += FuncTypeStr(MF.getFunction()->getFunctionType()) + '\n';
     }
 #define addList(name, list) do {                \
       if (list.size()) {                        \
@@ -218,6 +274,22 @@ unsigned MCFI::BarySlot = 0;
 
 FunctionPass *llvm::createX86MCFIInstrumentation() { return new MCFI(); }
 
+void MCFI::extractGlobalArray(const StringRef ArrayName,
+                              std::set<StringRef> &StrSet) {
+  StrSet.clear();
+  const GlobalVariable *GV = M->getNamedGlobal(ArrayName);
+  if (GV) {
+    const Constant *C = GV->getInitializer();
+    const ConstantArray *CA = dyn_cast<ConstantArray>(C);
+    for (unsigned i = 0, e = CA->getNumOperands(); i != e; ++i) {
+      const Value *V = CA->getOperand(i);
+      const ConstantStruct *CS = dyn_cast<ConstantStruct>(V);
+      const Function* F = dyn_cast<Function>(CS->getOperand(1));
+      StrSet.insert(F->getName());
+    }
+  }
+}
+
 bool MCFI::runOnMachineFunction(MachineFunction &MF) {
   Module* newM = const_cast<Module*>(MF.getMMI().getModule());
   if (M != newM) {
@@ -230,6 +302,10 @@ bool MCFI::runOnMachineFunction(MachineFunction &MF) {
     std::uniform_int_distribution<unsigned long>
       dist(std::llround(0), std::llround(std::pow(2, 64)));
     ModuleID = dist(e2);
+
+    // global constructors and destructors
+    extractGlobalArray("llvm.global_ctors", GlobalCtors);
+    extractGlobalArray("llvm.global_dtors", GlobalDtors);
   }
   // we only support AMD64
   if (MF.getTarget().getSubtarget<X86Subtarget>().isTarget64BitLP64())
@@ -667,11 +743,11 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   {
     // indirect call types
     std::string ICStr(to_hex(ModuleID + BarySlot));
-    ICStr += ' ';
     const CallInst *CI = dyn_cast<CallInst>(I);
     const InvokeInst *II = dyn_cast<InvokeInst>(I);
     assert(CI || II);
-    const Value *CV = CI ? CI->getCalledValue() : II->getCalledValue();
+#define selectInst(CI, II, func, arg) (CI ? CI->func(arg) : II->func(arg))
+    const Value *CV = selectInst(CI, II, getCalledValue, );
     const PointerType *PTy = cast<PointerType>(CV->getType());
     const FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
     
@@ -680,14 +756,14 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
       if (mdNode) {
         const Value *V = mdNode->getOperand(0);
         const std::string VStr = cast<MDString>(V)->getString().str();
+        ICStr += " " + VStr;
         if (VStr.find("PM") != 0) { // virtual call or virtual destructor
-          ICStr += VStr;
           goto AddToList;
         }
       }
     }
-    ICStr += "IC ";
-    ICStr += TypeStr(FTy);
+    ICStr += "@" + FuncTypeStr(FTy);
+#undef selectInst
     AddToList:
     IndirectCalls.push_back(ICStr);
   }
