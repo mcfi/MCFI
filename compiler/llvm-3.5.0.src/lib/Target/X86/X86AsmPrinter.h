@@ -74,6 +74,8 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
 
   void EmitEndOfAsmFile(Module &M) override;
 
+  void EmitBasicBlockStart(const MachineBasicBlock &MBB) const;
+
   void EmitMCFIInfo(const StringRef SectName, const Module& M);
     
   void EmitInstruction(const MachineInstr *MI) override;

@@ -1087,6 +1087,16 @@ void X86AsmPrinter::EmitMCFIPadding(const MachineInstr *MI) {
   }
 }
 
+void X86AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
+  AsmPrinter::EmitBasicBlockStart(MBB); // base impl first
+  static unsigned Seq;
+  if (MBB.isLandingPad()) {
+    MCSymbol *LPSym =
+      OutContext.GetOrCreateSymbol(StringRef("__mcfi_lp_") + to_hex(++Seq));
+    OutStreamer.EmitLabel(LPSym);
+  }
+}
+
 void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *LocMDNode,
                                                  InlineAsm::AsmDialect Dialect) {
   // we only take care of common InlineAsm and report unhandled asm instruction

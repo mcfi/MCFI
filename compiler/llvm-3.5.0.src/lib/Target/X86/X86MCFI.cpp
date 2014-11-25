@@ -299,8 +299,7 @@ bool MCFI::runOnMachineFunction(MachineFunction &MF) {
     
     std::random_device rd;
     std::mt19937_64 e2(rd());
-    std::uniform_int_distribution<unsigned long>
-      dist(std::llround(0), std::llround(std::pow(2, 64)));
+    std::uniform_int_distribution<unsigned long>dist(0UL, (unsigned long)-1);
     ModuleID = dist(e2);
 
     // global constructors and destructors
