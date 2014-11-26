@@ -8,4 +8,10 @@ _start:
 	movq (%rsp),  %rdi      /* 1nd arg: argc */
 	leaq 8(%rsp), %rsi      /* 2rd arg: argv */
 	callq runtime_init
-        jmpq *%rax              /* runtime_init returns user-program interpreter's entry */
+        movl %eax, %ebp
+        movq (%rsp), %rdi
+        leaq 8(%rsp), %rsi
+        movl %ebp, %edx
+        callq stack_init
+        movl %eax, %esp
+        jmpq *%rbp              /* runtime_init returns user-program interpreter's entry */

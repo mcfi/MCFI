@@ -42,9 +42,9 @@ typedef struct TCB_t {
      has escaped the sandbox
    */
   unsigned long sandbox_escape;      /* 0x10 */
-  /* sleep */
-  unsigned long sleep;               /* 0x18 */
-  unsigned long retaddr;             /* 0x20 */
+  /* in-syscall */
+  unsigned long insyscall;           /* 0x18 */
+  unsigned long continuation;        /* 0x20 */
 
   /* stack canary according to the x64 ABI */
   unsigned long canary;              /* 0x28 */
@@ -55,22 +55,22 @@ typedef struct TCB_t {
 
 static TCB* thread_self(void) {
   TCB *self;
-  __asm__ __volatile__("movq %%fs:0x8,%0" : "=r" (self) );
+  __asm__ __volatile__("movq %%fs:0x8, %0" : "=r" (self) );
   return self;
 }
 
 static unsigned long thread_escapes(void) {
   unsigned long numEscape;
-  __asm__ __volatile__("movq %%fs:0x10,%0" : "=r" (numEscape));
+  __asm__ __volatile__("movq %%fs:0x10, %0" : "=r" (numEscape));
   return numEscape;
 }
 
-static bool thread_sleep(void) {
-  unsigned long sleep;
-  __asm__ __volatile__("movb %%fs:0xb0,%0" : "=r" (sleep));
+static bool thread_in_syscall(void) {
+  bool sleep;
+  __asm__ __volatile__("movb %%fs:0x18, %0" : "=r" (sleep));
   return sleep;
 }
 
-TCB* alloc_tcb(void);
+void alloc_tcb(void);
 
 #endif
