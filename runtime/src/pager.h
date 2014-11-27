@@ -39,8 +39,8 @@
  * therefore be unmapped using UnmapViewOfFile().
  */
 enum VmmapEntryType {
-  NACL_VMMAP_ENTRY_ANONYMOUS = 1,
-  NACL_VMMAP_ENTRY_MAPPED
+  VMMAP_ENTRY_ANONYMOUS = 1,
+  VMMAP_ENTRY_MAPPED
 };
 
 struct VmmapEntry {
@@ -84,10 +84,10 @@ void  VmmapDtor(struct Vmmap  *self);
  * only when non-overlapping mappings are being added.
  */
 void  VmmapAdd(struct Vmmap         *self,
-               uintptr_t                page_num,
-               size_t                   npages,
-               int                      prot,
-               int                      max_prot,
+               uintptr_t            page_num,
+               size_t               npages,
+               int                  prot,
+               int                  max_prot,
                enum VmmapEntryType  vmmap_type);
 
 /*
@@ -166,5 +166,8 @@ uintptr_t VmmapFindMapSpaceAboveHint(struct Vmmap *self,
                                      size_t           num_pages);
 
 void VmmapMakeSorted(struct Vmmap  *self);
+
+#define CurPage(x) ((x >> PAGESHIFT) << PAGESHIFT)
+#define RoundToPage(x) ((x + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE)
 
 #endif

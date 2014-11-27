@@ -5,7 +5,6 @@
 
 #define inline inline __attribute__((always_inline))
 
-uintptr_t __brk(uintptr_t);
 void *mmap(void *, size_t, int, int, int, off_t);
 int munmap(void *, size_t);
 void *mremap(void *, size_t, size_t, int, void *);
@@ -90,69 +89,6 @@ static int bin_index_up(size_t x)
   x = x / SIZE_ALIGN - 1;
   if (x <= 32) return x;
   return ((union { float v; uint32_t r; }){(int)x}.r+0x1fffff>>21) - 496;
-}
-
-static struct chunk *expand_heap(size_t n)
-{
-  struct chunk *w;
-  uintptr_t new;
-
-  lock(mal.brk_lock);
-
-  if (n > SIZE_MAX - mal.brk - 2*PAGE_SIZE) goto fail;
-  new = mal.brk + n + SIZE_ALIGN + PAGE_SIZE - 1 & -PAGE_SIZE;
-  n = new - mal.brk;
-
-  if (__brk(new) != new) goto fail;
-
-  w = MEM_TO_CHUNK(new);
-  w->psize = n | C_INUSE;
-  w->csize = 0 | C_INUSE;
-
-  w = MEM_TO_CHUNK(mal.brk);
-  w->csize = n | C_INUSE;
-  mal.brk = new;
-	
-  unlock(mal.brk_lock);
-
-  return w;
- fail:
-  unlock(mal.brk_lock);
-  errn = ENOMEM;
-  return 0;
-}
-
-static int init_malloc(size_t n)
-{
-  static int init;
-  int state;
-  struct chunk *c;
-
-  if (init == 2) return 0;
-
-  state=a_swap(&init, 1);
-  
-  if (state) {
-    a_store(&init, 2);
-    return 0;
-  }
-
-  mal.brk = __brk(0);
-  mal.brk = mal.brk + 2*SIZE_ALIGN-1 & -SIZE_ALIGN;
-  
-  c = expand_heap(n);
-
-  if (!c) {
-    a_store(&init, 0);
-    return -1;
-  }
-
-  mal.heap = (void *)c;
-  c->psize = 0 | C_INUSE;
-  free(CHUNK_TO_MEM(c));
-
-  a_store(&init, 2);
-  return 1;
 }
 
 static int adjust_size(size_t *n)
@@ -275,46 +211,13 @@ void *malloc(size_t n)
 
   if (adjust_size(&n) < 0) return 0;
 
-  if (n > MMAP_THRESHOLD) {
-    size_t len = n + OVERHEAD + PAGE_SIZE - 1 & -PAGE_SIZE;
-    char *base = mmap(0, len, PROT_READ|PROT_WRITE,
-                      MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-    if (base == (void *)-1) return 0;
-    c = (void *)(base + SIZE_ALIGN - OVERHEAD);
-    c->csize = len - (SIZE_ALIGN - OVERHEAD);
-    c->psize = SIZE_ALIGN - OVERHEAD;
-    return CHUNK_TO_MEM(c);
-  }
-
-  i = bin_index_up(n);
-  for (;;) {
-    uint64_t mask = mal.binmap & -(1ULL<<i);
-    if (!mask) {
-      if (init_malloc(n) > 0) continue;
-      c = expand_heap(n);
-      if (!c) return 0;
-      if (alloc_rev(c)) {
-        struct chunk *x = c;
-        c = PREV_CHUNK(c);
-        NEXT_CHUNK(x)->psize = c->csize =
-          x->csize + CHUNK_SIZE(c);
-      }
-      break;
-    }
-    j = first_set(mask);
-    lock_bin(j);
-    c = mal.bins[j].head;
-    if (c != BIN_TO_CHUNK(j) && j == bin_index(c->csize)) {
-      if (!pretrim(c, n, i, j)) unbin(c, j);
-      unlock_bin(j);
-      break;
-    }
-    unlock_bin(j);
-  }
-
-  /* Now patch up in case we over-allocated */
-  trim(c, n);
-
+  size_t len = n + OVERHEAD + PAGE_SIZE - 1 & -PAGE_SIZE;
+  char *base = mmap(0, len, PROT_READ|PROT_WRITE,
+                    MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  if (base == (void *)-1) return 0;
+  c = (void *)(base + SIZE_ALIGN - OVERHEAD);
+  c->csize = len - (SIZE_ALIGN - OVERHEAD);
+  c->psize = SIZE_ALIGN - OVERHEAD;
   return CHUNK_TO_MEM(c);
 }
 

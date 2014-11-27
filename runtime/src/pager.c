@@ -13,11 +13,17 @@
 #include <io.h>
 #include <string.h>
 #include <syscall.h>
+#include <errno.h>
 
-#define START_ENTRIES   5   /* text, rodata, data, bss, stack */
+#define START_ENTRIES   2   /* text, stack */
 #define REMOVE_MARKED_DEBUG 0
 
 
+void *bsearch(const void *key, const void *base, size_t nel, size_t width,
+              int (*cmp)(const void *, const void *));
+void qsort(void *base, size_t nel, size_t width,
+           int (*cmp)(const void *, const void *) );
+  
 /*
  * The memory map structure is a simple array of memory regions which
  * may have different access protections.  We do not yet merge regions
@@ -75,24 +81,16 @@ void  VmmapEntryFree(struct VmmapEntry *entry) {
  */
 void VmentryPrint(void                  *state,
                   struct VmmapEntry *vmep) {
-#if 0  
-  UNREFERENCED_PARAMETER(state);
-
-  printf("page num 0x%06x\n", (uint32_t)vmep->page_num);
-  printf("num pages %d\n", (uint32_t)vmep->npages);
-  printf("prot bits %x\n", vmep->prot);
-  fflush(stdout);
-#endif  
+  dprintf(STDERR_FILENO, "page num 0x%06x\n", (uint32_t)vmep->page_num << PAGESHIFT);
+  dprintf(STDERR_FILENO, "num pages %d\n", (uint32_t)vmep->npages);
+  dprintf(STDERR_FILENO, "prot bits %x\n", vmep->prot);
 }
 
 
 void VmmapDebug(struct Vmmap *self,
                 char             *msg) {
-#if 0  
-  puts(msg);
+  dprintf(STDERR_FILENO, msg);
   VmmapVisit(self, VmentryPrint, (void *) 0);
-  fflush(stdout);
-#endif  
 }
 
 
@@ -134,7 +132,15 @@ static int VmmapCmpEntries(void const  *vleft,
   struct VmmapEntry const *const *right =
     (struct VmmapEntry const *const *) vright;
 
-  return (int) ((*left)->page_num - (*right)->page_num);
+  uintptr_t lpn = (*left)->page_num;
+  uintptr_t rpn = (*right)->page_num;
+  if (lpn < rpn) {
+    return -1;
+  } else if (lpn == rpn) {
+    return 0;
+  } else {
+    return 1;
+  }
 }
 
 
@@ -162,10 +168,8 @@ static void VmmapRemoveMarked(struct Vmmap *self) {
     VmmapEntryFree(self->vmentry[last]);
     self->vmentry[last] = NULL;
   }
-  if (last == 0 && self->vmentry[0]->removed) {
-#if 0    
-    Log(LOG_FATAL, "No valid entries in VM map\n");
-#endif
+  if (last == 0 && self->vmentry[0]->removed) {   
+    dprintf(STDERR_FILENO, "No valid entries in VM map\n");
     quit(-1);
     return;
   }
@@ -237,7 +241,7 @@ static void VmmapRemoveMarked(struct Vmmap *self) {
 void VmmapMakeSorted(struct Vmmap  *self) {
   if (self->is_sorted)
     return;
-
+  
   VmmapRemoveMarked(self);
 
   qsort(self->vmentry,
@@ -271,9 +275,7 @@ void VmmapAdd(struct Vmmap          *self,
 
     new_map = realloc(self->vmentry, new_size * sizeof *new_map);
     if (NULL == new_map) {
-#if 0      
-      Log(LOG_FATAL, "VmmapAdd: could not allocate memory\n");
-#endif
+      dprintf(STDERR_FILENO, "VmmapAdd: could not allocate memory\n");
       quit(-1);
       return;
     }
@@ -618,7 +620,6 @@ void  VmmapVisit(struct Vmmap *self,
                  void             *state) {
   size_t i;
   size_t nentries;
-
   VmmapMakeSorted(self);
   for (i = 0, nentries = self->nvalid; i < nentries; ++i) {
     (*fn)(state, self->vmentry[i]);

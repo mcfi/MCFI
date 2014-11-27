@@ -121,6 +121,7 @@ typedef uint32_t uint_fast32_t;
 #define PTRDIFF_MIN     INT64_MIN
 #define PTRDIFF_MAX     INT64_MAX
 #define SIZE_MAX        UINT64_MAX
+#define SIZE_T_MAX      SIZE_MAX
 
 #define INT8_C(c)  c
 #define INT16_C(c) c
@@ -156,4 +157,5 @@ typedef signed short s16;
 #define OneTwentyEightKB ((unsigned long)(1UL << 17))
 #define FourGB           ((unsigned long)(1UL << 32))
 
+#define NULL ((void*)0)
 #endif

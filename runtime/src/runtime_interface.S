@@ -6,7 +6,7 @@
 
 .macro switch_runtime_stack
         movq %fs:SELF, %rsp
-        addq 0xffc0, %rsp
+        addq $0xffc0, %rsp
 .endm
 
 .macro atomic_incr_thread_escapes scratchreg=%rax
@@ -16,8 +16,8 @@
 .endm
 
         .text
-        .global online_patch
-online_patch:
+        .global runtime_online_patch
+runtime_online_patch:
         # save the user context first
         movq %rdi, %fs:USER_CTX+0x20
         popq %rdi # pop the return address

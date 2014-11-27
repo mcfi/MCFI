@@ -7,6 +7,15 @@ extern "C" {
 
 #include <def.h>
 
+typedef struct {
+  int a_type;
+  union {
+    long a_val;
+    void *a_ptr;
+    void (*a_fnc)();
+  } a_un;
+} auxv_t;
+  
 typedef uint16_t Elf32_Half;
 typedef uint16_t Elf64_Half;
 

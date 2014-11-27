@@ -84,3 +84,11 @@ static inline long __syscall6(long n, long a1, long a2, long a3, long a4, long a
 
 int arch_prctl(int code, unsigned long addr);
 void quit(int status);
+
+#define CHECK(cond) do {                                                \
+    if (!(cond)) {                                                      \
+      dprintf(STDERR_FILENO, "[False Check] %s : %d\n", __FILE__, __LINE__); \
+      quit(-1);                                                         \
+    } } while (0)
+
+#define assert CHECK
