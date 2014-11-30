@@ -4,6 +4,7 @@
 #include <io.h>
 #include <string.h>
 #include <tcb.h>
+#include <errno.h>
 
 static void* prog_brk;
 
@@ -37,11 +38,19 @@ int rock_munmap(void *start, size_t len) {
 
 void *rock_mremap(void *old_addr, size_t old_len, size_t new_len,
                   int flags, void* new_addr) {
-  return mremap(old_addr, old_len, new_len, flags, new_addr);
+  void *ptr = mmap(0, new_len, PROT_READ | PROT_WRITE,
+                   MAP_32BIT | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  if (ptr == MAP_FAILED) {
+    dprintf(STDERR_FILENO, "[rock_mremap] mmap failed\n");
+    quit(-1);
+  }
+  memcpy(ptr, old_addr, old_len);
+  munmap(old_addr, old_len);
+  return ptr;
 }
 
 void* rock_brk(void* newbrk) {
-  return 0;
+  return __syscall1(SYS_brk, newbrk);
 }
 
 void load_native_code(const char* code_file_name) {

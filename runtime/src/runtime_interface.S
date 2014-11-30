@@ -1,6 +1,6 @@
 #define SELF     0x08
 #define THREAD_ESCAPES 0x10
-#define RETADDR  0x20
+#define CONTINUATION  0x20
 #define USER_CTX 0x30        
 #define STACK_SIZE $0x10000
 
@@ -22,7 +22,7 @@ runtime_online_patch:
         movq %rdi, %fs:USER_CTX+0x20
         popq %rdi # pop the return address
         movq (%rsp), %rdi
-        movq %rdi, %fs:RETADDR # save the called routine
+        movq %rdi, %fs:CONTINUATION # save the called routine
         movq %rax, %fs:USER_CTX
         movq %rcx, %fs:USER_CTX+0x10
         movq %rdx, %fs:USER_CTX+0x18
@@ -37,7 +37,7 @@ runtime_online_patch:
         switch_runtime_stack
         callq rock_patch
         # patch might return 0 or 5
-        subq %rax, %fs:RETADDR
+        subq %rax, %fs:CONTINUATION
         # restore states
         movq %fs:USER_CTX, %rax
         movq %fs:USER_CTX+0x10, %rcx
@@ -50,7 +50,7 @@ runtime_online_patch:
         movq %fs:USER_CTX+0x50, %r10
         movq %fs:USER_CTX+0x58, %r11
         # jump to the place
-        jmpq *%fs:RETADDR
+        jmpq *%fs:CONTINUATION
         
 .macro save_context
         movq %rsp, %fs:USER_CTX+0x38
@@ -65,13 +65,13 @@ runtime_online_patch:
         .global runtime_\func
 runtime_\func:
         save_context
-        movq %r11, %fs:RETADDR
+        movq %r11, %fs:CONTINUATION
         atomic_incr_thread_escapes
         # load system stack pointer
         switch_runtime_stack
         callq \func
         restore_context
-        jmpq *%fs:RETADDR
+        jmpq *%fs:CONTINUATION
 .endm
         runtime_function rock_mmap
         runtime_function rock_mprotect

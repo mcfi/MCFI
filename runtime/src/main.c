@@ -423,7 +423,7 @@ static void extract_elf_load_data(int argc, char **argv) {
 }
 
 void load_libc(void) {
-  int fd = open("libc.so", O_RDONLY, 0);
+  int fd = open("/home/ben/MCFI/runtime/libc.so", O_RDONLY, 0);
   if (fd == -1) {
     dprintf(STDERR_FILENO, "[load_libc] libc open failed with %d\n", errn);
     quit(-1);
