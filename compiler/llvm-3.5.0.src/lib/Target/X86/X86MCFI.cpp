@@ -342,7 +342,9 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
   // mov %gs:BarySlot, BIDReg
   auto &MIB = BuildMI(*MBB, I, DL, TII->get(BIDRegReadOp))
     .addReg(BIDReg, RegState::Define)
-    .addReg(0).addImm(1).addReg(0).addImm(BarySlot).addReg(X86::GS);
+    .addReg(0).addImm(1).addReg(0)
+    .addImm(0x1000 + BarySlot * (SmallID ? 4 : 8))
+    .addReg(X86::GS);
   MIB->setBarySlot(ModuleID + BarySlot);
   
   // cmp BIDReg, %gs:(TargetReg)

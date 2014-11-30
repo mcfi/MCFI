@@ -31,7 +31,13 @@
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Target/TargetOptions.h"
+
 using namespace llvm;
+
+static cl::opt<bool> DisableDS("disable-ds", cl::Hidden,
+                               cl::desc("Disable MCFI data sandboxing"));
 
 namespace {
 
@@ -948,18 +954,33 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
   }
 
-  // memory sandboxing
-  if (MI->mayStore() &&
-      !MI->isBranch() && // calls also change store mem, but no need to sandbox
-      !MI->isInlineAsm()) {// inlined asm is taken care of by another function
-    if (MI->getNumOperands() >= 5 || // if this instruction has a memory operand
-        RepOp(MI->getOpcode())) {    // if this instruction is a rep prefixed mov/store
-      // 0x67 prefix will replace the default 64-bit address size with 32-bit address size
-      OutStreamer.EmitIntValue(0x67, 1);
+  if (!DisableDS) {
+    // memory sandboxing
+    if ((MI->mayStore() || MI->mayLoad()) && // only writes are sandboxed
+        !MI->isBranch() && // calls also change store mem, but no need to sandbox
+        !MI->isInlineAsm()) {// inlined asm is taken care of by another function
+      if (MI->getNumOperands() >= 5 || // if this instruction has a memory operand
+          RepOp(MI->getOpcode())) {    // if this instruction is a rep prefixed mov/store
+        bool checkRemovable = false;
+        for (unsigned i = 0; i < MI->getNumOperands(); i++) {
+          const auto & MO = MI->getOperand(i);
+          if (MO.isReg() &&
+              (MO.getReg() == X86::RIP ||
+               MO.getReg() == X86::GS ||
+               MO.getReg() == X86::FS)) {
+            checkRemovable = true;
+            break;
+          }
+        }
+        // RIP-relative addressing is safe because we set [4GB, 8GB) as a guard zone.
+        if (!checkRemovable) {
+          // 0x67 prefix will replace the default 64-bit address size with 32-bit address size
+          OutStreamer.EmitIntValue(0x67, 1);
+        }
+      }
+      // other memory store instructions like push is safe if %rsp is within the guard region
     }
-    // other memory store instructions like push is safe if %rsp is within the guard region
   }
-
   MCInst TmpInst;
   MCInstLowering.Lower(MI, TmpInst);
   EmitToStreamer(OutStreamer, TmpInst);
@@ -1106,16 +1127,24 @@ void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *Lo
       TrimedStr.startswith_lower("rep;") ||
       TrimedStr.startswith_lower("cld; repne;") ||
       TrimedStr.startswith_lower("repne;")){
-    MCInst TmpInst;
     // sandboxing
-    if (SmallSandbox) {
-      TmpInst.setOpcode(X86::MOV32rr);
-      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::EDI));
-      TmpInst.insert(std::end(TmpInst), MCOperand::CreateReg(X86::EDI));
-      EmitToStreamer(OutStreamer, TmpInst);
+    if (SmallSandbox && !DisableDS) {
+      MCInst WriteSandboxingInst;
+      WriteSandboxingInst.setOpcode(X86::MOV32rr);
+      WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
+      WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
+      EmitToStreamer(OutStreamer, WriteSandboxingInst);
+      MCInst ReadSandboxingInst;
+      ReadSandboxingInst.setOpcode(X86::MOV32rr);
+      ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
+      ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
+      EmitToStreamer(OutStreamer, ReadSandboxingInst);
       return;
     }
   } else if (TrimedStr.startswith_lower("pmovmskb")) {
+    if (TrimedStr.find("(") != StringRef::npos) {
+      OutStreamer.EmitIntValue(0x67, 1);
+    }
     return;
   }
   llvm::errs() << "MCFI Warning: InlineAsm\n\t"
