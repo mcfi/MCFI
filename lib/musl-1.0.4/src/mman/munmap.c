@@ -1,6 +1,7 @@
 #include <sys/mman.h>
 #include "syscall.h"
 #include "libc.h"
+#include "trampolines.h"
 
 static void dummy1(int x) { }
 static void dummy0(void) { }
@@ -11,7 +12,8 @@ int __munmap(void *start, size_t len)
 {
 	int ret;
 	__vm_lock(-1);
-	ret = syscall(SYS_munmap, start, len);
+	//ret = syscall(SYS_munmap, start, len);
+        ret = __syscall_ret(trampoline_munmap(start, len));
 	__vm_unlock();
 	return ret;
 }

@@ -5,6 +5,7 @@
 #include "pthread_impl.h"
 #include "libc.h"
 #include "atomic.h"
+#include "trampolines.h"
 
 #ifndef SHARED
 
@@ -46,7 +47,9 @@ void *__tls_get_addr(size_t *v)
 static void *simple(void *p)
 {
 	*(void **)p = p;
-	return __set_thread_area(TP_ADJ(p)) ? 0 : p;
+	//return __set_thread_area(TP_ADJ(p)) ? 0 : p;
+        trampoline_set_tcb(p);
+        return p;
 }
 
 weak_alias(simple, __install_initial_tls);

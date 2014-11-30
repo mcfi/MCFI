@@ -5,6 +5,7 @@
 #include <limits.h>
 #include "syscall.h"
 #include "libc.h"
+#include "trampolines.h"
 
 static void dummy1(int x) { }
 static void dummy0(void) { }
@@ -26,11 +27,14 @@ void *__mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 		return MAP_FAILED;
 	}
 	if (flags & MAP_FIXED) __vm_lock(-1);
+#if 0
 #ifdef SYS_mmap2
 	ret = (void *)syscall(SYS_mmap2, start, len, prot, flags, fd, off>>12);
 #else
 	ret = (void *)syscall(SYS_mmap, start, len, prot, flags, fd, off);
 #endif
+#endif
+        ret = (void*)__syscall_ret(trampoline_mmap(start, len, prot, flags, fd, off));
 	if (flags & MAP_FIXED) __vm_unlock();
 	return ret;
 }
