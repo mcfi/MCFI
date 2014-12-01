@@ -1140,8 +1140,11 @@ foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> > Ops,
   LIS.ReplaceMachineInstrInMaps(MI, FoldMI);
   // The register allocator might spill a virtual register on stack, that
   // means a CALL64r instruction might be changed to CALL64m, so we need
-  // to preserve the IRInst info.
+  // to preserve the IRInst and TableJump info.
   FoldMI->setIRInst(MI->getIRInst());
+  if (MI->isTableJump())
+    FoldMI->setTableJump();
+
   MI->eraseFromParent();
 
   // Insert any new instructions other than FoldMI into the LIS maps.

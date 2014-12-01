@@ -101,6 +101,8 @@ private:
 
   bool Sandboxed;                       // MCFI Sandboxed
   bool SandboxCheck;                    // MCFI Sandbox check
+
+  bool TableJump;                       // whether this is a jump-table jump
   
   MachineInstr(const MachineInstr&) LLVM_DELETED_FUNCTION;
   void operator=(const MachineInstr&) LLVM_DELETED_FUNCTION;
@@ -1144,6 +1146,14 @@ public:
 
   bool isSandboxCheck() const {
     return SandboxCheck;
+  }
+
+  bool isTableJump() const {
+    return TableJump;
+  }
+
+  void setTableJump() {
+    TableJump = true;
   }
 private:
   /// getRegInfo - If this instruction is embedded into a MachineFunction,

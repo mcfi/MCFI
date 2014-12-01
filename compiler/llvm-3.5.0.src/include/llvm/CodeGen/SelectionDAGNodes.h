@@ -385,6 +385,9 @@ private:
 
   // IR Instruction from which this node is lowered
   const Instruction* IRInst;
+
+  // whether this indirect jump is a jump through jump table
+  bool TableJump;
   
   /// getValueTypeList - Return a pointer to the specified value type.
   static const EVT *getValueTypeList(EVT VT);
@@ -744,6 +747,14 @@ public:
   void setIRInst(const Instruction* inst) {
     IRInst = inst;
   }
+
+  bool isTableJump() const {
+    return TableJump;
+  }
+
+  void setTableJump() {
+    TableJump = true;
+  }
 protected:
   static SDVTList getSDVTList(EVT VT) {
     SDVTList Ret = { getValueTypeList(VT), 1 };
@@ -757,7 +768,7 @@ protected:
       OperandList(Ops.size() ? new SDUse[Ops.size()] : nullptr),
       ValueList(VTs.VTs), UseList(nullptr),
       NumOperands(Ops.size()), NumValues(VTs.NumVTs),
-      debugLoc(dl), IROrder(Order), IRInst(nullptr) {
+      debugLoc(dl), IROrder(Order), IRInst(nullptr), TableJump(false) {
     for (unsigned i = 0; i != Ops.size(); ++i) {
       OperandList[i].setUser(this);
       OperandList[i].setInitial(Ops[i]);
@@ -771,7 +782,7 @@ protected:
     : NodeType(Opc), OperandsNeedDelete(false), HasDebugValue(false),
       SubclassData(0), NodeId(-1), OperandList(nullptr), ValueList(VTs.VTs),
       UseList(nullptr), NumOperands(0), NumValues(VTs.NumVTs), debugLoc(dl),
-      IROrder(Order), IRInst(nullptr) {}
+      IROrder(Order), IRInst(nullptr), TableJump(false) {}
 
   /// InitOperands - Initialize the operands list of this with 1 operand.
   void InitOperands(SDUse *Ops, const SDValue &Op0) {

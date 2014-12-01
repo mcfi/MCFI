@@ -1021,7 +1021,11 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::JMP64m:
   {
     // must be a jump through a jump-table.
-    assert(MI->getOperand(3).isJTI());
+    // TODO: such case only appears when all registers are spilled
+    // between the target loading instruction and the actual indirect jump.
+    // Later we should modfiy the register spiller to make jump-through-memory
+    // instructions disappear.
+    assert(MI->isTableJump());
     break;
   }
   case X86::JMP32r:
@@ -1029,7 +1033,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::TAILJMPr:
   case X86::TAILJMPr64:
   {
-    assert(MI->hasBarySlot());
+    assert(MI->hasBarySlot() || MI->isTableJump());
     break;
   }
     // MCFI BID read

@@ -770,6 +770,8 @@ EmitMachineNode(SDNode *Node, bool IsClone, bool IsCloned,
   // Create the new machine instruction.
   MachineInstrBuilder MIB = BuildMI(*MF, Node->getDebugLoc(), II);
   MIB->setIRInst(Node->getIRInst()); // propagate IRInst
+  if (Node->isTableJump()) // table jump propagation
+    MIB->setTableJump();
   
   // Add result register values for things that are defined by this
   // instruction.

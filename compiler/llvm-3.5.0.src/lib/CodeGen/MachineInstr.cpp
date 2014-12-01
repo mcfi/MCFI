@@ -551,7 +551,7 @@ MachineInstr::MachineInstr(MachineFunction &MF, const MCInstrDesc &tid,
   : MCID(&tid), Parent(nullptr), Operands(nullptr), NumOperands(0),
     Flags(0), AsmPrinterFlags(0),
     NumMemRefs(0), MemRefs(nullptr), debugLoc(dl), IRInst(nullptr),
-    BarySlot(-1), Sandboxed(false), SandboxCheck(false) {
+    BarySlot(-1), Sandboxed(false), SandboxCheck(false), TableJump(false) {
   // Reserve space for the expected number of operands.
   if (unsigned NumOps = MCID->getNumOperands() +
     MCID->getNumImplicitDefs() + MCID->getNumImplicitUses()) {
@@ -570,7 +570,7 @@ MachineInstr::MachineInstr(MachineFunction &MF, const MachineInstr &MI)
     Flags(0), AsmPrinterFlags(0),
     NumMemRefs(MI.NumMemRefs), MemRefs(MI.MemRefs),
     debugLoc(MI.getDebugLoc()), IRInst(MI.IRInst),
-    BarySlot(-1), Sandboxed(false), SandboxCheck(false) {
+    BarySlot(-1), Sandboxed(false), SandboxCheck(false), TableJump(false) {
   CapOperands = OperandCapacity::get(MI.getNumOperands());
   Operands = MF.allocateOperandArray(CapOperands);
 
@@ -1733,6 +1733,8 @@ void MachineInstr::print(raw_ostream &OS, const TargetMachine *TM,
     printDebugLoc(debugLoc, MF, OS);
   }
 
+  if (TableJump)
+    OS << " SafeTableJump";
   OS << '\n';
   if (IRInst) {
     IRInst->print(OS);

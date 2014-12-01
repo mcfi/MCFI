@@ -874,6 +874,8 @@ void SelectionDAGISel::DoInstructionSelection() {
       if (ResNode) {
         // propagate the IRInst to the actual instruction
         ResNode->setIRInst(Node->getIRInst());
+        if (Node->isTableJump()) // table jump propagation
+          ResNode->setTableJump();
         ReplaceUses(Node, ResNode);
       }
 
