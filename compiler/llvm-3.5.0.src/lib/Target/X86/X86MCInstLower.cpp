@@ -1022,10 +1022,14 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   {
     // must be a jump through a jump-table.
     // TODO: such case only appears when all registers are spilled
-    // between the target loading instruction and the actual indirect jump.
+    // between the target loading instruction and the actual indirect jump, which
+    // happens when PIC code is generated.
     // Later we should modfiy the register spiller to make jump-through-memory
     // instructions disappear.
-    assert(MI->isTableJump());
+    if (!MI->getOperand(3).isJTI()) {
+      const TargetMachine &TM = MI->getParent()->getParent()->getTarget();
+      assert(TM.getRelocationModel() == Reloc::PIC_ && MI->isTableJump());
+    }
     break;
   }
   case X86::JMP32r:
