@@ -448,7 +448,7 @@ void MCFI::MCFIx64Report(MachineFunction &MF,
   }
   // load the indirect branch address
   BuildMI(*MBB, I, DL, TII->get(X86::LEA64r))
-    .addReg(X86::RDI, RegState::Define).addReg(0).addImm(1)
+    .addReg(X86::RDI, RegState::Define).addReg(X86::RIP).addImm(1)
     .addReg(0).addMBB(IDCmpMBB).addReg(0);
  
   // hlt for now

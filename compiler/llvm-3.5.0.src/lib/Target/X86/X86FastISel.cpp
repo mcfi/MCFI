@@ -2922,6 +2922,8 @@ bool X86FastISel::FastLowerCall(CallLoweringInfo &CLI) {
     unsigned CallOpc = Is64Bit ? X86::CALL64r : X86::CALL32r;
     MIB = BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(CallOpc))
       .addReg(CalleeOp);
+    // associate the IR Inst to this machine instruction
+    MIB->setIRInst(CLI.CS->getInstruction());
   } else {
     // Direct call.
     assert(GV && "Not a direct call");
