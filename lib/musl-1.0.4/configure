@@ -263,8 +263,8 @@ tryflag CFLAGS_C99FSE -std=c99
 tryflag CFLAGS_C99FSE -nostdinc
 tryflag CFLAGS_C99FSE -ffreestanding \
 || tryflag CFLAGS_C99FSE -fno-builtin
-tryflag CFLAGS_C99FSE -fexcess-precision=standard \
-|| { test "$ARCH" = i386 && tryflag CFLAGS_C99FSE -ffloat-store ; }
+#tryflag CFLAGS_C99FSE -fexcess-precision=standard \
+#|| { test "$ARCH" = i386 && tryflag CFLAGS_C99FSE -ffloat-store ; }
 tryflag CFLAGS_C99FSE -frounding-math
 
 #
@@ -295,7 +295,7 @@ fi
 # option is sufficient, and if not, add a macro to cripple these
 # functions with volatile...
 #
-tryflag CFLAGS_MEMOPS -fno-tree-loop-distribute-patterns
+# tryflag CFLAGS_MEMOPS
 
 #
 # If debugging is explicitly enabled, don't auto-enable optimizations
@@ -419,12 +419,12 @@ printf "warning: disabling dynamic linking support\n"
 shared=no
 }
 
-# Find compiler runtime library
-test -z "$LIBCC" && tryldflag LIBCC -lgcc && tryldflag LIBCC -lgcc_eh
-test -z "$LIBCC" && tryldflag LIBCC -lcompiler_rt
-test -z "$LIBCC" && try_libcc=`$CC -print-file-name=libpcc.a 2>/dev/null` \
-                 && tryldflag LIBCC "$try_libcc"
-printf "using compiler runtime libraries: %s\n" "$LIBCC"
+# Find compiler runtime library, libgcc and libgcc_eh will be replaced with libunwind
+# test -z "$LIBCC" && tryldflag LIBCC -lgcc && tryldflag LIBCC -lgcc_eh
+# test -z "$LIBCC" && tryldflag LIBCC -lcompiler_rt
+# test -z "$LIBCC" && try_libcc=`$CC -print-file-name=libpcc.a 2>/dev/null` \
+#                  && tryldflag LIBCC "$try_libcc"
+# printf "using compiler runtime libraries: %s\n" "$LIBCC"
 
 # Figure out arch variants for archs with variants
 SUBARCH=

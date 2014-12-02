@@ -1,5 +1,7 @@
 #include "pthread_impl.h"
 #include "syscall.h"
+#include "trampolines.h"
+
 static struct pthread *main_thread = &(struct pthread){0};
 
 /* pthread_key_create.c overrides this */
@@ -10,7 +12,7 @@ static int init_main_thread()
 {
 	__syscall(SYS_rt_sigprocmask, SIG_UNBLOCK,
                   mcfi_sandbox_mask(SIGPT_SET), 0, _NSIG/8);
-	if (__set_thread_area(TP_ADJ(main_thread)) < 0) return -1;
+	trampoline_set_tcb(TP_ADJ(main_thread));
 	main_thread->canceldisable = libc.canceldisable;
 	main_thread->tsd = (void **)__pthread_tsd_main;
 	main_thread->errno_ptr = __errno_location();
