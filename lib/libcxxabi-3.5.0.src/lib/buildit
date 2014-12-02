@@ -4,6 +4,11 @@
 # running this script.  If you set $CXX, that will be used to compile
 # the library.  Otherwise we'll use clang++.
 
+if [ -z "$MCFI_SDK" ]
+then
+    MCFI_SDK=$HOME/MCFI/toolchain
+fi
+
 set -e
 
 if [ `basename $(pwd)` != "lib" ]
@@ -14,12 +19,12 @@ fi
 
 if [ -z "$CXX" ]
 then
-	CXX=clang++
+	CXX=$MCFI_SDK/bin/clang++
 fi
 
 if [ -z "$CC" ]
 then
-    CC=clang
+    CC=$MCFI_SDK/bin/clang
 fi
 
 if [ -z $RC_ProjectSourceVersion ]
@@ -27,12 +32,12 @@ then
   RC_ProjectSourceVersion=1
 fi
 
-EXTRA_FLAGS="-std=c++11 -stdlib=libc++ -fstrict-aliasing -Wstrict-aliasing=2 \
+EXTRA_FLAGS="-nostdinc -std=c++11 -stdlib=libc++ -fstrict-aliasing -Wstrict-aliasing=2 \
              -Wsign-conversion -Wshadow -Wconversion -Wunused-variable \
              -Wmissing-field-initializers -Wchar-subscripts -Wmismatched-tags \
              -Wmissing-braces -Wshorten-64-to-32 -Wsign-compare \
              -Wstrict-aliasing=2 -Wstrict-overflow=4 -Wunused-parameter \
-             -Wnewline-eof"
+             -Wnewline-eof -I$MCFI_SDK/include"
 
 case $TRIPLE in
   *-apple-*)
@@ -70,7 +75,7 @@ case $TRIPLE in
     SOEXT=so
     LDSHARED_FLAGS="-o libc++abi.so.1.0 \
         -shared -nodefaultlibs -Wl,-soname,libc++abi.so.1 \
-        -lpthread -lrt -lc -lstdc++"
+        -lpthread -lc -lc++ -lunwind"
     ;;
 esac
 
@@ -97,3 +102,9 @@ if [ -z $RC_XBS ]
 then
     rm *.o
 fi
+
+cp libc++abi.so.1.0 $MCFI_SDK/lib/
+cp ../include/cxxabi.h $MCFI_SDK/include
+rm $MCFI_SDK/lib/libc++abi.so.1 $MCFI_SDK/lib/libc++abi.so
+ln -s $MCFI_SDK/lib/libc++abi.so.1.0 $MCFI_SDK/lib/libc++abi.so.1
+ln -s $MCFI_SDK/lib/libc++abi.so.1 $MCFI_SDK/lib/libc++abi.so
