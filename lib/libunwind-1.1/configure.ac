@@ -258,7 +258,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[#ifndef __INTEL_COMPILER
 
 if test x$GCC = xyes -a x$intel_compiler != xyes; then
   CFLAGS="${CFLAGS} -fexceptions -Wall -Wsign-compare"
-  LIBCRTS="-lgcc"
 fi
 AC_MSG_RESULT([$intel_compiler])
 
