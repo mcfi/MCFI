@@ -1012,6 +1012,12 @@ ctype<char>::do_narrow(const char_type* low, const char_type* high, char dfault,
     return low;
 }
 
+#ifdef __MUSL__
+extern "C" const unsigned short ** __ctype_b_loc();
+extern "C" const int ** __ctype_tolower_loc();
+extern "C" const int ** __ctype_toupper_loc();
+#endif
+
 #ifdef __EMSCRIPTEN__
 extern "C" const unsigned short ** __ctype_b_loc();
 extern "C" const int ** __ctype_tolower_loc();
@@ -1039,6 +1045,8 @@ ctype<char>::classic_table()  _NOEXCEPT
     return (const unsigned int *)__lc_ctype_ptr->obj->mask;
 #elif defined(__ANDROID__)
     return _ctype_;
+#elif defined(__MUSL__)
+    return (const unsigned long *)*__ctype_b_loc();
 #else
     // Platform not supported: abort so the person doing the port knows what to
     // fix

@@ -325,12 +325,14 @@ typedef __char32_t char32_t;
 #define _LIBCPP_HAS_QUICK_EXIT
 #elif defined(__linux__)
 #include <features.h>
-#if __GLIBC_PREREQ(2, 15)
+
+//#if __GLIBC_PREREQ(2, 15)
 #define _LIBCPP_HAS_QUICK_EXIT
-#endif
-#if __GLIBC_PREREQ(2, 17)
+//#endif
+//#if __GLIBC_PREREQ(2, 17)
 #define _LIBCPP_HAS_C11_FEATURES
-#endif
+//#endif
+
 #endif
 #endif
 

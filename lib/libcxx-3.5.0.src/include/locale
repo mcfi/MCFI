@@ -864,7 +864,8 @@ __num_get_signed_integral(const char* __a, const char* __a_end,
         typename remove_reference<decltype(errno)>::type __save_errno = errno;
         errno = 0;
         char *__p2;
-        long long __ll = strtoll_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
+        //long long __ll = strtoll_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
+        long long __ll = strtoll(__a, &__p2, __base);
         typename remove_reference<decltype(errno)>::type __current_errno = errno;
         if (__current_errno == 0)
             errno = __save_errno;
@@ -904,7 +905,8 @@ __num_get_unsigned_integral(const char* __a, const char* __a_end,
         typename remove_reference<decltype(errno)>::type __save_errno = errno;
         errno = 0;
         char *__p2;
-        unsigned long long __ll = strtoull_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
+        //unsigned long long __ll = strtoull_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
+        unsigned long long __ll = strtoull(__a, &__p2, __base);
         typename remove_reference<decltype(errno)>::type __current_errno = errno;
         if (__current_errno == 0)
             errno = __save_errno;
@@ -1290,13 +1292,13 @@ __num_put<_CharT>::__widen_and_group_float(char* __nb, char* __np, char* __ne,
         *__oe++ = __ct.widen(*__nf++);
         *__oe++ = __ct.widen(*__nf++);
         for (__ns = __nf; __ns < __ne; ++__ns)
-            if (!isxdigit_l(*__ns, _LIBCPP_GET_C_LOCALE))
+            if (!isxdigit(*__ns))
                 break;
     }
     else
     {
         for (__ns = __nf; __ns < __ne; ++__ns)
-            if (!isdigit_l(*__ns, _LIBCPP_GET_C_LOCALE))
+            if (!isdigit(*__ns))
                 break;
     }
     if (__grouping.empty())
