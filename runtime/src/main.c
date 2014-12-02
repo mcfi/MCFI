@@ -23,6 +23,13 @@ int lt_argc = 0;
 char **lt_envp = 0;
 int lt_envc = 0;
 
+/* default SDK path */
+const char *MCFI_SDK = 0;
+const char *HOME = 0;
+const char MCFI_SDK_NAME[] = "MCFI_SDK";
+
+int snprintf(char *str, size_t size, const char *format, ...);
+
 auxv_t *lt_auxv = 0;
 int lt_auxc = 0;
 
@@ -285,9 +292,14 @@ static void dump_stack(int argc, char **argv) {
 
 static char* build_stack(char* stack_top) {
   char *top = stack_top;
+  char *rv = 0;
   int i;
 
   top -= lt_stack_size;
+
+  /* ABI requires stack pointer should be 16-byte aligned */
+  rv = top = (char*)((unsigned long)top & ~15);
+
   /* zero fill the stack */
   memset(top, 0, lt_stack_size);
 
@@ -353,7 +365,7 @@ static char* build_stack(char* stack_top) {
 #undef writeval
 #undef copystr
 
-  return stack_top - lt_stack_size;
+  return rv;
 }
 
 static void stack_init(void) {
@@ -382,9 +394,14 @@ static void extract_elf_load_data(int argc, char **argv) {
   
   lt_envp = lt_argv + lt_argc + 1;
   
-  for (i = 0; lt_envp[i]; i++)
+  for (i = 0; lt_envp[i]; i++) {
+    if (!strncmp(lt_envp[i], MCFI_SDK_NAME, strlen(MCFI_SDK_NAME))) {
+      MCFI_SDK = lt_envp[i] + strlen(MCFI_SDK_NAME) + 1;
+    } else if (!strncmp(lt_envp[i], "HOME", 4)) {
+      HOME = lt_envp[i] + 5;
+    }
     lt_stack_size += (strlen(lt_envp[i]) + 1); /* each envp[i] length */
-
+  }
   lt_envc = i;
   
   lt_stack_size += (lt_envc + 1)* 8; /* for storing envp[] */
@@ -418,12 +435,17 @@ static void extract_elf_load_data(int argc, char **argv) {
 
   lt_stack_size += (lt_auxc + 1) * sizeof(auxv_t); /* auxiliary vector */
   lt_array_area_size += (lt_auxc + 1) * sizeof(auxv_t);
-
-  lt_stack_size = (lt_stack_size + 15)/16*16;/* ABI requires stack pointer to 16-byte aligned */
 }
 
 void load_libc(void) {
-  int fd = open("/home/ben/MCFI/runtime/libc.so", O_RDONLY, 0);
+  char libc_path[256] = {0};
+  if (MCFI_SDK) {
+    snprintf(libc_path, 255, "%s/lib/libc.so", MCFI_SDK);
+  } else {
+    snprintf(libc_path, 255, "%s/MCFI/toolchain/lib/libc.so", HOME);
+  }
+  /* dprintf(STDERR_FILENO, "%s\n", libc_path); */
+  int fd = open(libc_path, O_RDONLY, 0);
   if (fd == -1) {
     dprintf(STDERR_FILENO, "[load_libc] libc open failed with %d\n", errn);
     quit(-1);
@@ -497,7 +519,7 @@ void load_libc(void) {
                VMMAP_ENTRY_ANONYMOUS);
     }
   }
-  VmmapDebug(&VM, "After libc loaded\n");
+  /* VmmapDebug(&VM, "After libc loaded\n"); */
   munmap(libc_elf, (1 << 23));
 }
 

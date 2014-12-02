@@ -13,6 +13,14 @@ int strcmp(const char *l, const char *r)
   return *(unsigned char *)l - *(unsigned char *)r;
 }
 
+int strncmp(const char *_l, const char *_r, size_t n)
+{
+	const unsigned char *l=(void *)_l, *r=(void *)_r;
+	if (!n--) return 0;
+	for (; *l && *r && n && *l == *r ; l++, r++, n--);
+	return *l - *r;
+}
+
 void *memcpy(void *dest, const void *src, size_t n)
 {
   char* d = dest;
