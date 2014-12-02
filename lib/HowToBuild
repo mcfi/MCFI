@@ -1,0 +1,25 @@
+How to bulid libcxx and libcxxabi
+
+1. Build libcxx against libstdc++
+
+   cd libcxx-3.5.0.src
+   mkdir build_std
+   cd build_std
+   CC=clang CXX=clang++ cmake -G "Unix Makefiles" -DLIBCXX_CXX_ABI=libstdc++ -DLIBCXX_LIBSUPCXX_INCLUDE_PATHS="/usr/include/c++/4.8/;/usr/include/x86_64-linux-gnu/c++/4.8/" -DCMAKE_BUILD_TYPE=Release ../ -DCMAKE_INSTALL_PREFIX=/home/ben/MCFI/toolchain/
+   make
+
+2. Build libcxxabi against libcxx
+   cd libcxxabi-3.5.0.src/lib
+   ./buildit
+
+3. Build libcxx against libcxxabi
+
+   cd libcxx-3.5.0.src
+   mkdir build_libcxxabi
+   cd build_libcxxabi
+   # trick cmake to pass the Makefile generation
+   mv /home/ben/MCFI/toolchain/bin/clang /home/ben/MCFI/toolchain/bin/clang.new
+   ln -s ~/llvm/bin/clang /home/ben/MCFI/toolchain/bin/clang
+   CC=/home/ben/MCFI/toolchain/bin/clang CXX="/home/ben/MCFI/toolchain/bin/clang++ -D__MUSL__ -U__GLIBC__ -O3" cmake -G "Unix Makefiles" -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="/home/ben/MCFI/toolchain/include" -DCMAKE_BUILD_TYPE=Release ../ -DCMAKE_INSTALL_PREFIX=/home/ben/MCFI/toolchain/
+   mv /home/ben/MCFI/toolchain/bin/clang.new /home/ben/MCFI/toolchain/bin/clang
+   make
