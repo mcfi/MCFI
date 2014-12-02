@@ -47,6 +47,8 @@ typedef struct __mbstate_t
 	unsigned __opaque1, __opaque2;
 } mbstate_t;
 
+typedef struct __mbstate_t __mbstate_t;
+
 wchar_t *wcscpy (wchar_t *__restrict, const wchar_t *__restrict);
 wchar_t *wcsncpy (wchar_t *__restrict, const wchar_t *__restrict, size_t);
 
