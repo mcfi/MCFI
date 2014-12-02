@@ -281,11 +281,13 @@ void MCFI::extractGlobalArray(const StringRef ArrayName,
   if (GV) {
     const Constant *C = GV->getInitializer();
     const ConstantArray *CA = dyn_cast<ConstantArray>(C);
-    for (unsigned i = 0, e = CA->getNumOperands(); i != e; ++i) {
-      const Value *V = CA->getOperand(i);
-      const ConstantStruct *CS = dyn_cast<ConstantStruct>(V);
-      const Function* F = dyn_cast<Function>(CS->getOperand(1));
-      StrSet.insert(F->getName());
+    if (CA) { // CA might be a zero initializer
+      for (unsigned i = 0, e = CA->getNumOperands(); i != e; ++i) {
+        const Value *V = CA->getOperand(i);
+        const ConstantStruct *CS = dyn_cast<ConstantStruct>(V);
+        const Function* F = dyn_cast<Function>(CS->getOperand(1));
+        StrSet.insert(F->getName());
+      }
     }
   }
 }

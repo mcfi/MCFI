@@ -553,11 +553,11 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       Fn->addFnAttr(llvm::Attribute::NoInline);
   }
 
-  if (D->hasAttr<SignalHandlerAttr>()) {
+  if (D && D->hasAttr<SignalHandlerAttr>()) {
     Fn->addFnAttr(llvm::Attribute::SignalHandler);
   }
 
-  if (D->hasAttr<ThreadEntryAttr>()) {
+  if (D && D->hasAttr<ThreadEntryAttr>()) {
     Fn->addFnAttr(llvm::Attribute::ThreadEntry);
   }
 
