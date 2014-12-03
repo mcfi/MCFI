@@ -1051,6 +1051,8 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
       const unsigned long MCFIID = MI->getBarySlot();
       MCSymbol *MCFIIDSym = 
         OutContext.GetOrCreateSymbol(StringRef("__mcfi_bary_") + to_hex(MCFIID));
+      OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Global);
+      OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Hidden);
       OutStreamer.EmitLabel(MCFIIDSym);
     }
     break;
@@ -1066,15 +1068,15 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::CALL64r:
   {
     static unsigned long Seq;
+    MCSymbol *RetAddrSym;
     if (MI->getOpcode() == X86::CALL64r ||
         MI->getOpcode() == X86::CALL32r) {
       assert(MI->hasBarySlot());
-      MCSymbol *RetAddrSym =
+      RetAddrSym =
         OutContext.GetOrCreateSymbol(StringRef("__mcfi_icj_")
                                      + to_hex(++Seq)
                                      + std::string("_")
                                      + to_hex(MI->getBarySlot()));
-      OutStreamer.EmitLabel(RetAddrSym);
     } else {
       assert(MI->getOpcode() == X86::CALL64pcrel32 ||
              MI->getOpcode() == X86::CALLpcrel32);
@@ -1086,13 +1088,14 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
         FuncName = MO.getGlobal()->getName();
       }
       assert(!FuncName.empty());
-      MCSymbol *RetAddrSym =
+      RetAddrSym =
         OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
                                      + to_hex(++Seq)
                                      + std::string("_")
                                      + FuncName);
-      OutStreamer.EmitLabel(RetAddrSym);
     }
+    OutStreamer.EmitSymbolAttribute(RetAddrSym, MCSymbolAttr::MCSA_Hidden);
+    OutStreamer.EmitLabel(RetAddrSym);
   }
   }
 }
@@ -1120,8 +1123,10 @@ void X86AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
   AsmPrinter::EmitBasicBlockStart(MBB); // base impl first
   static unsigned Seq;
   if (MBB.isLandingPad()) {
+    OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0);
     MCSymbol *LPSym =
       OutContext.GetOrCreateSymbol(StringRef("__mcfi_lp_") + to_hex(++Seq));
+    OutStreamer.EmitSymbolAttribute(LPSym, MCSymbolAttr::MCSA_Hidden);
     OutStreamer.EmitLabel(LPSym);
   }
 }
