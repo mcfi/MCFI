@@ -1,0 +1,9 @@
+Change "isdigit" and "isalpha" in
+tokenize.cpp
+processrenderoptions.cpp
+processoptions.cpp
+pgm.cpp
+parse.cpp
+optout.cpp
+
+to ::isdigit and ::isalpha to avoid ambiguity

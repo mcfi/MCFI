@@ -1,0 +1,9 @@
+Comment out line 41 and 42 in include/grid/tria_accessor.h
+
+ namespace std
+ {
+-  template<class T1, class T2>
+-  struct pair;
++  //template<class T1, class T2>
++  //struct pair;
+ }
