@@ -50,7 +50,8 @@ public:
 
   enum RuntimeLibType {
     RLT_CompilerRT,
-    RLT_Libgcc
+    RLT_Libgcc,
+    RLT_LibMCFI
   };
 
 private:
@@ -213,7 +214,7 @@ public:
 
   /// GetDefaultRuntimeLibType - Get the default runtime library variant to use.
   virtual RuntimeLibType GetDefaultRuntimeLibType() const {
-    return ToolChain::RLT_Libgcc;
+    return ToolChain::RLT_LibMCFI;
   }
 
   /// IsUnwindTablesDefault - Does this tool chain use -funwind-tables

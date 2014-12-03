@@ -7175,6 +7175,14 @@ void gnutools::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
                    SplitDebugName(Args, Inputs));
 }
 
+static void AddLibMCFI(const llvm::Triple &Triple, const Driver &D,
+                       ArgStringList &CmdArgs, const ArgList &Args) {
+  if (D.CCCIsCXX()) {
+    CmdArgs.push_back("-lc++abi");
+    CmdArgs.push_back("-lunwind");
+  }
+}
+
 static void AddLibgcc(const llvm::Triple &Triple, const Driver &D,
                       ArgStringList &CmdArgs, const ArgList &Args) {
   bool isAndroid = Triple.getEnvironment() == llvm::Triple::Android;
@@ -7261,7 +7269,7 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
            ToolChain.getTriple().getEnvironment() == llvm::Triple::GNUX32)
     return "/libx32/ld-linux-x32.so.2";
   else
-    return "/lib64/ld-linux-x86-64.so.2";
+    return MCFI_SDK() + "/bin/rock";
 }
 
 static void AddRunTimeLibs(const ToolChain &TC, const Driver &D,
@@ -7275,6 +7283,9 @@ static void AddRunTimeLibs(const ToolChain &TC, const Driver &D,
     break;
   case ToolChain::RLT_Libgcc:
     AddLibgcc(TC.getTriple(), D, CmdArgs, Args);
+    break;
+  case ToolChain::RLT_LibMCFI:
+    AddLibMCFI(TC.getTriple(), D, CmdArgs, Args);
     break;
   }
 }
@@ -7308,8 +7319,9 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   // handled somewhere else.
   Args.ClaimAllArgs(options::OPT_w);
 
-  if (!D.SysRoot.empty())
-    CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
+  // We don't compile the linker with the system root
+  //if (!D.SysRoot.empty())
+  //  CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
   if (IsPIE)
     CmdArgs.push_back("-pie");
@@ -7399,6 +7411,8 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
         D.DyldPrefix + getLinuxDynamicLinker(Args, ToolChain)));
   }
 
+  CmdArgs.push_back("-rpath");
+  CmdArgs.push_back(Args.MakeArgString(MCFI_SDK() + "/lib"));
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
@@ -7415,9 +7429,11 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
           crt1 = "crt1.o";
       }
       if (crt1)
-        CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
+        CmdArgs.push_back(
+          Args.MakeArgString(MCFI_SDK() + "/lib/" + crt1));
 
-      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
+      CmdArgs.push_back(
+        Args.MakeArgString(MCFI_SDK() + "/lib/crti.o"));
     }
 
     const char *crtbegin;
@@ -7429,7 +7445,7 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbeginS.o";
     else
       crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbegin.o";
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crtbegin)));
+    CmdArgs.push_back(Args.MakeArgString(MCFI_SDK() + "/lib/" + crtbegin));
 
     // Add crtfastmath.o if available and fast math is enabled.
     ToolChain.AddFastMathRuntimeIfAvailable(Args, CmdArgs);
@@ -7440,8 +7456,11 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
 
   const ToolChain::path_list Paths = ToolChain.getFilePaths();
 
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+  // No standard paths
+  // for (const auto &Path : Paths)
+  //  CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+
+  CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + MCFI_SDK() + "/lib"));
 
   if (D.IsUsingLTO(Args))
     AddGoldPlugin(ToolChain, Args, CmdArgs);
@@ -7523,9 +7542,10 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       else
         crtend = isAndroid ? "crtend_android.o" : "crtend.o";
 
-      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crtend)));
+      CmdArgs.push_back(Args.MakeArgString(MCFI_SDK() + "/lib/" + crtend));
       if (!isAndroid)
-        CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
+        CmdArgs.push_back(
+          Args.MakeArgString(MCFI_SDK() + "/lib/crtn.o"));
     }
   }
 

@@ -779,4 +779,13 @@ public:
 } // end namespace driver
 } // end namespace clang
 
+static std::string MCFI_SDK(void) {
+  const char *mcfi_sdk = getenv("MCFI_SDK");
+  if (!mcfi_sdk) {
+    const char *home = getenv("HOME");
+    return std::string(home) + "/MCFI/toolchain";
+  }
+  return mcfi_sdk;
+}
+
 #endif

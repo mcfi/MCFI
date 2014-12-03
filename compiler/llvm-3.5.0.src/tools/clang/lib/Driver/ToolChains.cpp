@@ -3242,6 +3242,12 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   const Driver &D = getDriver();
   std::string SysRoot = computeSysRoot();
 
+  if (D.CCCIsCXX())
+    addSystemInclude(DriverArgs, CC1Args, MCFI_SDK() + "/include/c++/v1");
+  addSystemInclude(DriverArgs, CC1Args, MCFI_SDK() + "/include");
+
+  return;
+
   if (DriverArgs.hasArg(options::OPT_nostdinc))
     return;
 
