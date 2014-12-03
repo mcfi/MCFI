@@ -37,14 +37,6 @@ __CTOR_LIST__:
 __DTOR_LIST__:
 	.quad -1
 
-        .section        .init_array, "aw", @init_array
-        .align 8
-#__init_array_start:
-
-        .section        .fini_array, "aw", @fini_array
-        .align 8
-#__fini_array_start:
-        
 	.section	.eh_frame, "a", @unwind
 
 	.align 8
