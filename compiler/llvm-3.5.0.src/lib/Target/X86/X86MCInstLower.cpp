@@ -1051,7 +1051,6 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
       const unsigned long MCFIID = MI->getBarySlot();
       MCSymbol *MCFIIDSym = 
         OutContext.GetOrCreateSymbol(StringRef("__mcfi_bary_") + to_hex(MCFIID));
-      OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Global);
       OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Hidden);
       OutStreamer.EmitLabel(MCFIIDSym);
     }
