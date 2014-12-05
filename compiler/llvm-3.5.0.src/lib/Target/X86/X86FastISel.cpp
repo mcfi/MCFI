@@ -3291,6 +3291,11 @@ bool X86FastISel::tryToFoldLoadIntoMI(MachineInstr *MI, unsigned OpNo,
   if (!Result)
     return false;
 
+  // Folding the load might also need to transfer MCFI info.
+  Result->setIRInst(MI->getIRInst());
+  if (MI->isTableJump())
+    Result->setTableJump();
+
   Result->addMemOperand(*FuncInfo.MF, createMachineMemOperandFor(LI));
   FuncInfo.MBB->insert(FuncInfo.InsertPt, Result);
   MI->eraseFromParent();
