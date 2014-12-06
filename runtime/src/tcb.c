@@ -4,7 +4,7 @@
 #include <io.h>
 #include <syscall.h>
 
-void alloc_tcb(void) {
+TCB* alloc_tcb(void) {
   TCB* tcb = mmap(0, STACK_SIZE, PROT_WRITE,
                   MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   if (MAP_FAILED == (void*)tcb) {
@@ -20,7 +20,11 @@ void alloc_tcb(void) {
 
   tcb->self = tcb;
   //tcb->canary = compute_canary();
-  if (0 != arch_prctl(ARCH_SET_FS, (unsigned long)tcb)) {
+  return tcb;
+}
+
+void set_tcb_pointer(TCB *p) {
+  if (0 != arch_prctl(ARCH_SET_FS, (unsigned long)p)) {
     report_error("[set_tcb] FS set failed\n");
-  }
+  } 
 }

@@ -71,6 +71,6 @@ static bool thread_in_syscall(void) {
   return sleep;
 }
 
-void alloc_tcb(void);
-
+TCB* alloc_tcb(void);
+void set_tcb_pointer(TCB *);
 #endif

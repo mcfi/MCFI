@@ -158,6 +158,8 @@ void install_trampolines(void) {
     void *preadv;
     void *process_vm_readv;
     void *set_tcb;
+    void *allocset_tcb;
+    void *free_tcb;
     void *load_native_code;
     void *unload_native_code;
     void *create_code_heap;
@@ -173,6 +175,8 @@ void install_trampolines(void) {
   extern unsigned long runtime_rock_mremap;
   extern unsigned long runtime_rock_brk;
   extern unsigned long runtime_set_tcb;
+  extern unsigned long runtime_allocset_tcb;
+  extern unsigned long runtime_free_tcb;
   extern unsigned long runtime_load_native_code;
   extern unsigned long runtime_unload_native_code;
   extern unsigned long runtime_create_code_heap;
@@ -187,6 +191,8 @@ void install_trampolines(void) {
   tp->mremap = &runtime_rock_mremap;
   tp->brk = &runtime_rock_brk;
   tp->set_tcb = &runtime_set_tcb;
+  tp->allocset_tcb = &runtime_allocset_tcb;
+  tp->free_tcb = &runtime_free_tcb;
   tp->load_native_code = &runtime_load_native_code;
   tp->unload_native_code = &runtime_unload_native_code;
   tp->create_code_heap = &runtime_create_code_heap;
@@ -547,7 +553,7 @@ void* runtime_init(int argc, char **argv) {
   install_trampolines();
 
   /* set up the trusted thread-control block */
-  alloc_tcb();
+  set_tcb_pointer(alloc_tcb());
   
   /* load the libc */
   load_libc();

@@ -4,6 +4,12 @@
 #define USER_CTX 0x30        
 #define STACK_SIZE $0x10000
 
+        .data
+locked:
+        .byte 0
+
+        .text
+        
 .macro switch_runtime_stack
         movq %fs:SELF, %rsp
         addq $0xffc0, %rsp
@@ -15,7 +21,6 @@
         movq \scratchreg, %fs:THREAD_ESCAPES
 .endm
 
-        .text
         .global runtime_online_patch
 runtime_online_patch:
         # save the user context first
@@ -59,17 +64,31 @@ runtime_online_patch:
         movq %fs:USER_CTX+0x38, %rsp
 .endm
 
-# %r11 contains the return address
+.macro spin_lock
+1:      
+        movb $1, %r11b
+        lock
+        xchgb %r11b, locked(%rip)
+        testb %r11b, %r11b
+        jnz 1b
+.endm
+
+.macro spin_unlock
+        movb $0, %r11b
+        lock
+        xchgb %r11b, locked(%rip)
+.endm        
 
 .macro runtime_function func
         .global runtime_\func
 runtime_\func:
         save_context
-        movq %r11, %fs:CONTINUATION
         atomic_incr_thread_escapes
         # load system stack pointer
         switch_runtime_stack
+        spin_lock
         callq \func
+        spin_unlock
         restore_context
         jmpq *%fs:CONTINUATION
 .endm
@@ -82,6 +101,8 @@ runtime_\func:
         runtime_function rock_execve
         runtime_function rock_shmat
         runtime_function set_tcb
+        runtime_function allocset_tcb
+        runtime_function free_tcb
         runtime_function load_native_code
         runtime_function unload_native_code
         runtime_function create_code_heap
