@@ -2,6 +2,7 @@
 #include "pthread_impl.h"
 #include "stdio_impl.h"
 #include "libc.h"
+#include "trampolines.h"
 #include <sys/mman.h>
 
 static void dummy_0()
@@ -69,9 +70,11 @@ _Noreturn void pthread_exit(void *result)
 
 		/* The following call unmaps the thread's stack mapping
 		 * and then exits without touching the stack. */
-		__unmapself(self->map_base, self->map_size);
+                trampoline_free_tcb(pthread_self());
+		__unmapself(mcfi_sandbox_mask(self->map_base), mcfi_sandbox_mask(self->map_size));
 	}
 
+        trampoline_free_tcb(pthread_self());
 	for (;;) __syscall(SYS_exit, 0);
 }
 
@@ -130,6 +133,7 @@ int pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict attrp
 	int ret;
 	size_t size, guard;
 	struct pthread *self = pthread_self(), *new;
+        void *trusted_tcb = 0;
 	unsigned char *map = 0, *stack = 0, *tsd = 0, *stack_limit;
 	unsigned flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND
 		| CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS
@@ -213,7 +217,16 @@ int pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict attrp
 	new->canary = self->canary;
 
 	a_inc(&libc.threads_minus_1);
-	ret = __clone(start, stack, flags, new, &new->tid, TP_ADJ(new), &new->tid);
+        trusted_tcb = (void*)trampoline_allocset_tcb(TP_ADJ(new));
+        /* if trusted_tcb returns 0, the allocation fails and the clone call would
+         * also fail */
+	ret = __clone(start, stack, flags, new, &new->tid,
+                      trusted_tcb,
+                      &new->tid);
+        /* if thread creation fails, let's first free the allocated trusted tcb */
+        if (ret < 0) {
+          trampoline_free_tcb(new);
+        }
 
 	__release_ptc();
 
