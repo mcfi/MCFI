@@ -1158,6 +1158,10 @@ void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *Lo
       OutStreamer.EmitIntValue(0x67, 1);
     }
     return;
+  } else if (TrimedStr.startswith_lower("mfence") ||
+             TrimedStr.startswith_lower("sfence") ||
+             TrimedStr.startswith_lower("lfence")) {
+    return;
   }
   llvm::errs() << "MCFI Warning: InlineAsm\n\t"
                << TrimedStr
