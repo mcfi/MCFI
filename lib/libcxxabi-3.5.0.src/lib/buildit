@@ -105,6 +105,6 @@ fi
 
 cp libc++abi.so.1.0 $MCFI_SDK/lib/
 cp ../include/cxxabi.h $MCFI_SDK/include
-rm $MCFI_SDK/lib/libc++abi.so.1 $MCFI_SDK/lib/libc++abi.so
+rm -f $MCFI_SDK/lib/libc++abi.so.1 $MCFI_SDK/lib/libc++abi.so
 ln -s $MCFI_SDK/lib/libc++abi.so.1.0 $MCFI_SDK/lib/libc++abi.so.1
 ln -s $MCFI_SDK/lib/libc++abi.so.1 $MCFI_SDK/lib/libc++abi.so
