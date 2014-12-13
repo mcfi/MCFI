@@ -55,6 +55,7 @@ _Noreturn void pthread_exit(void *result)
 	if (a_fetch_add(&libc.threads_minus_1, -1)==0) {
 		libc.threads_minus_1 = 0;
 		__restore_sigs(&set);
+                trampoline_free_tcb(pthread_self());
 		exit(0);
 	}
 
