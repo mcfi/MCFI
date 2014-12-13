@@ -801,9 +801,10 @@ void X86AsmPrinter::EmitMCFIInfo(const StringRef SectName, const Module& M) {
     for (unsigned i = 0, e = NMNode->getNumOperands(); i != e; ++i) {
       const MDNode* mdNode = NMNode->getOperand(i);
       if (mdNode)
-        for (unsigned j = 0, je = mdNode->getNumOperands(); j != je; ++j)
-          OutStreamer.EmitBytes(((MDString*)mdNode->getOperand(j))->getString().str()
-                                + std::string("\n"));
+        for (unsigned j = 0, je = mdNode->getNumOperands(); j != je; ++j) {
+          OutStreamer.EmitBytes(((MDString*)mdNode->getOperand(j))->getString().str());
+          OutStreamer.EmitIntValue(0, 1); // emit a NULL byte at the end of each string
+        }
     }
   }
 }
