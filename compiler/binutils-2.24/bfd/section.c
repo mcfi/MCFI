@@ -139,6 +139,9 @@ SUBSECTION
 #include "bfd.h"
 #include "libbfd.h"
 #include "bfdlink.h"
+#include "libiberty.h"
+
+mcfi_section_content mcfi_sections[MCFINumSections];
 
 /*
 DOCDD
@@ -1437,6 +1440,7 @@ bfd_set_section_contents (bfd *abfd,
 			  bfd_size_type count)
 {
   bfd_size_type sz;
+  int id = mcfi_section_id(section->name);
 
   if (!(bfd_get_section_flags (abfd, section) & SEC_HAS_CONTENTS))
     {
@@ -1445,10 +1449,10 @@ bfd_set_section_contents (bfd *abfd,
     }
 
   sz = section->size;
-  if ((bfd_size_type) offset > sz
-      || count > sz
-      || offset + count > sz
-      || count != (size_t) count)
+  if (id < 0 && ((bfd_size_type) offset > sz
+                 || count > sz
+                 || offset + count > sz
+                 || count != (size_t) count))
     {
       bfd_set_error (bfd_error_bad_value);
       return FALSE;
@@ -1460,18 +1464,37 @@ bfd_set_section_contents (bfd *abfd,
       return FALSE;
     }
 
-  /* Record a copy of the data in memory if desired.  */
-  if (section->contents
-      && location != section->contents + offset)
-    memcpy (section->contents + offset, location, (size_t) count);
+  if (id < 0) { /* Non-MCFI sections */
+    /* Record a copy of the data in memory if desired.  */
+    if (section->contents
+        && location != section->contents + offset)
+      memcpy (section->contents + offset, location, (size_t) count);
 
-  if (BFD_SEND (abfd, _bfd_set_section_contents,
-		(abfd, section, location, offset, count)))
-    {
-      abfd->output_has_begun = TRUE;
+    if (BFD_SEND (abfd, _bfd_set_section_contents,
+                  (abfd, section, location, offset, count)))
+      {
+        abfd->output_has_begun = TRUE;
+        return TRUE;
+      }
+  } else {
+    /* all contents should have been loaded into mcfi_sections, we just need
+       to write the data to the output_bfd's section */
+    static int mcfi_written[MCFINumSections];
+    if (!mcfi_written[id] && section->size > 0) {
+      char *content = xmalloc(section->size);
+      mcfi_section_content_copy(content, &mcfi_sections[id]);
+      mcfi_written[id] = TRUE;
+      if (BFD_SEND (abfd, _bfd_set_section_contents,
+                    (abfd, section, content, 0, section->size)))
+        {
+          abfd->output_has_begun = TRUE;
+          free(content);
+          return TRUE;
+        }
+      free(content);
+    } else
       return TRUE;
-    }
-
+  }
   return FALSE;
 }
 
@@ -1624,10 +1647,109 @@ SYNOPSIS
 DESCRIPTION
 	Remove all members of @var{group} from the output.
 */
-
 bfd_boolean
 bfd_generic_discard_group (bfd *abfd ATTRIBUTE_UNUSED,
 			   asection *group ATTRIBUTE_UNUSED)
 {
   return TRUE;
+}
+
+#include "libiberty.h"
+
+static int eq_string(const void *s1, const void *s2) {
+  return (0 == strcmp(s1, s2));
+}
+
+void mcfi_section_content_init(mcfi_section_content p[]) {
+  if (p) {
+    int i;
+    for (i = 0; i < MCFINumSections; i++) {
+      p[i].size = 0;
+      p[i].tab =
+        htab_create_alloc(16, htab_hash_string, eq_string, NULL, xcalloc, free);
+    }
+  }
+}
+
+static int empty_callback(void **slot, void *arg) {
+  (void)arg;
+  free(*slot);
+  return TRUE;
+}
+
+void mcfi_section_content_reset(mcfi_section_content p[]) {
+  if (p) {
+    int i;
+    for (i = 0; i < MCFINumSections; i++) {
+      htab_traverse_noresize(p[i].tab, empty_callback, NULL);
+      htab_empty(p[i].tab);
+      p[i].size = 0;
+    }
+  }
+}
+
+void mcfi_section_content_fini(mcfi_section_content p[]) {
+  if (p) {
+    int i;
+    for (i = 0; i < MCFINumSections; i++) {
+      htab_traverse_noresize(p[i].tab, empty_callback, NULL);
+      htab_delete(p[i].tab);
+    }
+  }
+}
+
+void mcfi_section_content_add(mcfi_section_content *msc,
+                              char *content,
+                              bfd_size_type content_size) {
+  if (msc && content && content_size > 0) {
+    char *p = content;
+    while (*p && (p < content + content_size)) {
+      bfd_size_type len = strlen((char*)p) + 1;
+      PTR ent = htab_find(msc->tab, p);
+      if (ent == HTAB_EMPTY_ENTRY) {
+        /* if not found, add this entry to the hash table and increase
+           the section size */
+        void **slot = htab_find_slot(msc->tab, p, INSERT);
+        *slot = strdup(p);
+        msc->size += len;
+      }
+      p += len;
+    }
+  }
+}
+
+int mcfi_section_id(const char* name) {
+  if (0 == strcmp(name, ".MCFICHA"))
+    return MCFICHA;
+  else if (0 == strcmp(name, ".MCFIDtorCxaAtExit"))
+    return MCFIDtorCxaAtExit;
+  else if (0 == strcmp(name, ".MCFIDtorCxaThrow"))
+    return MCFIDtorCxaThrow;
+  else if (0 == strcmp(name, ".MCFIFuncInfo"))
+    return MCFIFuncInfo;
+  else if (0 == strcmp(name, ".MCFIIndirectCalls"))
+    return MCFIIndirectCalls;
+  else if (0 == strcmp(name, ".MCFIAliases"))
+    return MCFIAliases;
+  else if (0 == strcmp(name, ".MCFIAddrTaken"))
+    return MCFIAddrTaken;
+  else
+    return -1;
+}
+
+static int copy_callback(void **slot, void *arg) {
+  char *str = *slot;
+  bfd_size_type len = strlen(str);
+  char **buf = (char**)arg;
+  memcpy(*buf, str, len);
+  *buf += len;
+  **buf = 0;
+  *buf += 1; /* NULL byte */
+  return TRUE;
+}
+
+void mcfi_section_content_copy(char *content,
+                               const mcfi_section_content *msc) {
+  /* traverse the hash table and write all entries to content */
+  htab_traverse_noresize(msc->tab, copy_callback, &content);
 }

@@ -846,3 +846,30 @@ extern void bfd_section_already_linked_table_traverse
 
 extern bfd_vma read_unsigned_leb128 (bfd *, bfd_byte *, unsigned int *);
 extern bfd_signed_vma read_signed_leb128 (bfd *, bfd_byte *, unsigned int *);
+
+/* Handling MCFI-relevant sections */
+typedef struct {
+  size_t size; /* the length of all strings (plus the trailing NULL byte) */
+  htab_t tab; /* the hash table that contains all strings */
+} mcfi_section_content;
+
+#define MCFICHA 0
+#define MCFIDtorCxaAtExit 1
+#define MCFIDtorCxaThrow 2
+#define MCFIFuncInfo 3
+#define MCFIIndirectCalls 4
+#define MCFIAliases 5
+#define MCFIAddrTaken 6
+#define MCFINumSections 7
+
+extern void mcfi_section_content_init(mcfi_section_content p[]);
+extern void mcfi_section_content_reset(mcfi_section_content p[]);
+extern void mcfi_section_content_fini(mcfi_section_content p[]);
+extern void mcfi_section_content_add(mcfi_section_content *msc,
+                                     char *newcontents,
+                                     bfd_size_type len);
+
+extern int mcfi_section_id(const char* name);
+extern void mcfi_section_content_copy(char *content,
+                                      const mcfi_section_content *msc);
+extern mcfi_section_content mcfi_sections[];

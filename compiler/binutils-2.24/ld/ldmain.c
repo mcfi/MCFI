@@ -205,6 +205,8 @@ main (int argc, char **argv)
   program_name = argv[0];
   xmalloc_set_program_name (program_name);
 
+  mcfi_section_content_init(mcfi_sections);
+
   START_PROGRESS (program_name, 0);
 
   expandargv (&argc, &argv);
@@ -512,7 +514,7 @@ main (int argc, char **argv)
 
   /* Prevent ld_cleanup from doing anything, after a successful link.  */
   output_filename = NULL;
-
+  mcfi_section_content_fini(mcfi_sections);
   xexit (0);
   return 0;
 }

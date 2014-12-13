@@ -4591,9 +4591,20 @@ size_input_section
 
       i->output_offset = dot - o->vma;
 
-      /* Mark how big the output section must be to contain this now.  */
-      dot += TO_ADDR (i->size);
+      int id = mcfi_section_id(i->name);
+      if (id >= 0 && i->size > 0) {
+        char *content = xmalloc(i->size);
+        bfd_get_section_contents(i->owner, i, content, 0, i->size);
+        bfd_size_type prev_size = mcfi_sections[id].size;
+        mcfi_section_content_add(&mcfi_sections[id], content, i->size);
+        dot += mcfi_sections[id].size - prev_size;
+        free(content);
+      } else {
+        /* Mark how big the output section must be to contain this now.  */
+        dot += TO_ADDR (i->size);
+      }
       o->size = TO_SIZE (dot - o->vma);
+      /* fprintf(stderr, "%s size = %ld\n", o->name, o->size); */
     }
   else
     {
@@ -6308,6 +6319,7 @@ lang_reset_memory_regions (void)
       o->rawsize = o->size;
       o->size = 0;
     }
+  mcfi_section_content_reset(mcfi_sections);
 }
 
 /* Worker for lang_gc_sections_1.  */
