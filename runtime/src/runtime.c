@@ -7,7 +7,7 @@
 #include <errno.h>
 #include "pager.h"
 
-static void* prog_brk;
+static void* prog_brk = 0;
 
 extern struct Vmmap VM;
 
@@ -131,7 +131,34 @@ void *rock_mremap(void *old_addr, size_t old_len, size_t new_len,
 }
 
 void* rock_brk(void* newbrk) {
-  return __syscall1(SYS_brk, newbrk);
+  if (!prog_brk) {
+    /* return the initial break, which should be FourKB aligned */
+    prog_brk = __syscall1(SYS_brk, 0);
+    if ((unsigned long)prog_brk >= FourGB) {
+      dprintf(STDERR_FILENO, "[rock_brk] initial program break is outside of sandbox\n");
+      quit(-1);
+    }
+    /* dprintf(STDERR_FILENO, "[rock_brk] initial break = %x\n", (unsigned long)prog_brk); */
+  }
+
+  if ((unsigned long)newbrk >= FourGB) {
+    dprintf(STDERR_FILENO, "[rock_brk] newbrk is outside of sandbox\n");
+    quit(-1);
+  }
+  newbrk = __syscall1(SYS_brk, newbrk);
+  if (CurPage(newbrk) > CurPage(prog_brk)) {
+    VmmapAddWithOverwrite(&VM, CurPage(prog_brk) >> PAGESHIFT,
+                          (RoundToPage(newbrk) - CurPage(prog_brk)) >> PAGESHIFT,
+                          PROT_READ | PROT_WRITE,
+                          PROT_READ | PROT_WRITE,
+                          VMMAP_ENTRY_ANONYMOUS);
+  } else if (CurPage(newbrk) < CurPage(prog_brk)) {
+    VmmapRemove(&VM, RoundToPage(newbrk) >> PAGESHIFT,
+                (RoundToPage(prog_brk) - RoundToPage(newbrk)) >> PAGESHIFT,
+                VMMAP_ENTRY_ANONYMOUS);
+  }
+  prog_brk = newbrk;
+  return prog_brk;
 }
 
 void load_native_code(const char* code_file_name) {

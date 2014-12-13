@@ -167,7 +167,7 @@ uintptr_t VmmapFindMapSpaceAboveHint(struct Vmmap *self,
 
 void VmmapMakeSorted(struct Vmmap  *self);
 
-#define CurPage(x) ((x >> PAGESHIFT) << PAGESHIFT)
-#define RoundToPage(x) ((x + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE)
+#define CurPage(x) ((((unsigned long)x) >> PAGESHIFT) << PAGESHIFT)
+#define RoundToPage(x) ((((unsigned long)x) + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE)
 
 #endif
