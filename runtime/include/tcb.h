@@ -51,6 +51,10 @@ typedef struct TCB_t {
 
   /* application context */
   struct Context user_ctx;           /* 0x30 */
+  /* next tcb in the tcb list */
+  struct TCB_t *next;
+  /* this tcb is marked removed and should be reclaimed */
+  int remove;
 } TCB;
 
 static TCB* thread_self(void) {
@@ -72,5 +76,6 @@ static bool thread_in_syscall(void) {
 }
 
 TCB* alloc_tcb(void);
+void dealloc_tcb(TCB *);
 void set_tcb_pointer(TCB *);
 #endif

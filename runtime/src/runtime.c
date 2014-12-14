@@ -8,6 +8,10 @@
 #include "pager.h"
 
 static void* prog_brk = 0;
+static void* max_brk = 0;
+#define BRK_LEAP 0x800000
+
+static TCB *tcb_list = 0;
 
 extern struct Vmmap VM;
 
@@ -18,6 +22,7 @@ void set_tcb(unsigned long sb_tcb) {
 
   TCB* tcb = thread_self();
   tcb->tcb_inside_sandbox = (void*)sb_tcb;
+  tcb_list = tcb; /* add the main thread to the tcb list */
 }
 
 void* allocset_tcb(unsigned long sb_tcb) {
@@ -28,11 +33,61 @@ void* allocset_tcb(unsigned long sb_tcb) {
   }
   
   tcb->tcb_inside_sandbox = (void*)sb_tcb;
+  /* add tcb to the tcb_list */
+  tcb->next = tcb_list;
+  tcb_list = tcb;
   return tcb;
 }
 
-void free_tcb(unsigned long tcb) {
+/**
+ * For those tcb's marked as remove, remove them from the list and free memory.
+ */
+static void remove_tcb_marked(void) {
+  TCB *tcb = tcb_list;
+  TCB *p;
+  /* remove the marked nodes except the head */
+  while (p = tcb->next) {
+    if (p->remove) {
+      tcb->next = p->next;
+      dealloc_tcb(p);
+    } else
+      tcb = tcb->next;
+  }
+  /* remove the head if necessary */
+  if (tcb_list->remove) {
+    tcb = tcb_list;
+    tcb_list = tcb->next;
+    dealloc_tcb(tcb);
+  }
+}
 
+void free_tcb(void *user_tcb) {
+  TCB *tcb;
+  /* remove the remove-marked tcbs.
+     We shouldn't directly remove the tcb because most of the time a thread
+     removes itself's tcb, and doing so would crash the program because the
+     control flow cannot be returned back to the thread */
+  remove_tcb_marked();
+
+  tcb = tcb_list;
+
+  if (!tcb) {
+    dprintf(STDERR_FILENO, "[free_tcb] tcb_list is empty\n");
+    quit(-1);
+  }
+
+  if ((unsigned long)user_tcb > FourGB) {
+    dprintf(STDERR_FILENO, "[free_tcb] user_tcb is outside of sandbox\n");
+    quit(-1);
+  }
+
+  while (tcb) {
+    if (tcb->tcb_inside_sandbox == user_tcb) {
+      tcb->remove = 1;
+      break;
+    }
+    tcb = tcb->next;
+  }
 }
 
 void rock_patch(unsigned long patchpoint) {
@@ -138,6 +193,11 @@ void* rock_brk(void* newbrk) {
       dprintf(STDERR_FILENO, "[rock_brk] initial program break is outside of sandbox\n");
       quit(-1);
     }
+    /* By default, let's allocate BRK_LEAP to max brk. */
+    max_brk = (void*)(RoundToPage(prog_brk) + BRK_LEAP);
+    VmmapAdd(&VM, RoundToPage(prog_brk) >> PAGESHIFT,
+             BRK_LEAP >> PAGESHIFT,
+             PROT_READ | PROT_WRITE, PROT_READ | PROT_WRITE, VMMAP_ENTRY_ANONYMOUS);
     /* dprintf(STDERR_FILENO, "[rock_brk] initial break = %x\n", (unsigned long)prog_brk); */
   }
 
@@ -145,19 +205,18 @@ void* rock_brk(void* newbrk) {
     dprintf(STDERR_FILENO, "[rock_brk] newbrk is outside of sandbox\n");
     quit(-1);
   }
-  newbrk = __syscall1(SYS_brk, newbrk);
-  if (CurPage(newbrk) > CurPage(prog_brk)) {
-    VmmapAddWithOverwrite(&VM, CurPage(prog_brk) >> PAGESHIFT,
-                          (RoundToPage(newbrk) - CurPage(prog_brk)) >> PAGESHIFT,
-                          PROT_READ | PROT_WRITE,
-                          PROT_READ | PROT_WRITE,
-                          VMMAP_ENTRY_ANONYMOUS);
-  } else if (CurPage(newbrk) < CurPage(prog_brk)) {
-    VmmapRemove(&VM, RoundToPage(newbrk) >> PAGESHIFT,
-                (RoundToPage(prog_brk) - RoundToPage(newbrk)) >> PAGESHIFT,
+  prog_brk = __syscall1(SYS_brk, newbrk);
+  if (prog_brk > max_brk) {
+    void *old_max_brk = max_brk;
+    max_brk = (void*)(RoundToPage(prog_brk) + BRK_LEAP);
+    VmmapAdd(&VM, CurPage(old_max_brk) >> PAGESHIFT,
+             ((unsigned long)(max_brk - old_max_brk)) >> PAGESHIFT,
+             PROT_READ | PROT_WRITE, PROT_READ | PROT_WRITE, VMMAP_ENTRY_ANONYMOUS);
+  } else if (CurPage(max_brk) - RoundToPage(prog_brk) >= BRK_LEAP) {
+    VmmapRemove(&VM, RoundToPage(prog_brk) >> PAGESHIFT,
+                (CurPage(max_brk) - RoundToPage(prog_brk)) >> PAGESHIFT,
                 VMMAP_ENTRY_ANONYMOUS);
   }
-  prog_brk = newbrk;
   return prog_brk;
 }
 

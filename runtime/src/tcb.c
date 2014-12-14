@@ -23,8 +23,12 @@ TCB* alloc_tcb(void) {
   return tcb;
 }
 
+void dealloc_tcb(TCB *p) {
+  munmap(p, STACK_SIZE);
+}
+
 void set_tcb_pointer(TCB *p) {
   if (0 != arch_prctl(ARCH_SET_FS, (unsigned long)p)) {
     report_error("[set_tcb] FS set failed\n");
-  } 
+  }
 }
