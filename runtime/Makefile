@@ -1,11 +1,10 @@
 # Makefile for the runtime
 
-CC = gcc
-AS = as
+CC = clang
 
 # during context switch, we do not to save/restore xmm registers, therefore,
 # we shutdown all XMM register features such as SSE.
-CFLAGS = -Os -g -march=native -mtune=native -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-sse4 -mno-sse4.1 -mno-sse4.2 -mno-avx -mno-avx2 -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
+CFLAGS = -O3 -g -march=native -mtune=native -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
 
 SRCS = $(sort $(wildcard src/*.c src/*/*.c))
 OBJS = $(SRCS:.c=.o)

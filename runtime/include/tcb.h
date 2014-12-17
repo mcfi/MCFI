@@ -26,6 +26,8 @@ struct Context {
   unsigned long r13;                 /* 0x68 */
   unsigned long r14;                 /* 0x70 */
   unsigned long r15;                 /* 0x78 */
+  unsigned long fcw;                 /* 0x80 */
+  unsigned long mxcsr;               /* 0x88 */
 };
 
 typedef struct TCB_t {

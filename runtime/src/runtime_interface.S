@@ -3,6 +3,14 @@
 #define CONTINUATION  0x20
 #define USER_CTX 0x30        
 #define STACK_SIZE $0x10000
+#define FCW      0x80
+#define MXCSR    0x88
+
+# empty state of the SSE and FP control status
+#        .rodata
+#        .balign 64
+#fxrstor_default_state:
+#        .space 512
 
         .data
 locked:
@@ -56,12 +64,18 @@ runtime_online_patch:
         movq %fs:USER_CTX+0x58, %r11
         # jump to the place
         jmpq *%fs:CONTINUATION
-        
+
+# The ABI requires that fcw and mxcsr are both callee-saved, so
+# we do not need to save them.
 .macro save_context
+#        stmxcsr %fs:MXCSR
+#        fnstcw  %fs:FCW
         movq %rsp, %fs:USER_CTX+0x38
 .endm
 .macro restore_context
         movq %fs:USER_CTX+0x38, %rsp
+#        fldcw   %fs:FCW
+#        ldmxcsr %fs:MXCSR
 .endm
 
 .macro spin_lock
