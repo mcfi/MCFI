@@ -3923,7 +3923,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-fmcfi-sandbox=small");
   }
 
-  // fmcfi-id=small is default
+  // fmcfi-id=large is default, since it shows better performance.
   if (Args.hasArg(options::OPT_fmcfi_id)) {
     const Arg *MCFIIDBits = Args.getLastArg(options::OPT_fmcfi_id);
     std::string IDBits;
@@ -3936,7 +3936,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           << IDBits << "small or large";
       CmdArgs.push_back(Args.MakeArgString("-fmcfi-id=" + IDBits));
     } else
-      CmdArgs.push_back("-fmcfi-id=small");
+      CmdArgs.push_back("-fmcfi-id=large");
   }
 
   // -fms-compatibility-version=17.00 is default.

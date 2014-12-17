@@ -29,7 +29,7 @@ CODEGENOPT(Name, Bits, Default)
 #endif
 
 CODEGENOPT(MCFISmallSandbox, 1, 1)
-CODEGENOPT(MCFISmallID, 1, 1)
+CODEGENOPT(MCFISmallID, 1, 0)
 
 CODEGENOPT(DisableIntegratedAS, 1, 0) ///< -no-integrated-as
 CODEGENOPT(CompressDebugSections, 1, 0) ///< -Wa,-compress-debug-sections

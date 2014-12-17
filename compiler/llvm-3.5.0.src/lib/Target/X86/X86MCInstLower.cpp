@@ -39,6 +39,8 @@ using namespace llvm;
 static cl::opt<bool> DisableDS("disable-ds", cl::Hidden,
                                cl::desc("Disable MCFI data sandboxing"));
 
+static cl::opt<bool> EnableLoadDS("enable-memory-load-sandboxing", cl::NotHidden,
+                                  cl::desc("Enable memory read sandboxing"));
 namespace {
 
 /// X86MCInstLower - This class is used to lower an MachineInstr into an MCInst.
@@ -956,7 +958,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
   if (!DisableDS) {
     // memory sandboxing
-    if ((MI->mayStore() || MI->mayLoad()) && // only writes are sandboxed
+    if ((MI->mayStore() || (EnableLoadDS && MI->mayLoad())) && // only writes are sandboxed
         !MI->isBranch() && // calls also change store mem, but no need to sandbox
         !MI->isInlineAsm()) {// inlined asm is taken care of by another function
       if (MI->getNumOperands() >= 5 || // if this instruction has a memory operand
@@ -1146,15 +1148,17 @@ void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *Lo
       WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
       WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
       EmitToStreamer(OutStreamer, WriteSandboxingInst);
-      MCInst ReadSandboxingInst;
-      ReadSandboxingInst.setOpcode(X86::MOV32rr);
-      ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
-      ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
-      EmitToStreamer(OutStreamer, ReadSandboxingInst);
+      if (EnableLoadDS) {
+        MCInst ReadSandboxingInst;
+        ReadSandboxingInst.setOpcode(X86::MOV32rr);
+        ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
+        ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
+        EmitToStreamer(OutStreamer, ReadSandboxingInst);
+      }
       return;
     }
   } else if (TrimedStr.startswith_lower("pmovmskb")) {
-    if (TrimedStr.find("(") != StringRef::npos) {
+    if (TrimedStr.find("(") != StringRef::npos && EnableLoadDS) {
       OutStreamer.EmitIntValue(0x67, 1);
     }
     return;
