@@ -210,6 +210,7 @@ void CodeGenFunction::registerGlobalDtorWithAtExit(const VarDecl &VD,
     atexitFn->setDoesNotThrow();
 
   EmitNounwindRuntimeCall(atexit, dtorStub);
+  CGM.DtorCxaAtExit.insert(dtorStub->getName().str());
 }
 
 void CodeGenFunction::EmitCXXGuardedInit(const VarDecl &D,

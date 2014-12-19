@@ -66,16 +66,18 @@ namespace {
     }
 
     llvm::Module *ReleaseModule() override {
-      createMetadata(CHA, "MCFICHA");
-      createMetadata(MCFIPureVirt, "MCFIFuncInfo");
-      createMetadata(Builder->DtorCxaAtExit, "MCFIDtorCxaAtExit");
-      createMetadata(Builder->DtorCxaThrow, "MCFIDtorCxaThrow");
+      // M might be null if the compilation fails
+      if (M) {
+        createMetadata(CHA, "MCFICHA");
+        createMetadata(MCFIPureVirt, "MCFIFuncInfo");
+        createMetadata(Builder->DtorCxaAtExit, "MCFIDtorCxaAtExit");
+        createMetadata(Builder->DtorCxaThrow, "MCFIDtorCxaThrow");
 
-      if (!CodeGenOpts.MCFISmallSandbox)
-        assert(M->getOrInsertNamedMetadata("MCFILargeSandbox"));
-      if (!CodeGenOpts.MCFISmallID)
-        assert(M->getOrInsertNamedMetadata("MCFILargeID"));
-
+        if (!CodeGenOpts.MCFISmallSandbox)
+          assert(M->getOrInsertNamedMetadata("MCFILargeSandbox"));
+        if (!CodeGenOpts.MCFISmallID)
+          assert(M->getOrInsertNamedMetadata("MCFILargeID"));
+      }
       return M.release();
     }
 
