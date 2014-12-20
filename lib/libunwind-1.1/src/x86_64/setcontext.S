@@ -41,6 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
   
 */
 	.global _Ux86_64_setcontext
+        .align 16, 0x90
 	.type _Ux86_64_setcontext, @function
 
 _Ux86_64_setcontext:
@@ -95,16 +96,25 @@ _Ux86_64_setcontext:
 	mov    UC_MCONTEXT_GREGS_RSI(%rdi),%rsi
 	mov    UC_MCONTEXT_GREGS_RDX(%rdi),%rdx
 	mov    UC_MCONTEXT_GREGS_RAX(%rdi),%rax
-	mov    UC_MCONTEXT_GREGS_RCX(%rdi),%rcx
-	mov    UC_MCONTEXT_GREGS_RSP(%rdi),%rsp
+	mov    UC_MCONTEXT_GREGS_RSP(%rdi),%esp
 
         /* push the return address on the stack */
-	mov    UC_MCONTEXT_GREGS_RIP(%rdi),%rcx
-	push   %rcx
-
-	mov    UC_MCONTEXT_GREGS_RCX(%rdi),%rcx
-	mov    UC_MCONTEXT_GREGS_RDI(%rdi),%rdi
-	retq
+	mov    UC_MCONTEXT_GREGS_RIP(%rdi),%r11d
+try:    movq   %gs:0x1000, %rcx
+__mcfi_bary_catch_branch:
+        cmpq   %rcx, %gs:(%r11)
+        jne    check
+        mov    UC_MCONTEXT_GREGS_RCX(%rdi),%rcx
+        mov    UC_MCONTEXT_GREGS_RDI(%rdi),%rdi
+        jmpq   *%r11
+check:
+        movq %gs:(%r11), %r10
+        testb $0x1, %r10b
+        jne die
+        cmpl %ecx, %r10d
+        jne try
+die:
+        hlt
 
 	.size _Ux86_64_setcontext, . - _Ux86_64_setcontext
 

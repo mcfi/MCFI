@@ -35,17 +35,18 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 */
 
 	.global _Ux86_64_getcontext
+        .align 16, 0x90
 	.type _Ux86_64_getcontext, @function
 _Ux86_64_getcontext:
 	.cfi_startproc
 
 	/* Callee saved: RBX, RBP, R12-R15  */
-	movq %r12, UC_MCONTEXT_GREGS_R12(%rdi)
-	movq %r13, UC_MCONTEXT_GREGS_R13(%rdi)
-	movq %r14, UC_MCONTEXT_GREGS_R14(%rdi)
-	movq %r15, UC_MCONTEXT_GREGS_R15(%rdi)
-	movq %rbp, UC_MCONTEXT_GREGS_RBP(%rdi)
-	movq %rbx, UC_MCONTEXT_GREGS_RBX(%rdi)
+	movq %r12, UC_MCONTEXT_GREGS_R12(%edi)
+	movq %r13, UC_MCONTEXT_GREGS_R13(%edi)
+	movq %r14, UC_MCONTEXT_GREGS_R14(%edi)
+	movq %r15, UC_MCONTEXT_GREGS_R15(%edi)
+	movq %rbp, UC_MCONTEXT_GREGS_RBP(%edi)
+	movq %rbx, UC_MCONTEXT_GREGS_RBX(%edi)
 
 	/* Save argument registers (not strictly needed, but setcontext 
 	   restores them, so don't restore garbage).  */
@@ -61,9 +62,9 @@ _Ux86_64_getcontext:
 	/* Save fp state (not needed, except for setcontext not
 	   restoring garbage).  */
 	leaq UC_MCONTEXT_FPREGS_MEM(%rdi),%r8
-	movq %r8, UC_MCONTEXT_FPREGS_PTR(%rdi)
-	fnstenv (%r8)
-	stmxcsr FPREGS_OFFSET_MXCSR(%r8)
+	movq %r8, UC_MCONTEXT_FPREGS_PTR(%edi)
+	fnstenv (%r8d)
+	stmxcsr FPREGS_OFFSET_MXCSR(%r8d)
 #elif defined __FreeBSD__
 	fxsave UC_MCONTEXT_FPSTATE(%rdi)
 	movq $UC_MCONTEXT_FPOWNED_FPU,UC_MCONTEXT_OWNEDFP(%rdi)
@@ -91,13 +92,29 @@ _Ux86_64_getcontext:
 #endif
 
 	leaq 8(%rsp), %rax /* exclude this call.  */
-	movq %rax, UC_MCONTEXT_GREGS_RSP(%rdi)
+	movq %rax, UC_MCONTEXT_GREGS_RSP(%edi)
 
 	movq 0(%rsp), %rax
-	movq %rax, UC_MCONTEXT_GREGS_RIP(%rdi)
+	movq %rax, UC_MCONTEXT_GREGS_RIP(%edi)
 
 	xorq	%rax, %rax
-	retq
+	#retq
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary__Ux86_64_getcontext:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt
+        
 	.cfi_endproc
 	.size _Ux86_64_getcontext, . - _Ux86_64_getcontext
 
@@ -110,23 +127,40 @@ _Ux86_64_getcontext:
 */
 
 	.global _Ux86_64_getcontext_trace
+        .align 16, 0x90
 	.hidden _Ux86_64_getcontext_trace
 	.type _Ux86_64_getcontext_trace, @function
 _Ux86_64_getcontext_trace:
 	.cfi_startproc
 
 	/* Save only RBP, RBX, RSP, RIP - exclude this call. */
-	movq %rbp, UC_MCONTEXT_GREGS_RBP(%rdi)
-	movq %rbx, UC_MCONTEXT_GREGS_RBX(%rdi)
+	movq %rbp, UC_MCONTEXT_GREGS_RBP(%edi)
+	movq %rbx, UC_MCONTEXT_GREGS_RBX(%edi)
 
 	leaq 8(%rsp), %rax
-	movq %rax, UC_MCONTEXT_GREGS_RSP(%rdi)
+	movq %rax, UC_MCONTEXT_GREGS_RSP(%edi)
 
 	movq 0(%rsp), %rax
-	movq %rax, UC_MCONTEXT_GREGS_RIP(%rdi)
+	movq %rax, UC_MCONTEXT_GREGS_RIP(%edi)
 
 	xorq	%rax, %rax
-	retq
+	#retq
+        popq %rcx
+        movl %ecx, %ecx
+try2:   movq %gs:0x1000, %rdi
+__mcfi_bary__Ux86_64_getcontext_trace:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check2
+        jmpq *%rcx
+check2:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die2
+        cmpl %esi, %edi
+        jne try2
+die2:
+        hlt
+        
 	.cfi_endproc
 	.size _Ux86_64_getcontext_trace, . - _Ux86_64_getcontext_trace
 
