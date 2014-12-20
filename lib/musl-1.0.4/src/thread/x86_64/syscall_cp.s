@@ -1,9 +1,10 @@
-.text
-.global __syscall_cp_asm
-.type   __syscall_cp_asm,@function
+        .text
+        .global __syscall_cp_asm
+        .align 16, 0x90
+        .type   __syscall_cp_asm,@function
 __syscall_cp_asm:
 
-.global __cp_begin
+        .global __cp_begin
 __cp_begin:
 	mov (%rdi),%eax
 	test %eax,%eax
@@ -25,4 +26,19 @@ __cp_begin:
         movb   $0x0,%fs:0x18  # exit_syscall
 .global __cp_end
 __cp_end:
-	ret
+	#ret
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary___syscall_cp_asm:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt

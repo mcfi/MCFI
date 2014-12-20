@@ -1,7 +1,8 @@
 # see ../i386/acos.s
 
-.global acosl
-.type acosl,@function
+        .global acosl
+        .align 16, 0x90
+        .type acosl,@function
 acosl:
 	fldt 8(%rsp)
 1:	fld %st(0)
@@ -13,4 +14,19 @@ acosl:
 	fabs
 	fxch %st(1)
 	fpatan
-	ret
+        #ret
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary_acosl:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt

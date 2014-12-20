@@ -1,5 +1,6 @@
-.global floorl
-.type floorl,@function
+        .global floorl
+        .align 16, 0x90
+        .type floorl,@function
 floorl:
 	fldt 8(%rsp)
 1:	mov $0x7,%al
@@ -10,17 +11,34 @@ floorl:
 	frndint
 	mov %ah,9(%rsp)
 	fldcw 8(%rsp)
-	ret
+	#ret
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary_floorl:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt
 
-.global ceill
-.type ceill,@function
+        .global ceill
+        .align 16, 0x90
+        .type ceill,@function
 ceill:
 	fldt 8(%rsp)
 	mov $0xb,%al
 	jmp 1b
 
-.global truncl
-.type truncl,@function
+        .global truncl
+        .align 16, 0x90
+        .type truncl,@function
 truncl:
 	fldt 8(%rsp)
 	mov $0xf,%al

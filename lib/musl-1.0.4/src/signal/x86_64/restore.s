@@ -4,5 +4,6 @@
 .type __restore,@function
 __restore_rt:
 __restore:
-	movl $15, %eax
-	syscall
+#	movl $15, %eax
+#	syscall
+        hlt

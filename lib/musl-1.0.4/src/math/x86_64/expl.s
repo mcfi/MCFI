@@ -3,8 +3,9 @@
 # exact log2e*x calculation depends on nearest rounding mode
 # using the exact multiplication method of Dekker and Veltkamp
 
-.global expl
-.type expl,@function
+        .global expl
+        .align 16, 0x90
+        .type expl,@function
 expl:
 	fldt 8(%rsp)
 
@@ -21,10 +22,10 @@ expl:
 		# if |x|>=0x1p14 or nan return 2^trunc(x)
 	fscale
 	fstp %st(1)
-	ret
+	jmp Ret
 		# if |x|<0x1p-32 return 1+x
 1:	faddp
-	ret
+	jmp Ret
 
 		# should be 0x1.71547652b82fe178p0L == 0x3fff b8aa3b29 5c17f0bc
 		# it will be wrong on non-nearest rounding mode
@@ -88,7 +89,7 @@ expl:
 	movq $0x82f0025f2dc582ee,%rax
 	pushq %rax
 	fldt (%rsp)
-	addq $40,%rsp
+	addl $40,%esp
 		# fpu stack: 2^hi x lo log2e_lo
 		# lo += log2e_lo*x
 		# return 2^hi + 2^hi (2^lo - 1)
@@ -97,5 +98,20 @@ expl:
 	f2xm1
 	fmul %st(1), %st
 	faddp
-1:	addq $48, %rsp
-	ret
+1:	addl $48, %esp
+Ret:    #ret
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary_expl:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt

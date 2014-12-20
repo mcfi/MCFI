@@ -1,6 +1,8 @@
-.global memcpy
-.type memcpy,@function
+        .global memcpy
+        .align 16, 0x90
+        .type memcpy,@function
 memcpy:
+        movl %edi, %edi
 	mov %rdi,%rax
 	cmp $8,%rdx
 	jc 1f
@@ -19,4 +21,18 @@ memcpy:
 2:	movsb
 	dec %edx
 	jnz 2b
-1:	ret
+1:	popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary_memcpy:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt

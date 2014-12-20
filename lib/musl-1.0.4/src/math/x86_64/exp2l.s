@@ -1,5 +1,6 @@
-.global expm1l
-.type expm1l,@function
+        .global expm1l
+        .align 16, 0x90
+        .type expm1l,@function
 expm1l:
 	fldt 8(%rsp)
 	fldl2e
@@ -14,7 +15,7 @@ expm1l:
 		# x*log2e <= -65, return -1 without underflow
 	fstp %st(1)
 	fchs
-	ret
+	jmp 2f
 1:	fld %st(1)
 	fabs
 	fucom %st(1)
@@ -24,16 +25,35 @@ expm1l:
 	sahf
 	ja 1f
 	f2xm1
-	ret
+	jmp 2f
 1:	push %rax
+        .byte 0x0f, 0x1f, 0x40, 0x00
 	call 1f
+__mcfi_dcj_exp2l:        
 	pop %rax
 	fld1
 	fsubrp
-	ret
-
-.global exp2l
-.type exp2l,@function
+	#ret
+2:
+        popq %rcx
+        movl %ecx, %ecx
+try1:   movq %gs:0x1000, %rdi
+__mcfi_bary_expm1l:
+        cmpq %rdi, %gs:(%rcx)
+        jne check1
+        jmpq *%rcx
+check1:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die1
+        cmpl %esi, %edi
+        jne try1
+die1:
+        hlt
+        
+        .global exp2l
+        .align 16, 0x90
+        .type exp2l,@function
 exp2l:
 	fldt 8(%rsp)
 1:	fld %st(0)
@@ -71,7 +91,7 @@ exp2l:
 1:	fscale
 	fstp %st(1)
 	add $16,%rsp
-	ret
+	jmp 5f
 3:	xor %eax,%eax
 4:	cmp $0x3fff-64,%ax
 	fld1
@@ -87,4 +107,19 @@ exp2l:
 	fldt (%rsp)       # 2^rint(x)
 	fmulp
 	add $16,%rsp
-	ret
+5:      #ret
+        popq %rcx
+        movl %ecx, %ecx
+try2:   movq %gs:0x1000, %rdi
+__mcfi_bary_exp2l:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check2
+        jmpq *%rcx
+check2:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die2
+        cmpl %esi, %edi
+        jne try2
+die2:
+        hlt        

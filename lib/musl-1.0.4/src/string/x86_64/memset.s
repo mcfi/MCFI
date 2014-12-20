@@ -1,6 +1,8 @@
-.global memset
-.type memset,@function
+        .global memset
+        .align 16, 0x90
+        .type memset,@function
 memset:
+        movl %edi, %edi
 	and $0xff,%esi
 	mov $0x101010101010101,%rax
 	mov %rdx,%rcx
@@ -9,33 +11,49 @@ memset:
 	cmp $16,%rcx
 	jb 1f
 
-	mov %rax,-8(%rdi,%rcx)
+	mov %rax,-8(%edi,%ecx)
 	shr $3,%rcx
 	rep
 	stosq
 	mov %r8,%rax
-	ret
+	jmp 2f
 
 1:	test %ecx,%ecx
 	jz 1f
 
-	mov %al,(%rdi)
-	mov %al,-1(%rdi,%rcx)
+	mov %al,(%edi)
+	mov %al,-1(%edi,%ecx)
 	cmp $2,%ecx
 	jbe 1f
 
-	mov %al,1(%rdi)
-	mov %al,-2(%rdi,%rcx)
+	mov %al,1(%edi)
+	mov %al,-2(%edi,%ecx)
 	cmp $4,%ecx
 	jbe 1f
 
-	mov %eax,(%rdi)
-	mov %eax,-4(%rdi,%rcx)
+	mov %eax,(%edi)
+	mov %eax,-4(%edi,%ecx)
 	cmp $8,%ecx
 	jbe 1f
 
-	mov %eax,4(%rdi)
-	mov %eax,-8(%rdi,%rcx)
+	mov %eax,4(%edi)
+	mov %eax,-8(%edi,%ecx)
 
 1:	mov %r8,%rax
-	ret
+2:      #ret
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary_memset:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt
+        

@@ -14,6 +14,8 @@ static struct fl
 
 static int lock[2];
 
+extern void call_dtor(void (*)(void*), void *arg);
+
 void __funcs_on_exit()
 {
 	int i;
@@ -25,7 +27,7 @@ void __funcs_on_exit()
 		arg = head->a[i];
 		head->f[i] = 0;
 		UNLOCK(lock);
-		func(arg);
+                call_dtor(func, arg);
 		LOCK(lock);
 	}
 }
