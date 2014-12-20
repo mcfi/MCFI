@@ -401,6 +401,52 @@ llvm::Value *CodeGenFunction::getSelectorFromSlot() {
   return Builder.CreateLoad(getEHSelectorSlot(), "sel");
 }
 
+/// Create a stub function, suitable for being passed to cxa_throw,
+/// which passes the given address to the given exception destructor function.
+static llvm::Constant *createCxaThrowStub(CodeGenModule &CGM,
+                                          llvm::Constant *dtor) {
+  // Get the destructor function type, void(*)(void*).
+  dtor = dtor->stripPointerCasts();
+  std::string FnName(std::string("_GLOBAL__E_") + dtor->getName().str());
+  llvm::Function *Fn = CGM.getModule().getFunction(FnName);
+
+  if (Fn)
+    return Fn;
+
+  llvm::FunctionType *ty = llvm::FunctionType::get(CGM.VoidTy, CGM.Int8PtrTy, false);
+  Fn = llvm::Function::Create(ty, llvm::GlobalValue::InternalLinkage,
+                              FnName, &CGM.getModule());
+  // set attributes
+  Fn->setCallingConv(CGM.getRuntimeCC());
+
+  if (!CGM.getLangOpts().Exceptions)
+    Fn->setDoesNotThrow();
+
+  if (!CGM.getSanitizerBlacklist().isIn(*Fn)) {
+    if (CGM.getLangOpts().Sanitize.Address)
+      Fn->addFnAttr(llvm::Attribute::SanitizeAddress);
+    if (CGM.getLangOpts().Sanitize.Thread)
+      Fn->addFnAttr(llvm::Attribute::SanitizeThread);
+    if (CGM.getLangOpts().Sanitize.Memory)
+      Fn->addFnAttr(llvm::Attribute::SanitizeMemory);
+  }
+  Fn->addFnAttr("disable-tail-calls", "true");
+
+  // Build the basic block
+  llvm::BasicBlock *BB =
+    llvm::BasicBlock::Create(CGM.getModule().getContext(), "entry", Fn);
+  llvm::IRBuilder<> Builder(CGM.getModule().getContext());
+  Builder.SetInsertPoint(BB);
+
+  llvm::Function *Callee = CGM.getModule().getFunction(dtor->getName());
+  llvm::Value *Arg = Fn->arg_begin();
+  llvm::Value *ObjArg =
+    Builder.CreateBitCast(Arg, Callee->arg_begin()->getType());
+  Builder.CreateCall(Callee, ObjArg);
+  Builder.CreateRetVoid();
+  return Fn;
+}
+
 void CodeGenFunction::EmitCXXThrowExpr(const CXXThrowExpr *E,
                                        bool KeepInsertionPoint) {
   if (CGM.getTarget().getTriple().isWindowsMSVCEnvironment()) {
@@ -458,7 +504,10 @@ void CodeGenFunction::EmitCXXThrowExpr(const CXXThrowExpr *E,
     if (!Record->hasTrivialDestructor()) {
       CXXDestructorDecl *DtorD = Record->getDestructor();
       Dtor = CGM.GetAddrOfCXXDestructor(DtorD, Dtor_Complete);
-      if (Dtor) CGM.DtorCxaThrow.insert(Dtor->getName().str());
+      if (Dtor) {
+        Dtor = createCxaThrowStub(CGM, Dtor);
+        CGM.DtorCxaThrow.insert(Dtor->getName().str());
+      }
       Dtor = llvm::ConstantExpr::getBitCast(Dtor, Int8PtrTy);
     }
   }

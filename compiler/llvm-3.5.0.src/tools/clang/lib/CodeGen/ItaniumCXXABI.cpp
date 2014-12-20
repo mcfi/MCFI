@@ -1761,6 +1761,61 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   CGF.EmitBlock(EndBlock);
 }
 
+/// Create a stub function, suitable for being passed to atexit,
+/// which passes the given address to the given destructor function.
+static llvm::Constant *createCxaAtExitStub(CodeGenModule &CGM,
+                                           llvm::Constant *dtor,
+                                           bool TLS) {
+  // Get the destructor function type, void(*)(void*).
+  dtor = dtor->stripPointerCasts();
+  std::string FnName(std::string("_GLOBAL__D_") + dtor->getName().str());
+  llvm::Function *Fn = CGM.getModule().getFunction(FnName);
+
+  if (Fn)
+    return Fn;
+
+  llvm::FunctionType *ty = llvm::FunctionType::get(CGM.VoidTy, CGM.Int8PtrTy, false);
+  Fn = llvm::Function::Create(ty, llvm::GlobalValue::InternalLinkage,
+                              FnName, &CGM.getModule());
+
+  if (!CGM.getLangOpts().AppleKext && !TLS) {
+    // Set the section if needed.
+    if (const char *Section =
+        CGM.getTarget().getStaticInitSectionSpecifier())
+      Fn->setSection(Section);
+  }
+
+  // set attributes
+  Fn->setCallingConv(CGM.getRuntimeCC());
+
+  if (!CGM.getLangOpts().Exceptions)
+    Fn->setDoesNotThrow();
+
+  if (!CGM.getSanitizerBlacklist().isIn(*Fn)) {
+    if (CGM.getLangOpts().Sanitize.Address)
+      Fn->addFnAttr(llvm::Attribute::SanitizeAddress);
+    if (CGM.getLangOpts().Sanitize.Thread)
+      Fn->addFnAttr(llvm::Attribute::SanitizeThread);
+    if (CGM.getLangOpts().Sanitize.Memory)
+      Fn->addFnAttr(llvm::Attribute::SanitizeMemory);
+  }
+  Fn->addFnAttr("disable-tail-calls", "true");
+
+  // Build the basic block
+  llvm::BasicBlock *BB =
+    llvm::BasicBlock::Create(CGM.getModule().getContext(), "entry", Fn);
+  llvm::IRBuilder<> Builder(CGM.getModule().getContext());
+  Builder.SetInsertPoint(BB);
+
+  llvm::Function *Callee = CGM.getModule().getFunction(dtor->getName());
+  llvm::Value *Arg = Fn->arg_begin();
+  llvm::Value *ObjArg =
+    Builder.CreateBitCast(Arg, Callee->arg_begin()->getType());
+  Builder.CreateCall(Callee, ObjArg);
+  Builder.CreateRetVoid();
+  return Fn;
+}
+
 /// Register a global destructor using __cxa_atexit.
 static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
                                         llvm::Constant *dtor,
@@ -1792,13 +1847,14 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
   llvm::Constant *handle =
     CGF.CGM.CreateRuntimeVariable(CGF.Int8Ty, "__dso_handle");
 
+  llvm::Constant *dtorStub = createCxaAtExitStub(CGF.CGM, dtor, TLS);
   llvm::Value *args[] = {
-    llvm::ConstantExpr::getBitCast(dtor, dtorTy),
+    llvm::ConstantExpr::getBitCast(dtorStub, dtorTy),
     llvm::ConstantExpr::getBitCast(addr, CGF.Int8PtrTy),
     handle
   };
   CGF.EmitNounwindRuntimeCall(atexit, args);
-  CGF.CGM.DtorCxaAtExit.insert(dtor->getName().str());
+  CGF.CGM.DtorCxaAtExit.insert(dtorStub->getName().str());
 }
 
 /// Register a global destructor as best as we know how.
