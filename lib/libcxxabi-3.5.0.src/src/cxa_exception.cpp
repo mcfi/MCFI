@@ -624,6 +624,7 @@ __cxa_decrement_exception_refcount(void* thrown_object) throw()
         if (__sync_sub_and_fetch(&exception_header->referenceCount, size_t(1)) == 0)
         {
             if (NULL != exception_header->exceptionDestructor) {
+                //exception_header->exceptionDestructor(thrown_object);
                 call_exn_dtor(exception_header->exceptionDestructor, thrown_object);
             }
             __cxa_free_exception(thrown_object);
