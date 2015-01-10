@@ -929,7 +929,12 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     return;
 
   // MCFI requires each call instruction to be 4/8-byte aligned
-  case X86::CALLpcrel32:
+  case X86::CALLpcrel32: {
+    if (!isNoReturnFunction(MI->getOperand(0))) {
+      OutStreamer.EmitCodeAlignment(4, 0, 5);
+    }
+    break;
+  }
   case X86::CALL64pcrel32:
   {
     if (!isNoReturnFunction(MI->getOperand(0))) {
@@ -939,7 +944,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
   case X86::CALL32r:
   {
-    OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
+    OutStreamer.EmitCodeAlignment(4, 0, 2);
     break;
   }
   case X86::CALL64r:
@@ -949,6 +954,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     case X86::R8: case X86::R9: case X86::R10: case X86::R11:
     case X86::R12: case X86::R13: case X86::R14: case X86::R15:
       OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 3);
+      break;
     default:
       OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
     }
