@@ -50,13 +50,13 @@ _Ux86_64_getcontext:
 
 	/* Save argument registers (not strictly needed, but setcontext 
 	   restores them, so don't restore garbage).  */
-	movq %r8,  UC_MCONTEXT_GREGS_R8(%rdi)
-	movq %r9,  UC_MCONTEXT_GREGS_R9(%rdi)
-	movq %rdi, UC_MCONTEXT_GREGS_RDI(%rdi)
-	movq %rsi, UC_MCONTEXT_GREGS_RSI(%rdi)
-	movq %rdx, UC_MCONTEXT_GREGS_RDX(%rdi)
-	movq %rax, UC_MCONTEXT_GREGS_RAX(%rdi)
-	movq %rcx, UC_MCONTEXT_GREGS_RCX(%rdi)
+	//movq %r8,  UC_MCONTEXT_GREGS_R8(%rdi)
+	//movq %r9,  UC_MCONTEXT_GREGS_R9(%rdi)
+	//movq %rdi, UC_MCONTEXT_GREGS_RDI(%rdi)
+	//movq %rsi, UC_MCONTEXT_GREGS_RSI(%rdi)
+	//movq %rdx, UC_MCONTEXT_GREGS_RDX(%rdi)
+	//movq %rax, UC_MCONTEXT_GREGS_RAX(%rdi)
+	//movq %rcx, UC_MCONTEXT_GREGS_RCX(%rdi)
 
 #if defined __linux__
 	/* Save fp state (not needed, except for setcontext not

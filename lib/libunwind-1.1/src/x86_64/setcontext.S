@@ -85,15 +85,18 @@ _Ux86_64_setcontext:
 #endif
 
 	/* restore the rest of the state */
-	mov    UC_MCONTEXT_GREGS_R8(%rdi),%r8
-	mov    UC_MCONTEXT_GREGS_R9(%rdi),%r9
+	//mov    UC_MCONTEXT_GREGS_R8(%rdi),%r8
+	//mov    UC_MCONTEXT_GREGS_R9(%rdi),%r9
+        xorl   %r8d, %r8d
+        xorl   %r9d, %r9d
 	mov    UC_MCONTEXT_GREGS_RBX(%rdi),%rbx
 	mov    UC_MCONTEXT_GREGS_RBP(%rdi),%rbp
 	mov    UC_MCONTEXT_GREGS_R12(%rdi),%r12
 	mov    UC_MCONTEXT_GREGS_R13(%rdi),%r13
 	mov    UC_MCONTEXT_GREGS_R14(%rdi),%r14
 	mov    UC_MCONTEXT_GREGS_R15(%rdi),%r15
-	mov    UC_MCONTEXT_GREGS_RSI(%rdi),%rsi
+	//mov    UC_MCONTEXT_GREGS_RSI(%rdi),%rsi
+        xorl   %esi, %esi
 	mov    UC_MCONTEXT_GREGS_RDX(%rdi),%rdx
 	mov    UC_MCONTEXT_GREGS_RAX(%rdi),%rax
 	mov    UC_MCONTEXT_GREGS_RSP(%rdi),%esp
@@ -104,8 +107,10 @@ try:    movq   %gs:0x1000, %rcx
 __mcfi_bary_catch_branch:
         cmpq   %rcx, %gs:(%r11)
         jne    check
-        mov    UC_MCONTEXT_GREGS_RCX(%rdi),%rcx
-        mov    UC_MCONTEXT_GREGS_RDI(%rdi),%rdi
+        //mov    UC_MCONTEXT_GREGS_RCX(%rdi),%rcx
+        //mov    UC_MCONTEXT_GREGS_RDI(%rdi),%rdi
+        xorl   %ecx, %ecx
+        xorl   %edi, %edi
         jmpq   *%r11
 check:
         movq %gs:(%r11), %r10
