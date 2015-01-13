@@ -91,7 +91,9 @@ void __do_cleanup_pop(struct __ptcb *cb)
 	__pthread_self()->cancelbuf = cb->__next;
 }
 
-static int start(void *p)
+extern void* __call_thread_func(void * (*f)(void*), void*);
+
+static int __do_pthread_internal_start(void *p)
 {
 	pthread_t self = p;
 	if (self->startlock[0]) {
@@ -105,7 +107,8 @@ static int start(void *p)
 	if (self->unblock_cancel)
 		__syscall(SYS_rt_sigprocmask, SIG_UNBLOCK,
                           mcfi_sandbox_mask(SIGPT_SET), 0, _NSIG/8);
-	pthread_exit(self->start(self->start_arg));
+	//pthread_exit(self->start(self->start_arg));
+        pthread_exit(__call_thread_func(self->start, self->start_arg));
 	return 0;
 }
 
@@ -221,7 +224,7 @@ int pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict attrp
         trusted_tcb = (void*)trampoline_allocset_tcb(TP_ADJ(new));
         /* if trusted_tcb returns 0, the allocation fails and the clone call would
          * also fail */
-	ret = __clone(start, stack, flags, new, &new->tid,
+	ret = __clone(__do_pthread_internal_start, stack, flags, new, &new->tid,
                       trusted_tcb,
                       &new->tid);
         /* if thread creation fails, let's first free the allocated trusted tcb */

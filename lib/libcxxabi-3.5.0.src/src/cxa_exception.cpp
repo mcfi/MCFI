@@ -613,7 +613,7 @@ __cxa_increment_exception_refcount(void* thrown_object) throw()
 
     Requires:  If thrown_object is not NULL, it is a native exception.
 */
-extern "C" void call_exn_dtor(void (*)(void*), void *arg);
+extern "C" void __call_exn_dtor(void (*)(void*), void *arg);
 
 void
 __cxa_decrement_exception_refcount(void* thrown_object) throw()
@@ -625,7 +625,7 @@ __cxa_decrement_exception_refcount(void* thrown_object) throw()
         {
             if (NULL != exception_header->exceptionDestructor) {
                 //exception_header->exceptionDestructor(thrown_object);
-                call_exn_dtor(exception_header->exceptionDestructor, thrown_object);
+                __call_exn_dtor(exception_header->exceptionDestructor, thrown_object);
             }
             __cxa_free_exception(thrown_object);
         }
