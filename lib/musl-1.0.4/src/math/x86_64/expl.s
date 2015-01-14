@@ -30,7 +30,7 @@ expl:
 		# should be 0x1.71547652b82fe178p0L == 0x3fff b8aa3b29 5c17f0bc
 		# it will be wrong on non-nearest rounding mode
 2:	fldl2e
-	subq $48, %rsp
+	subl $48, %esp
 		# hi = log2e_hi*x
 		# 2^hi = exp2l(hi)
 	fmul %st(1),%st
@@ -38,7 +38,9 @@ expl:
 	fstpt (%rsp)
 	fstpt 16(%rsp)
 	fstpt 32(%rsp)
+        .byte 0x90
 	call exp2l
+__mcfi_dcj_exp2l:
 		# if 2^hi == inf return 2^hi
 	fld %st(0)
 	fstpt (%rsp)
@@ -115,3 +117,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ expl\nTY x86_fp80!x86_fp80@\nRT expl\n}"
+	.byte	0

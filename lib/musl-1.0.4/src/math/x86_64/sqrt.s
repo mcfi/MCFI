@@ -6,7 +6,7 @@ sqrt:	sqrtsd %xmm0, %xmm0
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_sqrt:     
+__mcfi_bary_sqrt:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -17,4 +17,7 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt        
+        hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ sqrt\nTY double!double@\nRT sqrt\n}"
+	.byte	0

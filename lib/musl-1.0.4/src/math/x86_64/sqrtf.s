@@ -6,7 +6,7 @@ sqrtf:  sqrtss %xmm0, %xmm0
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_sqrtf:     
+__mcfi_bary_sqrtf:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -18,3 +18,7 @@ check:
         jne try
 die:
         hlt
+
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ sqrtf\nTY float!float@\nRT sqrtf\n}"
+	.byte	0

@@ -30,7 +30,7 @@ __cp_end:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary___syscall_cp_asm:     
+__mcfi_bary___syscall_cp_asm:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -42,3 +42,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii "{ __syscall_cp_asm\nRT __syscall_cp_asm\n}"
+        .byte 0

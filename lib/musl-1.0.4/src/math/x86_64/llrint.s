@@ -19,3 +19,7 @@ check:
         jne try
 die:
         hlt
+
+	.section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ llrint\nTY i64!double@\nRT llrint\n}"
+	.byte	0

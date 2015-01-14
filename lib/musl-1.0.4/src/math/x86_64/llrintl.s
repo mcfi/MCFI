@@ -21,3 +21,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ llrintl\nTY i64!x86_fp80@\nRT llrintl\n}"
+	.byte	0

@@ -7,7 +7,7 @@ lrintf:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_lrintf:     
+__mcfi_bary_lrintf:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -19,3 +19,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ lrintf\nTY i64!float@\nRT lrintf\n}"
+	.byte	0

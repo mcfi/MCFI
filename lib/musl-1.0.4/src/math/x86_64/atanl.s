@@ -9,7 +9,7 @@ atanl:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_atanl:     
+__mcfi_bary_atanl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -21,3 +21,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ atanl\nTY x86_fp80!x86_fp80@\nRT atanl\n}"
+	.byte	0

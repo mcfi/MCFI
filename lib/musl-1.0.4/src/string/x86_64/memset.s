@@ -44,7 +44,7 @@ memset:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_memset:     
+__mcfi_bary_memset:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -56,4 +56,7 @@ check:
         jne try
 die:
         hlt
-        
+       
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii	"{ memset\nTY i8*!i8*@i32@i64@\nRT memset\n}"
+	.byte	0

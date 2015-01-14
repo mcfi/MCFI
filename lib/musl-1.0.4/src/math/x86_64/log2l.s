@@ -9,7 +9,7 @@ log2l:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_log2l:     
+__mcfi_bary_log2l:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -21,3 +21,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ log2l\nTY x86_fp80!x86_fp80@\nRT log2l\n}"
+	.byte	0

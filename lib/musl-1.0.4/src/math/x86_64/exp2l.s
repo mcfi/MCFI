@@ -29,7 +29,7 @@ expm1l:
 1:	push %rax
         .byte 0x0f, 0x1f, 0x40, 0x00
 	call 1f
-__mcfi_dcj_exp2l:        
+__mcfi_dcj_exp2l:
 	pop %rax
 	fld1
 	fsubrp
@@ -123,3 +123,8 @@ check2:
         jne try2
 die2:
         hlt        
+	.section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ expm1l\nTY x86_fp80!x86_fp80@\nRT expm1l\n}"
+	.byte	0
+	.ascii	"{ exp2l\nTY x86_fp80!x86_fp80@\nRT exp2l\n}"
+	.byte	0

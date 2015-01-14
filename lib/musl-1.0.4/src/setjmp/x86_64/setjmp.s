@@ -20,4 +20,27 @@ setjmp:
 	mov (%rsp),%rdx         /* save return addr ptr for new rip */
 	mov %rdx,56(%edi)
 	xor %rax,%rax           /* always return 0 */
-	ret
+	#ret
+        popq %rcx
+        movl %ecx, %ecx
+try:    movq %gs:0x1000, %rdi
+__mcfi_bary_setjmp:     
+        cmpq %rdi, %gs:(%rcx)
+        jne check
+        jmpq *%rcx
+check:
+        movq %gs:(%rcx), %rsi
+        testb $0x1, %sil
+        jne die
+        cmpl %esi, %edi
+        jne try
+die:
+        hlt
+
+        .section	.MCFIFuncInfo,"",@progbits        
+	.ascii	"{ setjmp\nRT setjmp\n}"
+	.byte	0
+	.ascii	"{ _setjmp\nRT setjmp\n}"
+	.byte	0
+	.ascii	"{ __setjmp\nRT setjmp\n}"
+	.byte	0

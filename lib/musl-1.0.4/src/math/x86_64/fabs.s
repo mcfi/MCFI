@@ -23,3 +23,7 @@ check:
         jne try
 die:
         hlt
+
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ fabs\nTY double!double@\nRT fabs\n}"
+	.byte	0

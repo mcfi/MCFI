@@ -9,7 +9,7 @@ fabsf:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_fabsf:     
+__mcfi_bary_fabsf:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -21,3 +21,7 @@ check:
         jne try
 die:
         hlt
+
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ fabsf\nTY float!float@\nRT fabsf\n}"
+	.byte	0

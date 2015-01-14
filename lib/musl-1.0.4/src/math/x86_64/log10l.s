@@ -21,3 +21,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ log10l\nTY x86_fp80!x86_fp80@\nRT log10l\n}"
+	.byte	0

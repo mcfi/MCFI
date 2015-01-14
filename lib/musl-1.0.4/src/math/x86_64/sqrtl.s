@@ -7,7 +7,7 @@ sqrtl:	fldt 8(%rsp)
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_sqrtl:     
+__mcfi_bary_sqrtl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -19,3 +19,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ sqrtl\nTY x86_fp80!x86_fp80@\nRT sqrtl\n}"
+	.byte	0

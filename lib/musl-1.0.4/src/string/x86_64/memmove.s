@@ -31,3 +31,6 @@ check:
 die:
         hlt
         
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ memmove\nTY i8*!i8*@i8*@i64@\nDT memcpy\nRT memmove\n}"
+	.byte	0

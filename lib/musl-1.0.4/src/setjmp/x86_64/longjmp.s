@@ -35,3 +35,9 @@ __mcfi_bary_longjmp:
         jne 5b
 4:
         hlt
+
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii	"{ longjmp\nRT longjmp\n}"
+	.byte	0
+        .ascii	"{ _longjmp\nRT longjmp\n}"
+	.byte	0

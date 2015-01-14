@@ -18,7 +18,7 @@ acosl:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_acosl:     
+__mcfi_bary_acosl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -30,3 +30,7 @@ check:
         jne try
 die:
         hlt
+
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii	"{ acosl\nTY x86_fp80!x86_fp80@\nRT acosl\n}"
+	.byte	0

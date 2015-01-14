@@ -5,11 +5,11 @@ atan2l:
 	fldt 8(%rsp)
 	fldt 24(%rsp)
 	fpatan
-	ret
+	#ret
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_atan2l:     
+__mcfi_bary_atan2l:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -21,3 +21,7 @@ check:
         jne try
 die:
         hlt
+
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii	"{ atan2l\nTY x86_fp80!x86_fp80@x86_fp80@\nRT atan2l\n}"
+	.byte	0

@@ -15,3 +15,7 @@ sigsetjmp:
 __mcfi_dcj_sigprocmask:        
 	popq %rdi
 1:	jmp setjmp
+
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii	"{ sigsetjmp\nDT setjmp\n}"
+	.byte	0

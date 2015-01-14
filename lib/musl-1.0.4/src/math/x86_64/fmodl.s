@@ -13,7 +13,7 @@ fmodl:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_acosl:     
+__mcfi_bary_fmodl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -25,3 +25,7 @@ check:
         jne try
 die:
         hlt
+
+	.section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ fmodl\nTY x86_fp80!x86_fp80@x86_fp80@\nRT fmodl\n}"
+	.byte	0

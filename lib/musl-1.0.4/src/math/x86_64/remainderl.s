@@ -13,7 +13,7 @@ remainderl:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_remainderl:     
+__mcfi_bary_remainderl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -25,3 +25,7 @@ check:
         jne try
 die:
         hlt
+
+	.section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ remainderl\nTY x86_fp80!x86_fp80@x86_fp80@\nRT remainderl\n}"
+	.byte	0

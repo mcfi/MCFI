@@ -8,7 +8,7 @@ rintl:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_rintl:     
+__mcfi_bary_rintl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -20,3 +20,6 @@ check:
         jne try
 die:
         hlt
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii	"{ rintl\nTY x86_fp80!x86_fp80@\nRT rintl\n}"
+	.byte	0

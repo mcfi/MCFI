@@ -15,7 +15,7 @@ floorl:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_floorl:     
+__mcfi_bary_floorl:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx
@@ -43,3 +43,11 @@ truncl:
 	fldt 8(%rsp)
 	mov $0xf,%al
 	jmp 1b
+
+        .section	.MCFIFuncInfo,"",@progbits
+	.ascii "{ floorl\nTY x86_fp80!x86_fp80@\nRT floorl\n}"
+	.byte 0
+        .ascii "{ truncl\nTY x86_fp80!x86_fp80@\nDT floorl\n}"
+	.byte 0
+	.ascii "{ ceill\nTY x86_fp80!x86_fp80@\nDT floorl\n}"
+	.byte 0
