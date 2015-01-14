@@ -102,7 +102,7 @@ _Ux86_64_getcontext:
         popq %rcx
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary__Ux86_64_getcontext:     
+__mcfi_bary__Ux86_64_getcontext:
         cmpq %rdi, %gs:(%rcx)
         jne check
         jmpq *%rcx

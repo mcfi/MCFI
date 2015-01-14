@@ -143,8 +143,9 @@ x86_64_sigreturn (unw_cursor_t *cursor)
 
   Debug (8, "resuming at ip=%llx via sigreturn(%p)\n",
 	     (unsigned long long) c->dwarf.ip, sc);
-  __asm__ __volatile__ ("mov %0, %%rsp;"
-			"mov %1, %%rax;"
+  __asm__ __volatile__ ("movq %0, %%rsp;"
+                        "movl %%esp, %%esp;"
+			"movq %1, %%rax;"
 			"syscall"
 			:: "r"(sc), "i"(SYS_rt_sigreturn)
 			: "memory");

@@ -103,21 +103,11 @@ _Ux86_64_setcontext:
 
         /* push the return address on the stack */
 	mov    UC_MCONTEXT_GREGS_RIP(%rdi),%r11d
-try:    movq   %gs:0x1000, %rcx
-__mcfi_bary_catch_branch:
-        cmpq   %rcx, %gs:(%r11)
-        jne    check
-        //mov    UC_MCONTEXT_GREGS_RCX(%rdi),%rcx
-        //mov    UC_MCONTEXT_GREGS_RDI(%rdi),%rdi
         xorl   %ecx, %ecx
         xorl   %edi, %edi
+        cmpb   $0x0, %gs:(%r11)
+        jne    die
         jmpq   *%r11
-check:
-        movq %gs:(%r11), %r10
-        testb $0x1, %r10b
-        jne die
-        cmpl %ecx, %r10d
-        jne try
 die:
         hlt
 
