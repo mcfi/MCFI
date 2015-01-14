@@ -674,10 +674,12 @@ static void LowerTlsAddr(MCStreamer &OutStreamer,
   OutStreamer.EmitInstruction(LEA, STI);
 
   if (needsPadding) {
+    OutStreamer.EmitCodeAlignment(8, 0);
     OutStreamer.EmitInstruction(MCInstBuilder(X86::DATA16_PREFIX), STI);
     OutStreamer.EmitInstruction(MCInstBuilder(X86::DATA16_PREFIX), STI);
     OutStreamer.EmitInstruction(MCInstBuilder(X86::REX64_PREFIX), STI);
-  }
+  } else
+    OutStreamer.EmitCodeAlignment(8, 0, 5);
 
   StringRef name = is64Bits ? "__tls_get_addr" : "___tls_get_addr";
   MCSymbol *tlsGetAddr = context.GetOrCreateSymbol(name);
