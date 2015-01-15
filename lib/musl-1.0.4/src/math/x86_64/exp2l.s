@@ -29,7 +29,7 @@ expm1l:
 1:	push %rax
         .byte 0x0f, 0x1f, 0x40, 0x00
 	call 1f
-__mcfi_dcj_exp2l:
+__mcfi_dcj_1_exp2l:
 	pop %rax
 	fld1
 	fsubrp

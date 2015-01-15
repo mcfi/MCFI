@@ -7,7 +7,7 @@ _start:
         nop
         nop
 	call __dynlink
-__mcfi_dcj___dynlink:
+__mcfi_dcj_1___dynlink:
 	pop %rdi
 1:	dec %edi
 	pop %rsi

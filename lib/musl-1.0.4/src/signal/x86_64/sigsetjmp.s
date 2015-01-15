@@ -12,7 +12,7 @@ sigsetjmp:
 	movl $2,%edi
         .byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00
 	call sigprocmask
-__mcfi_dcj_sigprocmask:        
+__mcfi_dcj_1_sigprocmask:        
 	popq %rdi
 1:	jmp setjmp
 

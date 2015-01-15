@@ -40,7 +40,7 @@ expl:
 	fstpt 32(%rsp)
         .byte 0x90
 	call exp2l
-__mcfi_dcj_exp2l:
+__mcfi_dcj_1_exp2l:
 		# if 2^hi == inf return 2^hi
 	fld %st(0)
 	fstpt (%rsp)

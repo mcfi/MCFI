@@ -25,7 +25,7 @@ __mcfi_bary_thread_start:
         jne check1
         .byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00
 	call *%r9
-__mcfi_icj_thread_start:
+__mcfi_icj_1_thread_start:
 	mov %eax,%edi
 	xor %eax,%eax
 	mov $60,%al
