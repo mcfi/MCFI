@@ -25,6 +25,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include <unordered_set>
+#include <stack>
 #include <memory>
 using namespace clang;
 
@@ -224,6 +225,16 @@ namespace {
       }
     }
 
+    std::string trimMethodName(const std::string MethodName) const {
+      size_t i;
+      for (i = MethodName.size() - 1; i > 0; i--) {
+        if (MethodName[i] == ')')
+          break;
+      }
+      // i points to the rightmost paren
+      return MethodName.substr(0, i+1);
+    }
+    
     void genClassHierarchyInfo(std::unordered_set<std::string>& CHA,
                                std::unordered_set<std::string>& MCFIPureVirt,
                                const TagDecl *RD) const {
@@ -231,44 +242,58 @@ namespace {
         const CXXRecordDecl* CRD = cast<CXXRecordDecl>(RD);
         if (CRD->getNumBases() > 0) {
           // print out the base classes
-          std::string Entry = std::string("~I~") + Builder->getCanonicalRecordName(CRD);
+          std::string Entry = std::string("I@") + Builder->getCanonicalRecordName(CRD);
           if (Entry.empty())
             return;
-          Entry += "@";
+          Entry += "#";
           for (CXXRecordDecl::base_class_const_iterator I = CRD->bases_begin(),
                  E = CRD->bases_end(); I != E; ++I) {
             assert(!I->getType()->isDependentType() &&
                    "Cannot layout class with dependent bases.");
             const CXXRecordDecl *Base =
               cast<CXXRecordDecl>(I->getType()->getAs<RecordType>()->getDecl());
-            Entry += Builder->getCanonicalRecordName(Base) + "|";
+            Entry += Builder->getCanonicalRecordName(Base) + "#";
           }
           Entry.erase(Entry.size()-1);
           CHA.insert(Entry);
         }
 
+        std::string Entry;
         for (CXXRecordDecl::method_iterator I = CRD->method_begin();
              I != CRD->method_end(); ++I) {
-          std::string Entry;
           if (isa<CXXConstructorDecl>(*I))
             continue;
           else if (isa<CXXDestructorDecl>(*I)) {
-            Entry += std::string("~D~");
-            Entry += Builder->getCanonicalRecordName(CRD);
+            if (!I->isVirtual())
+              continue; // non-virtual destructors are not considered
+            Entry += "~";
           } else {
-            Entry += std::string("~M~");
-            Entry += Builder->getCanonicalMethodName(*I);
+            std::string RecordName = Builder->getCanonicalRecordName(CRD);
+            std::string MethodName = Builder->getCanonicalMethodName(*I);
+            MethodName = MethodName.substr(RecordName.size()+2); // pass ::
+            // Trim MethodName and only leave the name and parameter types
+            Entry += trimMethodName(MethodName);
             if (I->isPure()) {
               std::string PV = Builder->getMCFIPureVirtual(*I);
               if (!PV.empty())
                 MCFIPureVirt.insert(PV);
             }
           }
-          Entry += std::string("@");
-          Entry += std::string(I->isStatic() ? "1" : "0");
-          Entry += std::string(I->isVirtual() ? "1" : "0");
+          if (I->isConst() || I->isVolatile() ||
+              I->isStatic() || I->isVirtual())
+            Entry += std::string("@");
+          if (I->isConst()) Entry+= "c";
+          if (I->isVolatile()) Entry += "o";
+          if (I->isStatic()) Entry += "s";
+          if (I->isVirtual()) Entry += "v";
+          Entry += "#";
+        }
+        if (Entry.size() > 0) {
+          Entry = std::string("M@") + Builder->getCanonicalRecordName(CRD) + "#" + Entry;
+          Entry.erase(Entry.size()-1); // erase the trailing '#'
           CHA.insert(Entry);
         }
+
         for (RecordDecl::field_iterator I = CRD->field_begin();
              I != CRD->field_end(); ++I) {
           const NamedDecl* ND = *I;

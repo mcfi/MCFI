@@ -159,7 +159,11 @@ private:
     std::string DemangledName = CXXDemangledName(FuncName.data());
 
     if (DemangledName.size()) {
-      FuncInfo += std::string("DN ") + DemangledName + '\n';
+      size_t Tilde = DemangledName.find_last_of('~');
+      if (Tilde == std::string::npos)
+        FuncInfo += std::string("DN ") + DemangledName + '\n';
+      else
+        FuncInfo += std::string("DD ") + DemangledName.substr(0, Tilde-2) + '\n';
     }
     const Function *F = MF.getFunction();
     FuncInfo += std::string("TY ");
