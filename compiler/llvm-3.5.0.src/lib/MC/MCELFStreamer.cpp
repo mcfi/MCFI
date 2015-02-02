@@ -305,7 +305,7 @@ void MCELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
       PushSection();
       SwitchSection(MCFIAddrTaken);
       EmitBytes(MEStr);
-      EmitBytes("\n");
+      EmitIntValue(0, 1); // NULL byte
       PopSection();
       AddrTakenSet.insert(MEStr);
     }

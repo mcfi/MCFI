@@ -280,8 +280,22 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   EmitCallArgs(Args, FPT, E->arg_begin(), E->arg_end());
 
   assert(VirtualCallee.find(Callee) == VirtualCallee.end());
-  VirtualCallee[Callee] = std::string("PM ") + CGM.getCanonicalRecordName(RD) +
-    "+" + FPT->desugar().getAsString();
+  VirtualCallee[Callee] = std::string("PM ") + CGM.getCanonicalRecordName(RD) + "#";
+
+  std::string qualifiers = FPT->desugar().getAsString();
+  for (size_t i = qualifiers.size() - 1; i > 0; i--) {
+    if (qualifiers[i] == ')') {
+      if (i < qualifiers.size() - 1) {
+        qualifiers = qualifiers.substr(i+1, qualifiers.size() - i);
+      } else
+        qualifiers = "";
+      break;
+    }
+  }
+  if (qualifiers.find("const") != std::string::npos)
+    VirtualCallee[Callee] += "c";
+  if (qualifiers.find("volatile") != std::string::npos)
+    VirtualCallee[Callee] += "o";
 
   return EmitCall(CGM.getTypes().arrangeCXXMethodCall(Args, FPT, required),
                   Callee, ReturnValue, Args);

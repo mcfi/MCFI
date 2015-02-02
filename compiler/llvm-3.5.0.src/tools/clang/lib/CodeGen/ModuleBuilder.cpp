@@ -224,16 +224,6 @@ namespace {
         }
       }
     }
-
-    std::string trimMethodName(const std::string MethodName) const {
-      size_t i;
-      for (i = MethodName.size() - 1; i > 0; i--) {
-        if (MethodName[i] == ')')
-          break;
-      }
-      // i points to the rightmost paren
-      return MethodName.substr(0, i+1);
-    }
     
     void genClassHierarchyInfo(std::unordered_set<std::string>& CHA,
                                std::unordered_set<std::string>& MCFIPureVirt,
@@ -270,9 +260,7 @@ namespace {
           } else {
             std::string RecordName = Builder->getCanonicalRecordName(CRD);
             std::string MethodName = Builder->getCanonicalMethodName(*I);
-            MethodName = MethodName.substr(RecordName.size()+2); // pass ::
-            // Trim MethodName and only leave the name and parameter types
-            Entry += trimMethodName(MethodName);
+            Entry += MethodName.substr(RecordName.size()+2); // pass ::
             if (I->isPure()) {
               std::string PV = Builder->getMCFIPureVirtual(*I);
               if (!PV.empty())
