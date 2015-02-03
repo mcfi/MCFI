@@ -37,39 +37,106 @@ static size_t next_symbol(char *cursor, char sym,
   return advanced;
 }
 
+static void print_string(void *str) {
+  printf("%s\n", (char*)str);
+}
+static void cha_cc_print(graph *g) {
+  dict_print(g, print_string, -1);
+}
+
+static char *_get_string_before_symbol(/*in/out*/char **cursor, char symbol,
+                                       /*out*/int *stop, /*len*/size_t *len) {
+  size_t name_len = next_symbol(*cursor, symbol, stop);
+  char *string = xmalloc(name_len + 1);
+  memcpy(string, *cursor, name_len);
+  *cursor += (name_len + 1);
+  if (len)
+    *len = name_len;
+  return string;
+}
+
+static char *sp_intern_string(char *string) {
+  return sp_add_nocpy_or_free(&sp, string);
+}
+
 static char *parse_inheritance(char *cursor, const char* end, graph **cha) {
-  /****************************************************************************/
-#define _get_string(cursor, name, name_len, symbol, ptrstop) do {   \
-    name_len = next_symbol(cursor, symbol, ptrstop);                \
-    name = xmalloc(name_len + 1);                                   \
-    memcpy(name, cursor, name_len);                                 \
-    name = sp_add_nocpy_or_free(&sp, name);                         \
-    cursor += (name_len + 1);                                       \
-  } while (0);
-  /****************************************************************************/
-  assert(cursor < end);
   int stop;
-  /* subclass */
-  char *sub_class_name;
-  size_t name_len;
-  _get_string(cursor, sub_class_name, name_len, '#', &stop);
-  do {
-    char *super_class_name;
-    _get_string(cursor, super_class_name, name_len, '#', &stop);
+  char *sub_class_name =
+    sp_intern_string(_get_string_before_symbol(&cursor, '#', &stop, 0));
+  while (!stop) {
+    char *super_class_name =
+      sp_intern_string(_get_string_before_symbol(&cursor, '#', &stop, 0));
     g_add_edge(cha, sub_class_name, super_class_name);
-  } while (!stop);
-#undef _get_string
+  }
   return cursor;
 }
 
+static unsigned char _get_cpp_method_attr(/*in/out*/char *method_name,
+                                          size_t len) {
+  unsigned char attrs = 0;
+  int counter = 5;
+  for (--len; len > 0 && method_name[len] != '@' && counter > 0; --len, counter--) {
+    switch (method_name[len]) {
+    case 'c':
+      attrs &= 1;
+      break;
+    case 'o':
+      attrs &= 2;
+      break;
+    case 's':
+      attrs &= 4;
+      break;
+    case 'v':
+      attrs &= 8;
+      break;
+    }
+  }
+  if (method_name[len] == '@')
+    method_name[len] = '\0';
+  return attrs;
+}
+
+static int isConstant(unsigned char attrs) {
+  return attrs & 1;
+}
+
+static int isVolatile(unsigned char attrs) {
+  return attrs & 2;
+}
+
+static int isStatic(unsigned char attrs) {
+  return attrs & 4;
+}
+
+static int isVirtual(unsigned char attrs) {
+  return attrs & 8;
+}
+
 static char *parse_classes(char *cursor, const char *end, dict **classes) {
-  assert(cursor < end);
   int stop;
-  size_t name_len = next_symbol(cursor, '#', &stop);
-  assert(!stop);
-  char *class_name = xmalloc(name_len + 1);
-  memcpy(class_name, cursor, name_len);
-  class_name = sp_add_nocpy_or_free(&sp, class_name);
+  char *class_name =
+    sp_intern_string(_get_string_before_symbol(&cursor, '#', &stop, 0));
+  keyvalue *class_entry = dict_find(*classes, class_name);
+  if (!class_entry) {
+    class_entry = dict_add(classes, class_name, 0);
+  }
+  while (!stop) {
+    size_t len;
+    char *method_name = _get_string_before_symbol(&cursor, '#', &stop, &len);
+    unsigned char attrs = _get_cpp_method_attr(method_name, len);
+    method_name = sp_intern_string(method_name);
+    keyvalue *method_entry = dict_find((dict*)class_entry->value, method_name);
+    if (!method_entry)
+      dict_add((dict**)&(class_entry->value), method_name, (void*)attrs);
+    else {
+      if ((unsigned char)method_entry->value != attrs) {
+        fprintf(stderr, "Duplicated method name %s in class %s\n",
+                method_name, class_name);
+        exit(-1);
+      }
+    }
+  }
+  return cursor;
 }
 
 void parse_cha(char* content, const char *end,
@@ -82,8 +149,7 @@ void parse_cha(char* content, const char *end,
       cursor = parse_inheritance(cursor+2, end, cha);
       break;
     case 'M':
-      cursor += strlen(cursor);
-      cursor += 1;
+      cursor = parse_classes(cursor+2, end, classes);
       break;
     default:
       fprintf(stderr, "Invalid cha info at offset %lu\n", cursor - content);
@@ -91,8 +157,6 @@ void parse_cha(char* content, const char *end,
     }
   }
   node *lcc = g_get_lcc(cha);
-  //sp_print(sp);
-  l_print(lcc, g_print);
 }
 
 int main(int argc, char **argv) {

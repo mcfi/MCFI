@@ -25,7 +25,7 @@ static void free_kv(keyvalue *kv) {
   if (kv) free(kv);
 }
 
-static void *dict_find(const keyvalue *dict, const void *key) {
+static keyvalue *dict_find(const keyvalue *dict, const void *key) {
   keyvalue *kv = 0;
   HASH_FIND_PTR(dict, &key, kv);
   return kv;
@@ -35,10 +35,11 @@ static int dict_in(const keyvalue *dict, const void *key) {
   return !!dict_find(dict, key);
 }
 
-static void dict_add(keyvalue **dict, void *key, void *value) {
+static keyvalue *dict_add(keyvalue **dict, void *key, void *value) {
   assert(!dict_in(*dict, key));
   keyvalue *kv = new_kv(key, value);
   HASH_ADD_PTR(*dict, key, kv);
+  return kv;
 }
 
 static void dict_del(keyvalue **dict, void *key) {
@@ -93,6 +94,7 @@ static void dict_print(keyvalue *dict,
       printf("\n");
     }
   }
+  printf("\n");
 }
 
 typedef keyvalue dict;
