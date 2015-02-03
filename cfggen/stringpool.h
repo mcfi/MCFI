@@ -73,6 +73,20 @@ static char *sp_str_handle(str **sp, char *data) {
 }
 
 /**
+ * sp_add_nocpy_or_free
+ */
+static char *sp_add_nocpy_or_free(str **sp, char *data) {
+  char *handle = sp_str_handle(sp, data);
+  if (!handle) {
+    sp_add_nocpy(sp, data);
+    return data;
+  } else {
+    free(data);
+    return handle;
+  }
+}
+
+/**
  * sp_del deletes a string
  */
 static void sp_del(str **sp, char *data) {
@@ -104,10 +118,10 @@ static void sp_dtor(str **sp) {
 /**
  * print string pool
  */
-static void sp_print(str **sp) {
+static void sp_print(str *sp) {
   str *s, *tmp;
   assert(sp);
-  HASH_ITER(hh, *sp, s, tmp) {
+  HASH_ITER(hh, sp, s, tmp) {
     printf("%s\n", s->data);
   }
 }

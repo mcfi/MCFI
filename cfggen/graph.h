@@ -4,50 +4,31 @@
 
 #ifndef GRAPH_H
 #define GRAPH_H
-#include "errors.h"
-#include "uthash.h"
-#include "utlist.h"
+#include "kv.h"
 
-#include <stdio.h>
+typedef keyvalue vertex;
+typedef vertex graph;
 
-typedef struct vertex_t {
-  UT_hash_handle hh;         /* hash table handle */
-  void *val;                 /* vertex value */
-  struct vertex_t *adj;      /* connecting vertices */
-} vertex;
+static vertex *new_vertex(void* val) {
+  return new_kv(val, 0);
+}
 
-static int g_in(vertex **g, void *val) {
-  vertex *v;
-  assert(g);
-  HASH_FIND_PTR(*g, &val, v);
-  return !!v;
+static int g_in(const vertex *g, const void *val) {
+  return dict_in(g, val);
 }
 
 static void g_add_vertex(vertex **g, void *val) {
-  vertex *v;
-  assert(g);
-  HASH_FIND_PTR(*g, &val, v);
-  if (!v) {
-    v = malloc(sizeof(*v));
-    if (!v) exit(-OOM);
-    v->val = val;
-    v->adj = 0;
-    HASH_ADD_PTR(*g, val, v);
-  }
+  if (!g_in(*g, val))
+    dict_add(g, val, 0);
 }
 
 static void g_add_edge_helper(vertex **g, void *val1, void *val2) {
-  vertex *v;
-  assert(g);
-  HASH_FIND_PTR(*g, &val1, v);
+  vertex *v = dict_find(*g, val1);
   if (!v) {
-    v = malloc(sizeof(*v));
-    if (!v) exit(-OOM);
-    v->val = val1;
-    v->adj = 0; /* initialize the adjacent list */
-    HASH_ADD_PTR(*g, val, v);
+    g_add_vertex(g, val1);
+    v = dict_find(*g, val1);
   }
-  g_add_vertex(&(v->adj), val2);
+  g_add_vertex((vertex**)(&(v->value)), val2);
 }
 
 static void g_add_edge(vertex **g, void *val1, void *val2) {
@@ -55,25 +36,24 @@ static void g_add_edge(vertex **g, void *val1, void *val2) {
   g_add_edge_helper(g, val2, val1);
 }
 
+static void g_add_directed_edge(vertex **g, void *val1, void *val2) {
+  g_add_edge_helper(g, val1, val2);
+}
+
 static void g_del_vertex(vertex **g, void *val) {
-  vertex *v;
-  assert(g);
-  HASH_FIND_PTR(*g, &val, v);
+  vertex *v = dict_find(*g, val);
   if (v) {
-    HASH_DEL(*g, v);
-    free(v);
+    dict_clear((vertex**)(&(v->value)));
+    dict_del(g, val);
   }
 }
 
 static void g_del_edge_helper(vertex **g, void *val1, void *val2) {
-  vertex *v;
-  assert(g);
-  HASH_FIND_PTR(*g, &val1, v);
+  vertex *v = dict_find(*g, val1);
   if (v) {
-    g_del_vertex(&(v->adj), val2);
-    if (!v->adj) { /* no node left */
-      HASH_DEL(*g, v);
-      free(v);
+    dict_del((vertex**)&(v->value), val2);
+    if (!v->value) { /* no node left */
+      dict_del(g, val1);
     }
   }
 }
@@ -83,41 +63,28 @@ static void g_del_edge(vertex **g, void *val1, void *val2) {
   g_del_edge_helper(g, val2, val1);
 }
 
-/* destruct vertices */
-static void g_dtor_vertex(vertex **g) {
-  assert(g);
-  vertex *v, *tmp;
-  HASH_ITER(hh, *g, v, tmp) {
-    HASH_DEL(*g, v);
-    free(v);
-  }
+static void g_del_directed_edge(vertex **g, void *val1, void *val2) {
+  g_del_edge_helper(g, val1, val2);
+}
+
+static void g_free_adj(vertex **g) {
+  dict_clear(g);
 }
 
 static void g_dtor(vertex **g) {
-  assert(g);
-  vertex *v, *tmp;
-  HASH_ITER(hh, *g, v, tmp) {
-    g_dtor_vertex(&(v->adj));
-    HASH_DEL(*g, v);
-    free(v);
-  }
+  dict_dtor(g, 0, g_free_adj);
 }
 
+static void g_print_vertex(void *v) {
+  printf("%lu", (unsigned long)v);
+}
 
-static void g_print_adj(vertex *adj) {
-  vertex *v, *tmp;
-  HASH_ITER(hh, adj, v, tmp) {
-    printf("%ld ", (long)v->val);
-  }
-  printf("\n");
+static void g_print_adj(vertex *g) {
+  dict_print(g, g_print_vertex, -1);
 }
 
 static void g_print(vertex *g) {
-  vertex *v, *tmp;
-  HASH_ITER(hh, g, v, tmp) {
-    printf("%ld->", (long)v->val);
-    g_print_adj(v->adj);
-  }
+  dict_print(g, 0, g_print_adj);
 }
 
 typedef struct node_t {
@@ -125,28 +92,31 @@ typedef struct node_t {
   void *val;
 } node;
 
+static node *new_node(void *val) {
+  node *n = malloc(sizeof(*n));
+  if (!n) exit(-OOM);
+  n->val = val;
+  return n;
+}
+
 /* do a breadth-first search from node val */
 static vertex *g_bfs(vertex **g, void *val) {
   vertex *rg = 0;    /* result nodes */
-  node *q = 0;   /* queue of vertices */
+  node *q = 0;       /* queue of vertices */
   vertex *v, *vi, *tmp;
   node *qv = 0;
-  qv = malloc(sizeof(*qv));
-  qv->val = val;
+  qv = new_node(val);
   DL_APPEND(q, qv); /* add the initial node into the q */
-  while (q) {        /* q is not empty */
+  while (q) {       /* q is not empty */
     node *front = q;
     DL_DELETE(q, front);
     g_add_vertex(&rg, front->val);
-    HASH_FIND_PTR(*g, &(front->val), v);
+    v = dict_find(*g, front->val);
     assert(v);
-    HASH_ITER(hh, v->adj, vi, tmp) { /* for every adjacent vertex */
-      vertex *vt;
-      HASH_FIND_PTR(rg, &(vi->val), vt);
+    HASH_ITER(hh, (vertex*)(v->value), vi, tmp) { /* for every adjacent vertex */
+      vertex *vt = dict_find(rg, vi->key);
       if (!vt) {
-        qv = malloc(sizeof(*qv));
-        if (!qv) exit(-OOM);
-        qv->val = vi->val;
+        qv = new_node(vi->key);
         DL_APPEND(q, qv);
       }
     }
@@ -164,14 +134,12 @@ static node *g_get_lcc(vertex **g) {
   vertex *v, *tmp;
   vertex *vi, *tmpi;
   HASH_ITER(hh, *g, v, tmp) {
-    if (!g_in(&explored, v->val)) {
-      cc = malloc(sizeof(*cc));
-      if (!cc) exit(-OOM);
-      cc->val = g_bfs(g, v->val);
+    if (!g_in(explored, v->key)) {
+      cc = new_node(g_bfs(g, v->key));
       DL_APPEND(lcc, cc);
       /* add all nodes in cc to expored */
       HASH_ITER(hh, (vertex*)(cc->val), vi, tmpi) {
-        g_add_vertex(&explored, vi->val);
+        g_add_vertex(&explored, vi->key);
       }
     }
   }

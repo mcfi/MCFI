@@ -1,46 +1,109 @@
 #include <stdlib.h>
 #include <string.h>
-#ifdef STANDALONE
 #include <stdio.h>
-#endif
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
-typedef struct code_module_t cpp_module;
-typedef struct function_t function;
-typedef struct icf_t ict;
-typedef struct cpp_class_t cpp_class;
+#include "cfggen.h"
 
-/**
- * A code module may be an executable or a .so file.
- */
-struct code_module_t {
-  char *path; // absolute path of the code module
-  uintptr_t addr; // in-memory address
-};
+code_module *modules = 0;
+str *sp = 0;            /* string pool */
+graph *callgraph = 0;   /* call graph */
+graph *rtgraph = 0;     /* return graph */
+graph *cha = 0;         /* class hierarchy */
+dict *chacc = 0;        /* class hierarchy cache */
+dict *classes = 0;      /* cpp classes */
 
-struct cpp_class_t {
-  char *name;
-  // set of methods
-};
+static void *xmalloc(size_t size) {
+  char *ptr = malloc(size);
+  if (!ptr) exit(-OOM);
+  ptr[size-1] = '\0';
+  return ptr;
+}
 
-struct icf_t {
-  code_module *mod;
-  char *id;
-  size_t offset; // offset of the bid mov instruction's patch point in the code module
-};
+static size_t next_symbol(char *cursor, char sym,
+                          int *stop) {
+  size_t advanced = 0;
+  if (*cursor) {
+    while (*cursor != sym && *cursor != '\0') {
+      cursor++;
+      advanced++;
+    }
+  }
+  *stop = (*cursor == '\0');
+  return advanced;
+}
 
-struct function_t {
-  code_module *mod;     // defined in which code module
-  cpp_class *cls;       // if this function is defined as a cpp class method
-  char *type;           // type of the function
-  char *mangled_name;
-  char *demangled_name; // if this function is a cpp method, then demangled name
-                        // should point to the demangled name.
-  size_t offset; // offset in the code module
-  int cons:1; // Constant
-  int volt:1; // vOlatile
-  int stat:1; // Static
-  int virt:1; // Virtual
-  // list of returns
-  // list of direct tail calls
-  // list of indirect tail calls
-};
+static char *parse_inheritance(char *cursor, const char* end, graph **cha) {
+  /****************************************************************************/
+#define _get_string(cursor, name, name_len, symbol, ptrstop) do {   \
+    name_len = next_symbol(cursor, symbol, ptrstop);                \
+    name = xmalloc(name_len + 1);                                   \
+    memcpy(name, cursor, name_len);                                 \
+    name = sp_add_nocpy_or_free(&sp, name);                         \
+    cursor += (name_len + 1);                                       \
+  } while (0);
+  /****************************************************************************/
+  assert(cursor < end);
+  int stop;
+  /* subclass */
+  char *sub_class_name;
+  size_t name_len;
+  _get_string(cursor, sub_class_name, name_len, '#', &stop);
+  do {
+    char *super_class_name;
+    _get_string(cursor, super_class_name, name_len, '#', &stop);
+    g_add_edge(cha, sub_class_name, super_class_name);
+  } while (!stop);
+#undef _get_string
+  return cursor;
+}
+
+static char *parse_classes(char *cursor, const char *end, dict **classes) {
+  assert(cursor < end);
+  int stop;
+  size_t name_len = next_symbol(cursor, '#', &stop);
+  assert(!stop);
+  char *class_name = xmalloc(name_len + 1);
+  memcpy(class_name, cursor, name_len);
+  class_name = sp_add_nocpy_or_free(&sp, class_name);
+}
+
+void parse_cha(char* content, const char *end,
+               dict **classes, graph **cha) {
+  assert(content && classes && cha);
+  char *cursor = content;
+  while (cursor < end) {
+    switch (*cursor) {
+    case 'I':
+      cursor = parse_inheritance(cursor+2, end, cha);
+      break;
+    case 'M':
+      cursor += strlen(cursor);
+      cursor += 1;
+      break;
+    default:
+      fprintf(stderr, "Invalid cha info at offset %lu\n", cursor - content);
+      exit(-1);
+    }
+  }
+  node *lcc = g_get_lcc(cha);
+  //sp_print(sp);
+  l_print(lcc, g_print);
+}
+
+int main(int argc, char **argv) {
+  struct stat statbuf;
+  stat("xalan.cha", &statbuf);
+  size_t len = statbuf.st_size;
+  int fd = open("xalan.cha", O_RDONLY);
+  assert(fd > -1);
+  char *buf = mmap(0, (len + 4095)/4096*4096,
+                   PROT_READ, MAP_PRIVATE,
+                   fd, 0);
+  assert(buf != (char*)-1);
+  parse_cha(buf, buf + len, &classes, &cha);
+}

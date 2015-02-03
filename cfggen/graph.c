@@ -11,6 +11,7 @@ int main() {
   printf("cc\n");
   node *lcc = g_get_lcc(&g);
   l_print(lcc, g_print);
+  
   printf("good\n");
   g_del_edge(&g, (void*)1, (void*)2);
   g_print(g);
