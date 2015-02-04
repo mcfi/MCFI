@@ -1042,6 +1042,59 @@ public:
   std::unordered_set<std::string> DtorCxaAtExit;
   std::unordered_set<std::string> DtorCxaThrow;
 
+  const std::string SanitizeTypeStr(const std::string TStr,
+                                    const std::string StructStr) const {
+    std::string postpro_result;
+    size_t pos;
+    size_t resultPos = 0;
+    do {
+      pos = TStr.find(StructStr, resultPos);
+      if (pos == std::string::npos)
+        break;
+      pos += StructStr.size();
+      while (pos < TStr.size() &&
+             (isalnum(TStr[pos]) || TStr[pos] == '_' || TStr[pos] == ':'))
+        ++pos;// advance until the end of the id
+      if (pos >= TStr.size())
+        break;
+      postpro_result += TStr.substr(resultPos, pos);
+      if (TStr[pos] == '.') {
+        while (pos < TStr.size() &&
+               (TStr[pos] == '.' || isalnum(TStr[pos])))
+          ++pos;
+      }
+      resultPos = pos;
+    } while (true);
+    return postpro_result + TStr.substr(resultPos);
+  }
+
+  const std::string TypeStr(const llvm::Type *Ty) const {
+    std::string result;
+    llvm::raw_string_ostream TStr(result);
+    Ty->print(TStr);
+    TStr.flush();
+    // Clang emits different types identifiers for the same struct
+    // For example, struct.op.1324 and struct.op.1423 are actually the
+    // same struct definition, but compiled in different files. We need
+    // to process the type string to remove the trailing digits.
+    result = SanitizeTypeStr(result, "%struct.");
+    result = SanitizeTypeStr(result, "%\"class.");
+    return result;
+  }
+
+  const std::string FuncTypeStr(const llvm::FunctionType *FTy) const {
+    std::string FTStr;
+    FTStr += TypeStr(FTy->getReturnType()) + '!';
+    for (llvm::FunctionType::param_iterator PI = FTy->param_begin();
+         PI != FTy->param_end(); ++PI) {
+      FTStr += TypeStr(*PI) + '@';
+    }
+    if (FTy->isVarArg()) {
+      FTStr += '$';
+    }
+    return FTStr;
+  }
+  
 private:
   llvm::GlobalValue *GetGlobalValue(StringRef Ref);
 

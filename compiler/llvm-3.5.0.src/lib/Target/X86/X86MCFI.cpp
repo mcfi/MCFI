@@ -151,21 +151,55 @@ private:
     }
     return FTStr;
   }
+
+  const std::string splitMethodName(const std::string MethodName) const {
+    size_t i;
+    // go back until the ')' symbol
+    for (i = MethodName.size() - 1; i > 0 && MethodName[i] != ')'; i--)
+      ;
+    size_t LeftParenToClose = 1;
+    for (--i; i > 0; i--) {
+      if (MethodName[i] == ')')
+        ++LeftParenToClose;
+      else if (MethodName[i] == '(') {
+        if (0 == --LeftParenToClose)
+          break;
+      }
+    }
+    // we get to the method name, but we need to bypass the template types
+    for (--i; i > 0 && isspace(MethodName[i]); i--)
+      ;
+    if (MethodName[i] == '>') {
+      LeftParenToClose = 1;
+      for (--i; i > 0; i--) {
+        if (MethodName[i] == '>')
+          ++LeftParenToClose;
+        else if (MethodName[i] == '<') {
+          if (0 == --LeftParenToClose)
+            break;
+        }
+      }
+    }
+    for (; i > 0 && MethodName[i] != ':'; i--)
+      ;
+    return MethodName.substr(0, i-1) + "#" + MethodName.substr(i+1);
+  }
   
   void MCFIFuncInfo(const MachineFunction &MF) {
     StringRef FuncName = MF.getName();
+    const Function *F = MF.getFunction();
     std::string FuncInfo("{ ");
     FuncInfo += FuncName.str() + '\n';
-    std::string DemangledName = CXXDemangledName(FuncName.data());
-
-    if (DemangledName.size()) {
-      size_t Tilde = DemangledName.find_last_of('~');
-      if (Tilde == std::string::npos)
-        FuncInfo += std::string("DN ") + DemangledName + '\n';
-      else
-        FuncInfo += std::string("DD ") + DemangledName.substr(0, Tilde-2) + '\n';
+    if (F->hasFnAttribute(Attribute::CXXInstanceMethod)) {
+      std::string DemangledName = CXXDemangledName(FuncName.data());
+      if (DemangledName.size()) {
+        size_t Tilde = DemangledName.find_last_of('~');
+        if (Tilde == std::string::npos) {
+          FuncInfo += std::string("DN ") + splitMethodName(DemangledName) + '\n';
+        } else
+          FuncInfo += std::string("DD ") + DemangledName.substr(0, Tilde-2) + "#~\n";
+      }
     }
-    const Function *F = MF.getFunction();
     FuncInfo += std::string("TY ");
     if (F->hasFnAttribute(Attribute::SignalHandler)) {
       FuncInfo += "SignalHandler\n";
@@ -763,13 +797,14 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
       if (mdNode) {
         const Value *V = mdNode->getOperand(0);
         const std::string VStr = cast<MDString>(V)->getString().str();
-        ICStr += " " + VStr;
-        if (VStr.find("PM") != 0) { // virtual call or virtual destructor
-          goto AddToList;
+        ICStr += "#" + VStr;
+        if (VStr.find("P#") == 0) { // virtual call or virtual destructor
+          ICStr += "#" + FuncTypeStr(FTy);
         }
+        goto AddToList;
       }
     }
-    ICStr += "-" + FuncTypeStr(FTy);
+    ICStr += "#N#" + FuncTypeStr(FTy);
 #undef selectInst
     AddToList:
     IndirectCalls.push_back(ICStr);

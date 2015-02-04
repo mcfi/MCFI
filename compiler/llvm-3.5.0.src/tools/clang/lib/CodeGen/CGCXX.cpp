@@ -346,7 +346,10 @@ CodeGenFunction::BuildAppleKextVirtualCall(const CXXMethodDecl *MD,
 
   llvm::Value* Val = ::BuildAppleKextVirtualCall(*this, MD, Ty, RD);
   assert(VirtualCallee.find(Val) == VirtualCallee.end());
-  VirtualCallee[Val] = std::string("VC ") + CGM.getCanonicalMethodName(MD);
+  std::string RecordName = CGM.getCanonicalRecordName(MD->getParent());
+  std::string MethodName = CGM.getCanonicalMethodName(MD);
+  MethodName = MethodName.substr(RecordName.size());
+  VirtualCallee[Val] = std::string("V#") + RecordName + "#" + MethodName;
   return Val;
 }
 
@@ -369,7 +372,7 @@ CodeGenFunction::BuildAppleKextVirtualDestructorCall(
     llvm::Value *Val =
       ::BuildAppleKextVirtualCall(*this, GlobalDecl(DD, Type), Ty, RD);
     assert(VirtualCallee.find(Val) == VirtualCallee.end());
-    VirtualCallee[Val] = std::string("VD ") + CGM.getCanonicalRecordName(RD);
+    VirtualCallee[Val] = std::string("D#") + CGM.getCanonicalRecordName(RD);
     return Val;
   }
   return nullptr;

@@ -658,6 +658,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   EmitFunctionProlog(*CurFnInfo, CurFn, Args);
 
   if (D && isa<CXXMethodDecl>(D) && cast<CXXMethodDecl>(D)->isInstance()) {
+    Fn->addFnAttr(llvm::Attribute::CXXInstanceMethod);
     CGM.getCXXABI().EmitInstanceFunctionProlog(*this);
     const CXXMethodDecl *MD = cast<CXXMethodDecl>(D);
     if (MD->getParent()->isLambda() &&

@@ -1354,7 +1354,7 @@ void ItaniumCXXABI::EmitVirtualDestructorCall(CodeGenFunction &CGF,
 
   assert(CGF.VirtualCallee.find(Callee) == CGF.VirtualCallee.end());
   CGF.VirtualCallee[Callee] =
-    std::string("VD ") + CGM.getCanonicalRecordName(Dtor->getParent());
+    std::string("D#") + CGM.getCanonicalRecordName(Dtor->getParent());
 
   CGF.EmitCXXMemberCall(Dtor, CallLoc, Callee, ReturnValueSlot(), This,
                         /*ImplicitParam=*/nullptr, QualType(), nullptr,

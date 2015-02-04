@@ -1032,6 +1032,7 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
     case lltok::kw_nounwind:          B.addAttribute(Attribute::NoUnwind); break;
     case lltok::kw_signalhandler:     B.addAttribute(Attribute::SignalHandler); break;
     case lltok::kw_threadentry:       B.addAttribute(Attribute::ThreadEntry); break;
+    case lltok::kw_cxxinstancemethod: B.addAttribute(Attribute::CXXInstanceMethod); break;
     case lltok::kw_optnone:           B.addAttribute(Attribute::OptimizeNone); break;
     case lltok::kw_optsize:           B.addAttribute(Attribute::OptimizeForSize); break;
     case lltok::kw_readnone:          B.addAttribute(Attribute::ReadNone); break;

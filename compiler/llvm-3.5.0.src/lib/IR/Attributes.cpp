@@ -253,7 +253,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "signalhandler";
   if (hasAttribute(Attribute::ThreadEntry))
     return "threadentry";
-
+  if (hasAttribute(Attribute::CXXInstanceMethod))
+    return "cxxinstancemethod";
   // FIXME: These should be output like this:
   //
   //   align=4
@@ -432,6 +433,7 @@ uint64_t AttributeImpl::getAttrMask(Attribute::AttrKind Val) {
   case Attribute::JumpTable:       return 1ULL << 45;
   case Attribute::SignalHandler:   return 1ULL << 46;
   case Attribute::ThreadEntry:     return 1ULL << 47;
+  case Attribute::CXXInstanceMethod: return 1ULL << 48;
   case Attribute::Dereferenceable:
     llvm_unreachable("dereferenceable attribute not supported in raw format");
   }

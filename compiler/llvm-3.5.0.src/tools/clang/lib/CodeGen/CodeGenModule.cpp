@@ -3407,21 +3407,16 @@ std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
   llvm::raw_string_ostream Out(OStr);
   getCXXABI().getMangleContext().mangleName(MD, Out);
   Out.flush();
-  int status = 0;
-  char* result = abi::__cxa_demangle(OStr.c_str(), 0, 0, &status);
   MPV += OStr;
   MPV += "\n";
-  assert(result);
-  MPV += std::string("DN ") + std::string(result);
-  free(result);
+  std::string RecordName = getCanonicalRecordName(MD->getParent());
+  std::string MethodName = getCanonicalMethodName(MD);
+  MethodName = MethodName.substr(RecordName.size() + 2);
+  MPV += std::string("DN ") + RecordName + "#" + MethodName;
   MPV += "\n";
-  OStr.clear();
-  llvm::raw_string_ostream TypeOut(OStr);
   const CGFunctionInfo &FI = getTypes().arrangeCXXMethodDeclaration(MD);
   llvm::FunctionType * FT = getTypes().GetFunctionType(FI);
-  FT->print(TypeOut);
-  TypeOut.flush();
-  MPV += std::string("TY ") + OStr + std::string("\n}");
+  MPV += std::string("TY ") + FuncTypeStr(FT) + std::string("\n}");
   return MPV;
 }
 
