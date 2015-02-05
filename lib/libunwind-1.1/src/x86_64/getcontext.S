@@ -164,5 +164,10 @@ die2:
 	.cfi_endproc
 	.size _Ux86_64_getcontext_trace, . - _Ux86_64_getcontext_trace
 
-      /* We do not need executable stack.  */
-      .section        .note.GNU-stack,"",@progbits
+        /* We do not need executable stack.  */
+        .section        .note.GNU-stack,"",@progbits
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii "{ _Ux86_64_getcontext\nR _Ux86_64_getcontext\n}"
+        .byte 0
+        .ascii "{ _Ux86_64_getcontext_trace\nR _Ux86_64_getcontext_trace\n}"
+        .byte 0

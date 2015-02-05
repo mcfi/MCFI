@@ -45,9 +45,9 @@ truncl:
 	jmp 1b
 
         .section	.MCFIFuncInfo,"",@progbits
-	.ascii "{ floorl\nTY x86_fp80!x86_fp80@\nRT floorl\n}"
+	.ascii "{ floorl\nY x86_fp80!x86_fp80@\nR floorl\n}"
 	.byte 0
-        .ascii "{ truncl\nTY x86_fp80!x86_fp80@\nDT floorl\n}"
+        .ascii "{ truncl\nY x86_fp80!x86_fp80@\nT floorl\n}"
 	.byte 0
-	.ascii "{ ceill\nTY x86_fp80!x86_fp80@\nDT floorl\n}"
+	.ascii "{ ceill\nY x86_fp80!x86_fp80@\nT floorl\n}"
 	.byte 0

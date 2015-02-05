@@ -124,7 +124,7 @@ check2:
 die2:
         hlt        
 	.section	.MCFIFuncInfo,"",@progbits
-	.ascii	"{ expm1l\nTY x86_fp80!x86_fp80@\nRT expm1l\n}"
+	.ascii	"{ expm1l\nY x86_fp80!x86_fp80@\nR expm1l\n}"
 	.byte	0
-	.ascii	"{ exp2l\nTY x86_fp80!x86_fp80@\nRT exp2l\n}"
+	.ascii	"{ exp2l\nY x86_fp80!x86_fp80@\nR exp2l\n}"
 	.byte	0

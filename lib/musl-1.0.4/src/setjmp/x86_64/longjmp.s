@@ -37,7 +37,7 @@ __mcfi_bary_longjmp:
         hlt
 
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii	"{ longjmp\nRT longjmp\n}"
+        .ascii	"{ longjmp\nR longjmp\n}"
 	.byte	0
-        .ascii	"{ _longjmp\nRT longjmp\n}"
+        .ascii	"{ _longjmp\nR longjmp\n}"
 	.byte	0

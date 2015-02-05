@@ -32,5 +32,5 @@ die:
         hlt
         
         .section	.MCFIFuncInfo,"",@progbits
-	.ascii	"{ memmove\nTY i8*!i8*@i8*@i64@\nDT memcpy\nRT memmove\n}"
+	.ascii	"{ memmove\nY i8*!i8*@i8*@i64@\nT memcpy\nR memmove\n}"
 	.byte	0

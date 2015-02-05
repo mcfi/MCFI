@@ -38,5 +38,5 @@ die:
         hlt
 
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii "{ memcpy\nTY i8*!i8*@i8*@i64@\nRT memcpy\n}"
+        .ascii "{ memcpy\nY i8*!i8*@i8*@i64@\nR memcpy\n}"
         .byte 0

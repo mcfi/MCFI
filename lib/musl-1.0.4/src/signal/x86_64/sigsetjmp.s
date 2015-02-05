@@ -17,5 +17,5 @@ __mcfi_dcj_1_sigprocmask:
 1:	jmp setjmp
 
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii	"{ sigsetjmp\nDT setjmp\n}"
+        .ascii	"{ sigsetjmp\nT setjmp\n}"
 	.byte	0

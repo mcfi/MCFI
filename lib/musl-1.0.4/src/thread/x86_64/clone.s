@@ -57,5 +57,5 @@ check1:
 die1:
         hlt
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii "{ __clone\nRT __clone\n}"
+        .ascii "{ __clone\nR __clone\n}"
         .byte 0

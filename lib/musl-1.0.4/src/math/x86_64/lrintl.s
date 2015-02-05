@@ -23,5 +23,5 @@ die:
         hlt
 
 	.section	.MCFIFuncInfo,"",@progbits
-        .ascii	"{ lrintl\nTY i64!x86_fp80@\nRT lrintl\n}"
+        .ascii	"{ lrintl\nY i64!x86_fp80@\nR lrintl\n}"
 	.byte	0

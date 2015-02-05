@@ -211,17 +211,17 @@ die7:
         hlt
 
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii	"{ feclearexcept\nTY i32!i32@\nRT feclearexcept\n}"
+        .ascii	"{ feclearexcept\nY i32!i32@\nR feclearexcept\n}"
 	.byte	0
-        .ascii	"{ feraiseexcept\nTY i32!i32@\nRT feraiseexcept\n}"
+        .ascii	"{ feraiseexcept\nY i32!i32@\nR feraiseexcept\n}"
 	.byte	0
-        .ascii	"{ fegetround\nTY i32!\nRT fegetround\n}"
+        .ascii	"{ fegetround\nY i32!\nR fegetround\n}"
 	.byte	0
-	.ascii	"{ fegetenv\nTY i32!%struct.fenv_t*@\nRT fegetenv\n}"
+	.ascii	"{ fegetenv\nY i32!%struct.fenv_t*@\nR fegetenv\n}"
 	.byte	0
-	.ascii	"{ fesetenv\nTY i32!%struct.fenv_t*@\nRT fesetenv\n}"
+	.ascii	"{ fesetenv\nY i32!%struct.fenv_t*@\nR fesetenv\n}"
 	.byte	0
-	.ascii	"{ fetestexcept\nTY i32!i32@\nRT fetestexcept\n}"
+	.ascii	"{ fetestexcept\nY i32!i32@\nR fetestexcept\n}"
 	.byte	0
-	.ascii	"{ __fesetround\nRT __fesetround\n}"
+	.ascii	"{ __fesetround\nR __fesetround\n}"
 	.byte	0

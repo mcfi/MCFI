@@ -21,5 +21,5 @@ check:
 die:
         hlt
         .section	.MCFIFuncInfo,"",@progbits
-	.ascii	"{ fabsl\nTY x86_fp80!x86_fp80@\nRT fabsl\n}"
+	.ascii	"{ fabsl\nY x86_fp80!x86_fp80@\nR fabsl\n}"
 	.byte	0

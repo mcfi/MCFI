@@ -38,9 +38,9 @@ die:
         hlt
 
         .section	.MCFIFuncInfo,"",@progbits        
-	.ascii	"{ setjmp\nRT setjmp\n}"
+	.ascii	"{ setjmp\nR setjmp\n}"
 	.byte	0
-	.ascii	"{ _setjmp\nRT setjmp\n}"
+	.ascii	"{ _setjmp\nR setjmp\n}"
 	.byte	0
-	.ascii	"{ __setjmp\nRT setjmp\n}"
+	.ascii	"{ __setjmp\nR setjmp\n}"
 	.byte	0

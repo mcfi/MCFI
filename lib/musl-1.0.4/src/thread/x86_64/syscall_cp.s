@@ -43,5 +43,5 @@ check:
 die:
         hlt
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii "{ __syscall_cp_asm\nRT __syscall_cp_asm\n}"
+        .ascii "{ __syscall_cp_asm\nR __syscall_cp_asm\n}"
         .byte 0

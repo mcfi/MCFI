@@ -58,5 +58,5 @@ die:
         hlt
        
         .section	.MCFIFuncInfo,"",@progbits
-        .ascii	"{ memset\nTY i8*!i8*@i32@i64@\nRT memset\n}"
+        .ascii	"{ memset\nY i8*!i8*@i32@i64@\nR memset\n}"
 	.byte	0

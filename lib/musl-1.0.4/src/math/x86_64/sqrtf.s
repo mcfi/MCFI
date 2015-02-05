@@ -20,5 +20,5 @@ die:
         hlt
 
         .section	.MCFIFuncInfo,"",@progbits
-	.ascii	"{ sqrtf\nTY float!float@\nRT sqrtf\n}"
+	.ascii	"{ sqrtf\nY float!float@\nR sqrtf\n}"
 	.byte	0

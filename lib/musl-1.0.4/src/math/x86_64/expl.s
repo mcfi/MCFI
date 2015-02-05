@@ -118,5 +118,5 @@ check:
 die:
         hlt
         .section	.MCFIFuncInfo,"",@progbits
-	.ascii	"{ expl\nTY x86_fp80!x86_fp80@\nRT expl\n}"
+	.ascii	"{ expl\nY x86_fp80!x86_fp80@\nR expl\n}"
 	.byte	0

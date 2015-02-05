@@ -19,5 +19,5 @@ check:
 die:
         hlt
         .section	.MCFIFuncInfo,"",@progbits
-	.ascii	"{ sqrt\nTY double!double@\nRT sqrt\n}"
+	.ascii	"{ sqrt\nY double!double@\nR sqrt\n}"
 	.byte	0
