@@ -195,12 +195,12 @@ private:
       if (DemangledName.size()) {
         size_t Tilde = DemangledName.find_last_of('~');
         if (Tilde == std::string::npos) {
-          FuncInfo += std::string("DN ") + splitMethodName(DemangledName) + '\n';
+          FuncInfo += std::string("N ") + splitMethodName(DemangledName) + '\n';
         } else
-          FuncInfo += std::string("DD ") + DemangledName.substr(0, Tilde-2) + "#~\n";
+          FuncInfo += std::string("D ") + DemangledName.substr(0, Tilde-2) + '\n';
       }
     }
-    FuncInfo += std::string("TY ");
+    FuncInfo += std::string("Y ");
     if (F->hasFnAttribute(Attribute::SignalHandler)) {
       FuncInfo += "SignalHandler\n";
     } else if (F->hasFnAttribute(Attribute::ThreadEntry)) {
@@ -222,9 +222,9 @@ private:
         }                                       \
         FuncInfo += '\n';                       \
       }} while (0);
-    addList("RT", Returns);
-    addList("DT", DirectTailCalls);
-    addList("IT", IndirectTailCalls);
+    addList("R", Returns);
+    addList("T", DirectTailCalls);
+    addList("I", IndirectTailCalls);
 #undef addList
     FuncInfo += "}";
     Returns.clear();

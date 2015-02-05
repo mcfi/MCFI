@@ -3412,11 +3412,11 @@ std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
   std::string RecordName = getCanonicalRecordName(MD->getParent());
   std::string MethodName = getCanonicalMethodName(MD);
   MethodName = MethodName.substr(RecordName.size() + 2);
-  MPV += std::string("DN ") + RecordName + "#" + MethodName;
+  MPV += std::string("N ") + RecordName + "#" + MethodName;
   MPV += "\n";
   const CGFunctionInfo &FI = getTypes().arrangeCXXMethodDeclaration(MD);
   llvm::FunctionType * FT = getTypes().GetFunctionType(FI);
-  MPV += std::string("TY ") + FuncTypeStr(FT) + std::string("\n}");
+  MPV += std::string("Y ") + FuncTypeStr(FT) + std::string("\n}");
   return MPV;
 }
 

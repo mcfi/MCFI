@@ -21,12 +21,7 @@ typedef struct str_t {
  * Precondition: data must not be in the string pool.
  */
 static int sp_add_nocpy(str **sp, char *data) {
-  str *s;
-  assert(sp && data);
-  HASH_FIND_STR(*sp, data, s);
-  if (!data)
-    return -PRECONDVIOLATED;
-  s = malloc(sizeof(*s));
+  str *s = malloc(sizeof(*s));
   if (!s) exit(-OOM);
   s->data = data;
   HASH_ADD_KEYPTR(hh, *sp, s->data, strlen(s->data), s);
@@ -38,12 +33,7 @@ static int sp_add_nocpy(str **sp, char *data) {
  * Precondition: data must not be in the string pool.
  */
 static int sp_add_cpy(str **sp, char *data, char **data_handle) {
-  str *s;
-  assert(sp && data);
-  HASH_FIND_STR(*sp, data, s);
-  if (!data)
-    return -PRECONDVIOLATED;
-  s = malloc(sizeof(*s));
+  str *s = malloc(sizeof(*s));
   if (!s) exit(-OOM);
   s->data = strdup(data); /* copy the data */
   HASH_ADD_KEYPTR(hh, *sp, s->data, strlen(s->data), s);
@@ -53,21 +43,10 @@ static int sp_add_cpy(str **sp, char *data, char **data_handle) {
 }
 
 /**
- * sp_in tests whether a string is in the pool
- */
-static int sp_in(str **sp, char *data) {
-  str *s;
-  assert(sp && data);
-  HASH_FIND_STR(*sp, data, s);
-  return (s != 0);
-}
-
-/**
  * sp_str_handle gets the handle to a string
  */
 static char *sp_str_handle(str **sp, char *data) {
   str *s;
-  assert(sp && data);
   HASH_FIND_STR(*sp, data, s);
   return s ? s->data : 0;
 }
@@ -75,7 +54,7 @@ static char *sp_str_handle(str **sp, char *data) {
 /**
  * sp_add_nocpy_or_free
  */
-static char *sp_add_nocpy_or_free(str **sp, char *data) {
+static char *sp_add_nocpy_or_free(str **sp, const char *data) {
   char *handle = sp_str_handle(sp, data);
   if (!handle) {
     sp_add_nocpy(sp, data);
@@ -84,6 +63,21 @@ static char *sp_add_nocpy_or_free(str **sp, char *data) {
     free(data);
     return handle;
   }
+}
+
+/**
+ * sp_add_cpy_or_nothing
+ */
+static size_t counter = 0;
+
+static char *sp_add_cpy_or_nothing(str **sp, const char *data) {
+  char *handle = sp_str_handle(sp, data);
+  if (!handle) {
+    /* ++counter; */
+    sp_add_cpy(sp, data, &handle);
+    return handle;
+  }
+  return handle;
 }
 
 /**

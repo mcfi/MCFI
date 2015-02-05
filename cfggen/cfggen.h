@@ -1,6 +1,7 @@
 #ifndef CFGGEN_H
 #define CFGGEN_H
 
+#include "uthash.h"
 #include "utlist.h"
 #include "graph.h"
 #include "stringpool.h"
@@ -13,9 +14,16 @@ enum Vertex_Type {
 };
 
 enum ICF_Type {
-  VirtualCall,
-  PointerToMethod,
+  VirtualMethodCall,
+  PointerToMethodCall,
   NormalCall
+};
+
+enum Qualifiers {
+  CONSTANT = 1,
+  VOLATILE = 2,
+  STATIC = 4,
+  VIRTUAL = 8
 };
 
 typedef struct code_module_t code_module;
@@ -27,18 +35,17 @@ struct icf_t {
   enum Vertex_Type ty;
   char *id;
   enum ICF_Type ity;
-  char *type;  
-  char *classname;
-  char *methodname;  
-  /* offset of the bid mov instruction's patch point relative to the code start */
+  char *type;
+  unsigned char attrs; /* constant / volatile */
+  char *class_name;
+  char *method_name;
   size_t offset;
-  struct icf_t *next, *prev;
+  UT_hash_handle hh;
 };
 
 static icf *alloc_icf(enum Vertex_Type ty) {
   icf *i = malloc(sizeof(*i));
   if (!i) exit(-OOM);
-  memset(i, 0, sizeof(*i));
   i->ty = ty;
   return i;
 }
@@ -49,18 +56,15 @@ static void free_icf(icf *i) {
 
 struct function_t {
   enum Vertex_Type ty;
+  char *name;
+  char *class_name;
+  char *method_name;
   char *type;           /* type of the function */
-  char *mangled_name;
-  char *demangled_name;
   size_t offset;        /* offset relative to the code start */
-  int cons;             /* Constant */
-  int volt;             /* vOlatile */
-  int stat;             /* Static */
-  int virt;             /* Virtual */
   node *returns;        /* return instructions */
   node *dtails;         /* direct tail calls */
   node *itails;         /* indirect tail calls */
-  struct function_t *next, *prev;
+  struct function_t *prev, *next;
 };
 
 static function *alloc_function(void) {
@@ -128,6 +132,7 @@ static code_module *alloc_code_module(void) {
   return cm;
 }
 
+/*
 static void free_code_module(code_module *cm) {
   icf *i, *tmpi;
   DL_FOREACH_SAFE(cm->icalls, i, tmpi) {
@@ -146,5 +151,5 @@ static void free_code_module(code_module *cm) {
   }
   g_dtor(&(cm->addr_taken_functions));
 }
-
+*/
 #endif
