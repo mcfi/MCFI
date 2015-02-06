@@ -79,7 +79,7 @@ private:
   void extractGlobalArray(const StringRef ArrayName,
                           std::set<StringRef> &StrSet);
 
-  const std::string CXXDemangledName(const char* MangledName) const {
+  const std::string CXXDemangledName(const char* MangledName, bool &isThunk) const {
     int status = 0;
     char* result = abi::__cxa_demangle(MangledName, 0, 0, &status);
 
@@ -90,10 +90,14 @@ private:
       const std::string VirtualThunk("virtual thunk to ");
       const std::string NonVirtualThunk("non-virtual thunk to ");
       // for thunks, we don't output the annoying "virtual thunk to" things
-      if (DemangledName.find(VirtualThunk) != std::string::npos)
-        Start = VirtualThunk.size();
-      else if (DemangledName.find(NonVirtualThunk) != std::string::npos)
+      // we match the longer NonVirtualThunk first.
+      if (DemangledName.find(NonVirtualThunk) != std::string::npos) {
         Start = NonVirtualThunk.size();
+        isThunk = true;
+      } else if (DemangledName.find(VirtualThunk) != std::string::npos) {
+        Start = VirtualThunk.size();
+        isThunk = true;
+      }
       return DemangledName.substr(Start);
     }
     return std::string("");
@@ -190,8 +194,9 @@ private:
     const Function *F = MF.getFunction();
     std::string FuncInfo("{ ");
     FuncInfo += FuncName.str() + '\n';
-    if (F->hasFnAttribute(Attribute::CXXInstanceMethod)) {
-      std::string DemangledName = CXXDemangledName(FuncName.data());
+    bool isThunk = false;
+    std::string DemangledName = CXXDemangledName(FuncName.data(), isThunk);
+    if (F->hasFnAttribute(Attribute::CXXInstanceMethod) || isThunk) {
       if (DemangledName.size()) {
         size_t Tilde = DemangledName.find_last_of('~');
         if (Tilde == std::string::npos) {
