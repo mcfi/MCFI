@@ -80,21 +80,16 @@ static void dict_print(keyvalue *dict,
                        void (*print_key)(const void *key),
                        void (*print_value)(const void *value)) {
   keyvalue *kv, *tmp;
-  if (0 == print_key)
-    print_key = default_print;
-  if (0 == print_value)
-    print_value = default_print;
+  if (0 == print_key) print_key = default_print;
+  if (0 == print_value) print_value = default_print;
+  printf("{");
   HASH_ITER(hh, dict, kv, tmp) {
-    if (print_key != (void*)-1) {
-      print_key(kv->key);
-      printf(" : ");
-    }
-    if (print_value != (void* )-1) {
-      print_value(kv->value);
-      printf("\n");
-    }
+    print_key(kv->key);
+    printf(": ");
+    print_value(kv->value);
+    printf(", ");
   }
-  printf("\n");
+  printf("}\n");
 }
 
 typedef keyvalue dict;

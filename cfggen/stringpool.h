@@ -54,7 +54,7 @@ static char *sp_str_handle(str **sp, char *data) {
 /**
  * sp_add_nocpy_or_free
  */
-static char *sp_add_nocpy_or_free(str **sp, const char *data) {
+static char *sp_add_nocpy_or_free(str **sp, char *data) {
   char *handle = sp_str_handle(sp, data);
   if (!handle) {
     sp_add_nocpy(sp, data);
@@ -70,7 +70,7 @@ static char *sp_add_nocpy_or_free(str **sp, const char *data) {
  */
 static size_t counter = 0;
 
-static char *sp_add_cpy_or_nothing(str **sp, const char *data) {
+static char *sp_add_cpy_or_nothing(str **sp, char *data) {
   char *handle = sp_str_handle(sp, data);
   if (!handle) {
     /* ++counter; */

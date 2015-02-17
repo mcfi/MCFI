@@ -32,7 +32,6 @@ typedef struct icf_t icf;
 typedef struct ra_t ra;
 
 struct icf_t {
-  enum Vertex_Type ty;
   char *id;
   enum ICF_Type ity;
   char *type;
@@ -46,7 +45,6 @@ struct icf_t {
 static icf *alloc_icf(enum Vertex_Type ty) {
   icf *i = malloc(sizeof(*i));
   if (!i) exit(-OOM);
-  i->ty = ty;
   return i;
 }
 
@@ -55,7 +53,6 @@ static void free_icf(icf *i) {
 }
 
 struct function_t {
-  enum Vertex_Type ty;
   char *name;
   char *class_name;
   char *method_name;
@@ -71,7 +68,6 @@ static function *alloc_function(void) {
   function *f = malloc(sizeof(*f));
   if (!f) exit(-OOM);
   memset(f, 0, sizeof(*f));
-  f->ty = FUNCTION;
   return f;
 }
 

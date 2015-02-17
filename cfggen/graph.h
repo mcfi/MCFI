@@ -17,6 +17,16 @@ static int g_in(const vertex *g, const void *val) {
   return dict_in(g, val);
 }
 
+static int g_directed_edge_in(const vertex *g, const void *val1, const void *val2) {
+  vertex *v = dict_find(g, val1);
+  if (v) {
+    v = dict_find((vertex*)(v->value), val2);
+    if (v)
+      return TRUE;
+  }
+  return FALSE;
+}
+
 static void g_add_vertex(vertex **g, void *val) {
   if (!g_in(*g, val))
     dict_add(g, val, 0);
@@ -38,6 +48,22 @@ static void g_add_edge(vertex **g, void *val1, void *val2) {
 
 static void g_add_directed_edge(vertex **g, void *val1, void *val2) {
   g_add_edge_helper(g, val1, val2);
+}
+
+static void g_add_directed_l2_edge(vertex **g, void *val1, void *val2, void *val3) {
+  g_add_edge_helper(g, val1, val2);
+  vertex *v = dict_find(*g, val1);
+  g_add_edge_helper((vertex**)(&(v->value)), val2, val3);
+}
+
+static void* g_find_l2_vertex(vertex *g, void *val1, void *val2) {
+  vertex *v1 = dict_find(g, val1);
+  if (v1) {
+    vertex *v2 = dict_find((vertex*)(v1->value), val2);
+    if (v2)
+      return v2;
+  }
+  return 0;
 }
 
 static void g_del_vertex(vertex **g, void *val) {
@@ -67,24 +93,12 @@ static void g_del_directed_edge(vertex **g, void *val1, void *val2) {
   g_del_edge_helper(g, val1, val2);
 }
 
-static void g_free_adj(vertex **g) {
-  dict_clear(g);
+static void g_free_adj(void **g) {
+  dict_clear((vertex**)g);
 }
 
 static void g_dtor(vertex **g) {
   dict_dtor(g, 0, g_free_adj);
-}
-
-static void g_print_vertex(void *v) {
-  printf("%lu", (unsigned long)v);
-}
-
-static void g_print_adj(vertex *g) {
-  dict_print(g, g_print_vertex, -1);
-}
-
-static void g_print(vertex *g) {
-  dict_print(g, 0, g_print_adj);
 }
 
 typedef struct node_t {
@@ -147,10 +161,52 @@ static node *g_get_lcc(vertex **g) {
   return lcc;
 }
 
+/* get the directory where each node is connected with
+   all its connected nodes */
+
+static graph *g_transitive_closure(vertex **g) {
+  assert(g);
+  graph *rs = 0;
+  node *lcc = 0;
+  lcc = g_get_lcc(g);
+  if (lcc) {
+    node *n, *ntmp;
+    DL_FOREACH_SAFE(lcc, n, ntmp) {
+      vertex *v, *tmp;
+      HASH_ITER(hh, (vertex*)n->val, v, tmp) {
+        g_add_directed_edge(&rs, v->key, n->val);
+        //printf("%s+", v->key);
+      }
+      //printf("\n");
+      DL_DELETE(lcc, n);
+      free(n);
+    }
+  }
+  return rs;
+}
+
+static void g_free_transitive_closure(vertex **g) {
+  /* IMPORTANT: free the nodes just once */
+}
+
+static void g_add_cc_to_g(vertex **g, vertex *cc) {
+  if (g && cc) {
+    vertex *first = cc;
+    HASH_DEL(cc, first);
+    vertex *v, *tmp;
+    HASH_ITER(hh, cc, v, tmp) {
+      HASH_DEL(cc, v);
+      g_add_edge(g, first->key, v->key);
+      free(v);
+    }
+    free(first);
+  }
+}
+
 static void l_print(node *l, void (*print)(void *)) {
   node *elt;
   DL_FOREACH(l, elt) {
-    printf("Ele\n");
+    printf("\n***********************************\n");
     print(elt->val);
   }
 }
