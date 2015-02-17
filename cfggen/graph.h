@@ -113,6 +113,14 @@ static node *new_node(void *val) {
   return n;
 }
 
+static void l_print(node *l, void (*print)(void *)) {
+  node *elt;
+  DL_FOREACH(l, elt) {
+    printf("\n***********************************\n");
+    print(elt->val);
+  }
+}
+
 /* do a breadth-first search from node val */
 static vertex *g_bfs(vertex **g, void *val) {
   vertex *rg = 0;    /* result nodes */
@@ -164,51 +172,74 @@ static node *g_get_lcc(vertex **g) {
 /* get the directory where each node is connected with
    all its connected nodes */
 
+static void print_cc(void *cc) {
+  vertex *v, *tmp;
+  HASH_ITER(hh, (vertex*)cc, v, tmp) {
+    printf("%s\n", v->key);
+  }
+}
+
 static graph *g_transitive_closure(vertex **g) {
   assert(g);
   graph *rs = 0;
   node *lcc = 0;
+
   lcc = g_get_lcc(g);
+
+  // l_print(lcc, print_cc);
+
   if (lcc) {
     node *n, *ntmp;
+
     DL_FOREACH_SAFE(lcc, n, ntmp) {
       vertex *v, *tmp;
+
       HASH_ITER(hh, (vertex*)n->val, v, tmp) {
-        g_add_directed_edge(&rs, v->key, n->val);
-        //printf("%s+", v->key);
+        g_add_vertex(&rs, v->key);
+        vertex *nv = dict_find(rs, v->key);
+        nv->value = n->val;
       }
-      //printf("\n");
+
       DL_DELETE(lcc, n);
+
       free(n);
     }
   }
+
   return rs;
 }
 
 static void g_free_transitive_closure(vertex **g) {
   /* IMPORTANT: free the nodes just once */
+  vertex *v, *tmp;
+  dict *cleared = 0;
+  HASH_ITER(hh, *g, v, tmp) {
+    HASH_DEL(*g, v);
+    vertex *connected_nodes = dict_find(cleared, (vertex*)(v->value));
+    if (!connected_nodes) {
+      dict_add(&cleared, v->value, 0);
+      dict_clear((vertex**)(&(v->value)));
+    }
+    free(v);
+  }
+  dict_clear(&cleared);
 }
 
 static void g_add_cc_to_g(vertex **g, vertex *cc) {
   if (g && cc) {
     vertex *first = cc;
+
     HASH_DEL(cc, first);
+
     vertex *v, *tmp;
+
     HASH_ITER(hh, cc, v, tmp) {
       HASH_DEL(cc, v);
       g_add_edge(g, first->key, v->key);
       free(v);
     }
+
     free(first);
   }
 }
-
-static void l_print(node *l, void (*print)(void *)) {
-  node *elt;
-  DL_FOREACH(l, elt) {
-    printf("\n***********************************\n");
-    print(elt->val);
-  }
-}
-
 #endif

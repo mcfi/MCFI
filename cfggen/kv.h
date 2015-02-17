@@ -72,22 +72,19 @@ static void dict_dtor(keyvalue **dict,
   }
 }
 
-static void default_print(const void *ptr) {
-  printf("%lu", (unsigned long)ptr);
-}
-
 static void dict_print(keyvalue *dict,
                        void (*print_key)(const void *key),
                        void (*print_value)(const void *value)) {
   keyvalue *kv, *tmp;
-  if (0 == print_key) print_key = default_print;
-  if (0 == print_value) print_value = default_print;
   printf("{");
   HASH_ITER(hh, dict, kv, tmp) {
-    print_key(kv->key);
-    printf(": ");
-    print_value(kv->value);
-    printf(", ");
+    if (print_key)
+      print_key(kv->key);
+    if (print_value) {
+      printf(": ");
+      print_value(kv->value);
+      printf(", ");
+    }
   }
   printf("}\n");
 }
