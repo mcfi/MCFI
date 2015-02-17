@@ -358,6 +358,7 @@ void CodeGenVTables::emitThunk(GlobalDecl GD, const ThunkInfo &Thunk,
   }
 
   llvm::Function *ThunkFn = cast<llvm::Function>(Entry);
+  ThunkFn->addFnAttr(llvm::Attribute::CXXInstanceMethod);
   bool ABIHasKeyFunctions = CGM.getTarget().getCXXABI().hasKeyFunctions();
   bool UseAvailableExternallyLinkage = ForVTable && ABIHasKeyFunctions;
 

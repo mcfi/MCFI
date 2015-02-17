@@ -212,8 +212,11 @@ private:
       FuncInfo += "ThreadEntry\n";
     } else if (GlobalCtors.find(FuncName) != std::end(GlobalCtors)) {
       FuncInfo += "GlobalConstructor\n";
-    } else if (GlobalDtors.find(FuncName) != std::end(GlobalDtors)) {
+    } else if (GlobalDtors.find(FuncName) != std::end(GlobalDtors) ||
+               (FuncName.size() > 12 && FuncName.substr(0, 12) == "_GLOBAL__D__")) {
       FuncInfo += "GlobalDestructor\n";
+    } else if (FuncName.size() > 12 && FuncName.substr(0, 12) == "_GLOBAL__E__") {
+      FuncInfo += "GlobalExnDestructor\n";
     } else if (FuncName.equals("main")) {
       FuncInfo += "MAIN\n";
     } else {

@@ -1042,6 +1042,9 @@ public:
   std::unordered_set<std::string> DtorCxaAtExit;
   std::unordered_set<std::string> DtorCxaThrow;
 
+  /// Pure virtual functions' addresses are just considered to be taken anyway
+  std::unordered_set<std::string> MCFIAddrTaken;
+  
   const std::string SanitizeTypeStr(const std::string TStr,
                                     const std::string StructStr) const {
     std::string postpro_result;

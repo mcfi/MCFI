@@ -1257,6 +1257,7 @@ bool ModuleLinker::linkNamedMDNodes() {
     // MCFI-related metadata are handled separately.
     if (I->getName().equals("MCFICHA"))  continue;
     if (I->getName().equals("MCFIFuncInfo")) continue;
+    if (I->getName().equals("MCFIAddrTaken")) continue;
     if (I->getName().equals("MCFIDtorCxaAtExit")) continue;
     if (I->getName().equals("MCFIDtorCxaThrow")) continue;
     if (I->getName().equals("MCFILargeSandbox")) continue;
@@ -1271,6 +1272,7 @@ bool ModuleLinker::linkNamedMDNodes() {
   // MCFI-related metadata
   linkMCFINamedMDNodes("MCFICHA");
   linkMCFINamedMDNodes("MCFIFuncInfo");
+  linkMCFINamedMDNodes("MCFIAddrTaken");
   linkMCFINamedMDNodes("MCFIDtorCxaAtExit");
   linkMCFINamedMDNodes("MCFIDtorCxaThrow");
   if ((SrcM->getNamedMetadata("MCFILargeSandbox") &&

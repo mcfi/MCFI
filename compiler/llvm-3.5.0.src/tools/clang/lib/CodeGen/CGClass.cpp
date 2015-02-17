@@ -2088,7 +2088,7 @@ CodeGenFunction::EmitCXXOperatorMemberCallee(const CXXOperatorCallExpr *E,
     assert(VirtualCallee.find(Val) == VirtualCallee.end());
     std::string RecordName = CGM.getCanonicalRecordName(MD->getParent());
     std::string MethodName = CGM.getCanonicalMethodName(MD);
-    MethodName = MethodName.substr(RecordName.size());
+    MethodName = MethodName.substr(RecordName.size()+2);
     VirtualCallee[Val] = std::string("V#") + RecordName + "#" + MethodName;
     return Val;
   }

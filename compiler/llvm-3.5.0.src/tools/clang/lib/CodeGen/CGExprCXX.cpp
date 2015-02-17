@@ -211,7 +211,7 @@ RValue CodeGenFunction::EmitCXXMemberCallExpr(const CXXMemberCallExpr *CE,
     assert(VirtualCallee.find(Callee) == VirtualCallee.end());
     std::string RecordName = CGM.getCanonicalRecordName(MD->getParent());
     std::string MethodName = CGM.getCanonicalMethodName(MD);
-    MethodName = MethodName.substr(RecordName.size());
+    MethodName = MethodName.substr(RecordName.size()+2);
     VirtualCallee[Callee] = std::string("V#") + RecordName + "#" + MethodName;
   } else {
     if (getLangOpts().AppleKext &&

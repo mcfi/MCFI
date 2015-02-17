@@ -2904,6 +2904,11 @@ bool SimplifyCFGOpt::SimplifyResume(ResumeInst *RI, IRBuilder<> &Builder) {
     Call->setAttributes(II->getAttributes());
     Call->setDebugLoc(II->getDebugLoc());
 
+    // In MCFI, if the invoke is lowered from a virtual call, we should propagate
+    // the invoke's metadata to the call instruction.
+    MDNode *MD = II->getMetadata("CXXVirtual");
+    if (MD)
+      Call->setMetadata("CXXVirtual", MD);
     // Anything that used the value produced by the invoke instruction now uses
     // the value produced by the call instruction.  Note that we do this even
     // for void functions and calls with no uses so that the callgraph edge is

@@ -192,7 +192,11 @@ static void HandleCallsInBlockInlinedThroughInvoke(BasicBlock *BB,
     II->setDebugLoc(CI->getDebugLoc());
     II->setCallingConv(CI->getCallingConv());
     II->setAttributes(CI->getAttributes());
-    
+
+    // if CI is associated with an MCFI metadata node, propagate it to II
+    MDNode *MD = CI->getMetadata("CXXVirtual");
+    if (MD)
+      II->setMetadata("CXXVirtual", MD);
     // Make sure that anything using the call now uses the invoke!  This also
     // updates the CallGraph if present, because it uses a WeakVH.
     CI->replaceAllUsesWith(II);

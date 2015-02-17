@@ -71,6 +71,7 @@ namespace {
       if (M) {
         createMetadata(CHA, "MCFICHA");
         createMetadata(MCFIPureVirt, "MCFIFuncInfo");
+        createMetadata(Builder->MCFIAddrTaken, "MCFIAddrTaken");
         createMetadata(Builder->DtorCxaAtExit, "MCFIDtorCxaAtExit");
         createMetadata(Builder->DtorCxaThrow, "MCFIDtorCxaThrow");
 

@@ -3408,6 +3408,7 @@ std::string CodeGenModule::getMCFIPureVirtual(const CXXMethodDecl *MD) {
   getCXXABI().getMangleContext().mangleName(MD, Out);
   Out.flush();
   MPV += OStr;
+  MCFIAddrTaken.insert(OStr);
   MPV += "\n";
   std::string RecordName = getCanonicalRecordName(MD->getParent());
   std::string MethodName = getCanonicalMethodName(MD);
