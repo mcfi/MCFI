@@ -636,6 +636,8 @@ static Attribute::AttrKind GetAttrFromCode(uint64_t Code) {
     return Attribute::ThreadEntry;
   case bitc::ATTR_KIND_CXX_INSTANCE_METHOD:
     return Attribute::CXXInstanceMethod;
+  case bitc::ATTR_KIND_CXX_CTOR:
+    return Attribute::CXXCtor;
   }
 }
 

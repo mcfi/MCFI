@@ -116,6 +116,7 @@ public:
     SignalHandler,         ///< Signal handler
     ThreadEntry,           ///< Thread function entry
     CXXInstanceMethod,     ///< Instance method of C++ classes
+    CXXCtor,               ///< C++ constructors
     EndAttrKinds           ///< Sentinal value useful for loops
   };
 private:

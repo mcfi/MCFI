@@ -143,6 +143,7 @@ namespace lltok {
     kw_signalhandler,
     kw_threadentry,
     kw_cxxinstancemethod,
+    kw_cxxctor,    
     
     kw_type,
     kw_opaque,

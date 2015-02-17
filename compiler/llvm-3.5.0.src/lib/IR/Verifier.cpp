@@ -778,7 +778,8 @@ void Verifier::VerifyAttributeTypes(AttributeSet Attrs, unsigned Idx,
         I->getKindAsEnum() == Attribute::JumpTable ||
         I->getKindAsEnum() == Attribute::SignalHandler ||
         I->getKindAsEnum() == Attribute::ThreadEntry ||
-        I->getKindAsEnum() == Attribute::CXXInstanceMethod) {
+        I->getKindAsEnum() == Attribute::CXXInstanceMethod ||
+        I->getKindAsEnum() == Attribute::CXXCtor) {
       if (!isFunction) {
         CheckFailed("Attribute '" + I->getAsString() +
                     "' only applies to functions!", V);

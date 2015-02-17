@@ -79,7 +79,7 @@ private:
   void extractGlobalArray(const StringRef ArrayName,
                           std::set<StringRef> &StrSet);
 
-  const std::string CXXDemangledName(const char* MangledName, bool &isThunk) const {
+  const std::string CXXDemangledName(const char* MangledName) const {
     int status = 0;
     char* result = abi::__cxa_demangle(MangledName, 0, 0, &status);
 
@@ -93,10 +93,8 @@ private:
       // we match the longer NonVirtualThunk first.
       if (DemangledName.find(NonVirtualThunk) != std::string::npos) {
         Start = NonVirtualThunk.size();
-        isThunk = true;
       } else if (DemangledName.find(VirtualThunk) != std::string::npos) {
         Start = VirtualThunk.size();
-        isThunk = true;
       }
       return DemangledName.substr(Start);
     }
@@ -194,15 +192,25 @@ private:
     const Function *F = MF.getFunction();
     std::string FuncInfo("{ ");
     FuncInfo += FuncName.str() + '\n';
-    bool isThunk = false;
-    std::string DemangledName = CXXDemangledName(FuncName.data(), isThunk);
-    if (F->hasFnAttribute(Attribute::CXXInstanceMethod) || isThunk) {
+
+    /// C++ constructors are never indirect branch targets, so we don't need
+    /// to emit their demangled name and type
+    if (F->hasFnAttribute(Attribute::CXXCtor))
+      goto NoFuncInfoEmit;
+
+    /// Other methods, including instance methods and destructors, should have
+    /// their demangled name output, so that class hierarchy reconstruction
+    /// can be done.
+    if (F->hasFnAttribute(Attribute::CXXInstanceMethod)) {
+      std::string DemangledName = CXXDemangledName(FuncName.data());
       if (DemangledName.size()) {
         size_t Tilde = DemangledName.find_last_of('~');
         if (Tilde == std::string::npos) {
           FuncInfo += std::string("N ") + splitMethodName(DemangledName) + '\n';
-        } else
+        } else {
           FuncInfo += std::string("D ") + DemangledName.substr(0, Tilde-2) + '\n';
+          goto NoFuncInfoEmit;
+        }
       }
     }
     FuncInfo += std::string("Y ");
@@ -211,17 +219,18 @@ private:
     } else if (F->hasFnAttribute(Attribute::ThreadEntry)) {
       FuncInfo += "ThreadEntry\n";
     } else if (GlobalCtors.find(FuncName) != std::end(GlobalCtors)) {
-      FuncInfo += "GlobalConstructor\n";
+      FuncInfo += "GblCtor\n";
     } else if (GlobalDtors.find(FuncName) != std::end(GlobalDtors) ||
                (FuncName.size() > 12 && FuncName.substr(0, 12) == "_GLOBAL__D__")) {
-      FuncInfo += "GlobalDestructor\n";
+      FuncInfo += "GblDtor\n";
     } else if (FuncName.size() > 12 && FuncName.substr(0, 12) == "_GLOBAL__E__") {
-      FuncInfo += "GlobalExnDestructor\n";
+      FuncInfo += "GblExnDtor\n";
     } else if (FuncName.equals("main")) {
       FuncInfo += "MAIN\n";
     } else {
       FuncInfo += FuncTypeStr(MF.getFunction()->getFunctionType()) + '\n';
     }
+    NoFuncInfoEmit:
 #define addList(name, list) do {                \
       if (list.size()) {                        \
         FuncInfo += std::string(name);          \
