@@ -529,26 +529,40 @@ static void _build_cha_relations(/*out*/graph **callgraph,
  */
 graph *build_callgraph(icf *icfs, function *functions,
                        dict *classes, graph *cha,
-                       dict *fats, graph *aliases) {
+                       dict *fats, graph *aliases,
+                       dict **all_funcs_grouped_by_name) {
   graph *callgraph = 0; /* call graph */
-  graph *chacc = 0;     /* cha cache */
-  dict *all_funcs_grouped_by_name = 0;
+
+  /* the following should be freed at the end of this function */
   dict *all_virtual_funcs_grouped_by_cls_mtd_name = 0;
   dict *global_funcs_grouped_by_types = 0;   /* global or static member functions */
   dict *instance_funcs_grouped_by_types = 0; /* non-static and non-virtual methods */
   dict *instance_funcs_grouped_by_const_types = 0;
   dict *instance_funcs_grouped_by_volatile_types = 0;
   dict *instance_funcs_grouped_by_const_volatile_types = 0;
+  /*************************************************************/
   function *f;
   int virtual;
   int instance;
   unsigned char attrs;
   
-  /* Compute aliases transitive closure */
+  /* Compute aliases transitive closure, need to be freed */
   graph *aliases_tc = g_transitive_closure(&aliases);
 
   DL_FOREACH(functions, f) {
-    g_add_directed_edge(&all_funcs_grouped_by_name, f->name, f);
+    {
+      /* handle aliased function names */
+      g_add_directed_edge(all_funcs_grouped_by_name, f->name, f);
+
+      keyvalue *alias_entry = dict_find(aliases_tc, f->name);
+      if (alias_entry) {
+        keyvalue *v, *tmp;
+
+        HASH_ITER(hh, (vertex*)(alias_entry->value), v, tmp) {
+          g_add_directed_edge(all_funcs_grouped_by_name, v->key, f);
+        }
+      }
+    }
 
     instance = _is_instance_method(f, classes, &attrs);
 
@@ -600,6 +614,8 @@ graph *build_callgraph(icf *icfs, function *functions,
     }
   }
 
+  graph *chacc = g_transitive_closure(&cha);
+
   /* get the list of inheritance relationship */
   _build_cha_relations(&callgraph, classes, cha,
                        all_virtual_funcs_grouped_by_cls_mtd_name);
@@ -621,10 +637,39 @@ graph *build_callgraph(icf *icfs, function *functions,
                   method_name, tmpkv) {
           g_add_edge(&callgraph, _mark_ptr(ic->id), method_name->key);
         }
+      } else {
+        /* it is possible that if the class_name::method_name is inlined
+           at all call sites so that no class_name::method_name function
+           would appear in the final binary. we should check all equivalent
+           classes of this class to see if their same-name virtual methods
+           are there */
+        keyvalue *class_inheritance_group = dict_find(chacc, ic->class_name);
+        if (class_inheritance_group) {
+          keyvalue *k, *tmp;
+          HASH_ITER(hh, (dict*)(class_inheritance_group->value), k, tmp) {
+            keyvalue *virtual_method_entry =
+              g_find_l2_vertex(all_virtual_funcs_grouped_by_cls_mtd_name,
+                               k->key, ic->method_name);
+            if (virtual_method_entry) {
+              keyvalue *method_name, *tmpkv;
+              
+              HASH_ITER(hh, (dict*)(virtual_method_entry->value),
+                        method_name, tmpkv) {
+                g_add_edge(&callgraph, _mark_ptr(ic->id), method_name->key);
+              }
+              break;
+            }
+          }
+        }
       }
     } else if (ic->ity == PointerToMethodCall) {
       dict *g = 0;
 
+      /*
+       * TODO: it is also possible that some virtual functions possibly pointed
+       *       to by a method pointer are completely inlined and no entry is
+       *       emitted. This is rare and I will fix this problem later.
+       */
       if (!is_constant(ic->attrs) && !is_volatile(ic->attrs))
         g = instance_funcs_grouped_by_types;
       else if (is_constant(ic->attrs) && !is_volatile(ic->attrs))
@@ -653,7 +698,13 @@ graph *build_callgraph(icf *icfs, function *functions,
       }
     }
   }
-
+  /* free the following graphs */
+  g_dtor(&all_virtual_funcs_grouped_by_cls_mtd_name);
+  g_dtor(&global_funcs_grouped_by_types);
+  g_dtor(&instance_funcs_grouped_by_types);
+  g_dtor(&instance_funcs_grouped_by_const_types);
+  g_dtor(&instance_funcs_grouped_by_volatile_types);
+  g_dtor(&instance_funcs_grouped_by_const_volatile_types);
   /* free the transitive closure of aliases */
   g_free_transitive_closure(&aliases_tc);
   return callgraph;
@@ -671,6 +722,128 @@ static char *acquire_file_content(const char *file_name, size_t *len) {
   assert(buf != (char*)-1);
   close(fd);
   return buf;
+}
+
+static unsigned long _convert_to_mcfi_half_id_format(unsigned long *number) {
+  unsigned long a, b, c, d;
+
+  while (TRUE) {
+    *number %= 268435455UL; /* 2^28-1 */
+    a = (*number & 127);
+    a <<= 1;
+    b = (*number >> 7) & 127;
+    b <<= 1;
+    c = (*number >> 14) & 127;
+    c <<= 1;
+    d = (*number >> 21) & 127;
+    d <<= 1;
+    ++*number;
+    if (a != 0xf4 && b != 0xf4 && c != 0xf4 && d != 0xf4)
+      break;
+  }
+  unsigned long rs = ((d << 24) | (c << 16) | (b << 8) | a);
+  assert(rs != 0xFFFFFFFFUL);
+  return rs;
+}
+
+graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name) {
+  graph *retgraph = 0;
+  return retgraph;
+}
+
+static dict *gen_mcfi_id(node *lcc, /*out*/unsigned long *version) {
+  node *n, *ntmp;
+
+  dict *rs = 0;
+
+  unsigned long eqc_number = 0;
+
+  unsigned long mcfi_version = _convert_to_mcfi_half_id_format(version);
+
+  DL_FOREACH_SAFE(lcc, n, ntmp) {
+    vertex *v, *tmp;
+
+    unsigned long id = _convert_to_mcfi_half_id_format(&eqc_number);
+
+    id = ((id << 32UL) | mcfi_version | 1); /* least significant bit should be one */
+    
+    HASH_ITER(hh, (vertex*)(n->val), v, tmp) {
+      dict_add(&rs, v->key, (void*)id);
+    }
+  }
+
+  return rs;
+}
+
+static void _build_bary(dict *callids, char *content, const char *end,
+                        const char *bary_name) {
+  assert(callids && content && end && bary_name);
+  char *cursor = content;
+
+  unsigned long *bary = malloc(30000 * sizeof(unsigned long));
+  assert(bary);
+  memset(bary, 0, 30000);
+
+  while (cursor < end) {
+    int stop;
+
+    char *ic =
+      sp_intern_string(_get_string_before_symbol(&cursor, ' ', &stop, 0));
+
+    assert(!stop);
+
+    int slot = atoi(_get_string_before_symbol(&cursor, '\n', &stop, 0));
+
+    assert(!stop);
+    //printf("%s, %d\n", ic, slot);
+
+    keyvalue *callid = dict_find(callids, _mark_ptr(ic));
+    if (callid) {
+      //printf("%s, %lu, %d\n", _unmark_ptr(callid->key), (unsigned long)callid->value, slot);
+      bary[(slot - 524288) >> 3] = (unsigned long)callid->value;
+    }
+  }
+
+  FILE *fp = fopen(bary_name, "w");
+  assert(fp);
+  fwrite(bary, sizeof(unsigned long), 4000000, fp);
+  fclose(fp);
+  free(bary);
+}
+
+static void _build_tary(dict *callids, char *content, const char *end,
+                        const char *tary_name) {
+  assert(callids && content && end && tary_name);
+  char *cursor = content;
+
+  unsigned long *tary = mmap(0, 4194304, PROT_READ | PROT_WRITE,
+                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+  while (cursor < end) {
+    int stop;
+
+    int addr = atoi(_get_string_before_symbol(&cursor, ' ', &stop, 0));
+
+    assert(!stop);
+
+    char *func =
+      sp_intern_string(_get_string_before_symbol(&cursor, '\n', &stop, 0));
+
+    assert(!stop);
+
+    keyvalue *callid = dict_find(callids, func);
+    if (callid) {
+      //printf("%s, %lu, %x\n", callid->key, (unsigned long)callid->value, addr);
+      assert(addr % sizeof(unsigned long) == 0);
+      tary[addr / sizeof(unsigned long)] = (unsigned long)callid->value;
+    }
+  }
+
+  FILE *fp = fopen(tary_name, "w");
+  assert(fp);
+  fwrite(tary, sizeof(char), 4194304, fp);
+  fclose(fp);
+  munmap(tary, 4194304);
 }
 
 static void release_file_content(char *buf, size_t len) {
@@ -718,12 +891,26 @@ int main(int argc, char **argv) {
   parse_functions(buf, buf + len, &functions);
   release_file_content(buf, len);
 
+  graph *all_funcs_grouped_by_name = 0;
   graph *callgraph =
-    build_callgraph(icfs, functions, classes, cha, fats, aliases);
+    build_callgraph(icfs, functions, classes, cha, fats, aliases,
+                    &all_funcs_grouped_by_name);
   node *lcg = g_get_lcc(&callgraph);
   int count;
   node *n;
   DL_COUNT(lcg, n, count);
   fprintf(stderr, "%d\n", count);
   //l_print(lcg, print_node_val);
+  unsigned long version = 0;
+  dict *callids = gen_mcfi_id(lcg, &version);
+
+  buf = acquire_file_content("xalan.bid", &len);
+  _build_bary(callids, buf, buf + len, "xalan.bary");
+  release_file_content(buf, len);
+
+  buf = acquire_file_content("xalan.tid", &len);
+  _build_tary(callids, buf, buf + len, "xalan.tary");
+  release_file_content(buf, len);
+  /* return graph generation */
+  graph *retgraph = build_retgraph(callgraph, all_funcs_grouped_by_name);
 }
