@@ -30,7 +30,7 @@ __mcfi_bary_longjmp:
 2:
         mov %gs:(%rdx), %rsi
         test $0x1, %sil
-        jne 4f
+        jz 4f
         cmp %esi, %edi
         jne 5b
 4:

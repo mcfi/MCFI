@@ -18,7 +18,7 @@ __mcfi_bary_fabs:
 check:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die
+        jz die
         cmpl %esi, %edi
         jne try
 die:

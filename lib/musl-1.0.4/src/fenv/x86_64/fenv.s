@@ -29,7 +29,7 @@ __mcfi_bary_feclearexcept:
 check1:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die1
+        jz die1
         cmpl %esi, %edi
         jne try1
 die1:
@@ -55,7 +55,7 @@ __mcfi_bary_feraiseexcept:
 check2:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die2
+        jz die2
         cmpl %esi, %edi
         jne try2
 die2:
@@ -90,7 +90,7 @@ __mcfi_bary___fesetround:
 check3:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die3
+        jz die3
         cmpl %esi, %edi
         jne try3
 die3:
@@ -116,7 +116,7 @@ __mcfi_bary_fegetround:
 check4:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die4
+        jz die4
         cmpl %esi, %edi
         jne try4
 die4:
@@ -140,7 +140,7 @@ __mcfi_bary_fegetenv:
 check5:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die5
+        jz die5
         cmpl %esi, %edi
         jne try5
 die5:
@@ -176,7 +176,7 @@ __mcfi_bary_fesetenv:
 check6:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die6
+        jz die6
         cmpl %esi, %edi
         jne try6
 die6:
@@ -204,7 +204,7 @@ __mcfi_bary_fetestexcept:
 check7:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die7
+        jz die7
         cmpl %esi, %edi
         jne try7
 die7:

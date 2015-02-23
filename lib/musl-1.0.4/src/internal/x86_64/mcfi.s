@@ -31,7 +31,7 @@ __mcfi_bary___call_dtor:
 check1:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die1
+        jz die1
         cmpl %esi, %edi
         jne try1
 die1:
@@ -39,7 +39,7 @@ die1:
 check4:
         movq %gs:(%rax), %rcx
         testb $0x1, %cl
-        jne die4
+        jz die4
         cmpl %edx, %ecx
         jne try4
 die4:
@@ -72,7 +72,7 @@ __mcfi_bary___call_exn_dtor:
 check2:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die2
+        jz die2
         cmpl %esi, %edi
         jne try2
 die2:
@@ -80,7 +80,7 @@ die2:
 check5:
         movq %gs:(%rax), %rcx
         testb $0x1, %cl
-        jne die5
+        jz die5
         cmpl %edx, %ecx
         jne try5
 die5:
@@ -113,7 +113,7 @@ __mcfi_bary___call_thread_func:
 check3:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die3
+        jz die3
         cmpl %esi, %edi
         jne try3
 die3:
@@ -121,7 +121,7 @@ die3:
 check6:
         movq %gs:(%rax), %rcx
         testb $0x1, %cl
-        jne die6
+        jz die6
         cmpl %edx, %ecx
         jne try6
 die6:

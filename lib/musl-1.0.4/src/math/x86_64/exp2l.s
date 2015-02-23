@@ -45,7 +45,7 @@ __mcfi_bary_expm1l:
 check1:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die1
+        jz die1
         cmpl %esi, %edi
         jne try1
 die1:
@@ -118,7 +118,7 @@ __mcfi_bary_exp2l:
 check2:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die2
+        jz die2
         cmpl %esi, %edi
         jne try2
 die2:

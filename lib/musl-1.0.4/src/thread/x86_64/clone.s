@@ -42,7 +42,7 @@ __mcfi_bary___clone:
 check:
         movq %gs:(%rcx), %rsi
         testb $0x1, %sil
-        jne die
+        jz die
         cmpl %esi, %edi
         jne try
 die:
@@ -51,7 +51,7 @@ die:
 check1:
         movq %gs:(%r9), %r10
         testb $0x1, %r10b
-        jne die1
+        jz die1
         cmpl %r11d, %r10d
         jne try1
 die1:
