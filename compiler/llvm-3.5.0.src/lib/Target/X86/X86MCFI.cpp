@@ -453,8 +453,10 @@ void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
   // test $1, TIDReg
   BuildMI(*MBB, I, DL, TII->get(TestOp))
     .addReg(getX86SubSuperRegister(TIDReg, MVT::i8, false)).addImm(1);
-  // jne Lreport
-  BuildMI(*MBB, I, DL, TII->get(X86::JNE_4));
+  // if TIDReg's least significant bit is zero, the previous test
+  // instruction would set ZF (zero flag) of EFLAGS to 1.
+  // Therefore, je(jz) Lreport
+  BuildMI(*MBB, I, DL, TII->get(X86::JE_4));
 }
 
 void MCFI::MCFIx64IDVersionCheck(MachineFunction &MF,
