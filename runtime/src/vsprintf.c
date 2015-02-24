@@ -989,13 +989,13 @@ int sprintf(char *buf, const char *fmt, ...)
  */
 int dprintf(int fd, const char *fmt, ...) {
   va_list args;
-  
-  char buf[PAGE_SIZE];
-  buf[PAGE_SIZE-1] = '\0';
+  /* we can only print out strings that are no more than 16KB long. */
+  char buf[PAGE_SIZE * 4];
+  buf[PAGE_SIZE * 4 - 1] = '\0';
   int i;
   va_start(args, fmt);
-  /* note that only PAGE_SIZE - 1 bytes are allowed */
-  i = vsnprintf(buf, PAGE_SIZE - 1, fmt, args);
+  /* note that only PAGE_SIZE - 2 bytes are allowed */
+  i = vsnprintf(buf, PAGE_SIZE * 4 - 1, fmt, args);
   va_end(args);
   write(fd, buf, i);
   return i;

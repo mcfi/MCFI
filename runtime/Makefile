@@ -4,7 +4,7 @@ CC = clang
 
 # during context switch, we do not to save/restore xmm registers, therefore,
 # we shutdown all XMM register features such as SSE.
-CFLAGS = -O3 -g -march=native -mtune=native -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
+CFLAGS = -O3 -g -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
 
 SRCS = $(sort $(wildcard src/*.c src/*/*.c))
 OBJS = $(SRCS:.c=.o)
@@ -35,7 +35,7 @@ clean:
 	rm -f $(RTIME)
 
 %.o: %.s
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) -c -o $@ $<
 
 %.o: %.c $(INCLUDES)
 	$(CC) $(CFLAGS) -c -o $@ $<

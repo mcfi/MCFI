@@ -134,4 +134,8 @@
 #define EHWPOISON       133
 
 extern unsigned errn;
-#define STDERR_FILENO    2
+#define STDERR_FILENO   2
+#define OOM             134
+#define TRUE            1
+#define FALSE           0
+#define SUCCESS         0

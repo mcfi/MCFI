@@ -6,7 +6,10 @@
 #include <syscall.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <cfggen/cfggen.h>
 #include "pager.h"
+
+#define MAX_PATH 256
 
 /* the table region holding Bary and Tary */
 void* table = 0;
@@ -22,6 +25,10 @@ int lt_argc = 0;
 
 char **lt_envp = 0;
 int lt_envc = 0;
+
+/* cfg generation data */
+code_module *modules = 0; /* code modules */
+str *stringpool = 0;
 
 /* default SDK path */
 const char *MCFI_SDK = 0;
@@ -443,44 +450,117 @@ static void extract_elf_load_data(int argc, char **argv) {
   lt_array_area_size += (lt_auxc + 1) * sizeof(auxv_t);
 }
 
-static void load_symbols(const void *elf) {
-  const Ehdr *ehdr = (const Ehdr *)elf;
-  
+static code_module *load_mcfi_metadata(const char *elf) {
+  const Elf64_Ehdr *ehdr = (const Ehdr *)elf;
+  const Elf64_Shdr *shdr = (const Elf64_Shdr *)(elf + ehdr->e_shoff);
+  const Elf64_Shdr *shstrtbl = &shdr[ehdr->e_shstrndx];
+  const char *shstrpool = (const char *)(elf + shstrtbl->sh_offset);
+  const Elf64_Sym *sym = 0;
+  const char *strtab = 0;
+  size_t cnt;
+  size_t numsym = 0;
+
+  icf *icfs = 0;
+  function *functions = 0;
+  dict *classes = 0;
+  dict *cha = 0;
+  dict *aliases = 0;
+  dict *fats = 0;
+
+  for (cnt = 0; cnt < ehdr->e_shnum; cnt++) {
+    if (cnt == ehdr->e_shstrndx)
+      continue;
+    const char *shname = shstrpool + shdr[cnt].sh_name;
+    //dprintf(STDERR_FILENO, "%d, %x, %s\n", cnt, shdr[cnt].sh_name, shname);
+    if (0 == strcmp(shname, ".symtab")) {
+      sym = (const Elf64_Sym *)(elf + shdr[cnt].sh_offset);
+      numsym = shdr[cnt].sh_size / sizeof(*sym);
+    } else if (0 == strcmp(shname, ".strtab")) {
+      strtab = elf + shdr[cnt].sh_offset;
+    } else if (0 == strcmp(shname, ".MCFIIndirectCalls")) {
+      parse_icfs(elf + shdr[cnt].sh_offset, /* content */
+                 elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                 &icfs, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFIFuncInfo")) {
+      parse_functions(elf + shdr[cnt].sh_offset, /* content */
+                      elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                      &functions, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFICHA")) {
+      parse_cha(elf + shdr[cnt].sh_offset, /* content */
+                elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                &classes, &cha, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFIAliases")) {
+      parse_aliases(elf + shdr[cnt].sh_offset, /* content */
+                    elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                    &aliases, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFIAddrTaken")) {
+      parse_fats(elf + shdr[cnt].sh_offset, /* content */
+                 elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                 &fats, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFIDtorCxaAtExit")) {
+      // TODO: Add handling code here
+    } else if (0 == strcmp(shname, ".MCFIDtorCxaThrow")) {
+      // TODO: Add handling code here
+    }
+  }
+
+  for (cnt = 0; cnt < numsym; cnt++) {
+    const char *symname = strtab + sym[cnt].st_name;
+    //dprintf(STDERR_FILENO, "%d, %x, %s\n", cnt, sym[cnt].st_name, symname);
+  }
+
+  code_module *cm = alloc_code_module();
+  cm->icfs = icfs;
+  cm->functions = functions;
+  cm->classes = classes;
+  cm->cha = cha;
+  cm->aliases = aliases;
+  cm->fats = fats;
+  return cm;
 }
 
-void load_libc(void) {
-  char libc_path[256] = {0};
-  if (MCFI_SDK) {
-    snprintf(libc_path, 255, "%s/lib/libc.so", MCFI_SDK);
-  } else {
-    snprintf(libc_path, 255, "%s/MCFI/toolchain/lib/libc.so", HOME);
-  }
-  /* dprintf(STDERR_FILENO, "%s\n", libc_path); */
-  int fd = open(libc_path, O_RDONLY, 0);
+static char *load_elf_into_memory(const char *path,
+                                  /*out*/size_t *elf_size_rounded_to_page_boundary) {
+  int fd = open(path, O_RDONLY, 0);
   if (fd == -1) {
-    dprintf(STDERR_FILENO, "[load_libc] libc open failed with %d\n", errn);
+    dprintf(STDERR_FILENO, "[load_elf_into_memory] %s open failed with %d\n",
+            path, errn);
     quit(-1);
   }
 
   struct stat st;
 
   if (0 != fstat(fd, &st)) {
-    dprintf(STDERR_FILENO, "[load_libc] fstat failed with %d\n", errn);
+    dprintf(STDERR_FILENO, "[load_elf_into_memory] fstat failed with %d\n", errn);
     quit(-1);
   }
 
-  /* dprintf(STDERR_FILENO, "[load_lib] libc size = %lx\n", st.st_size); */
-
-  size_t libc_size_rounded_to_page_boundary =
+  *elf_size_rounded_to_page_boundary =
     (st.st_size + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
 
-  char *libc_elf= mmap(0, libc_size_rounded_to_page_boundary,
-                       PROT_READ | PROT_WRITE, MAP_PRIVATE,
-                       fd, 0);
-  if (libc_elf == MAP_FAILED) {
-    dprintf(STDERR_FILENO, "[load_libc] memory allocation failed\n");
+  void *elf = mmap(0, *elf_size_rounded_to_page_boundary,
+                   PROT_READ | PROT_WRITE, MAP_PRIVATE,
+                   fd, 0);
+
+  if (elf == MAP_FAILED) {
+    dprintf(STDERR_FILENO, "[load_elf_into_memory] memory mmap failed\n");
     quit(-1);
   }
+  close(fd);
+  return elf;
+}
+
+void load_libc(void) {
+  char libc_path[MAX_PATH];
+  libc_path[MAX_PATH-1] = '\0';
+  if (MCFI_SDK) {
+    snprintf(libc_path, MAX_PATH-1, "%s/lib/libc.so", MCFI_SDK);
+  } else {
+    snprintf(libc_path, MAX_PATH-1, "%s/MCFI/toolchain/lib/libc.so", HOME);
+  }
+  /* dprintf(STDERR_FILENO, "%s\n", libc_path); */
+  size_t libc_size_rounded_to_page_boundary = 0;
+  char *libc_elf = load_elf_into_memory(libc_path, &libc_size_rounded_to_page_boundary);
 
   /* compute how many consecutive memory pages we need */
   size_t phdr_vaddr_end = 0;
@@ -540,7 +620,8 @@ void load_libc(void) {
     }
   }
   /* Load symbols and rewrite bary entries */
-  load_symbols(libc_elf);
+  code_module *cm = load_mcfi_metadata(libc_elf);
+  DL_APPEND(modules, cm);
   /* VmmapDebug(&VM, "After libc loaded\n"); */
   munmap(libc_elf, libc_size_rounded_to_page_boundary);
 }
@@ -576,6 +657,13 @@ void* runtime_init(int argc, char **argv) {
 
   /* copy data from kernel-allocated stack to sandbox-stack */
   stack_init();
+
+  /* load mcfi metadata for the exe */
+  size_t exe_size = 0;
+  void *exe = load_elf_into_memory(argv[0], &exe_size);
+  code_module *cm = load_mcfi_metadata(exe);
+  DL_APPEND(modules, cm);
+  munmap(exe, exe_size);
 
   return stack;
 }

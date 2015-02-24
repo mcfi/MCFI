@@ -10,6 +10,13 @@ int strncmp(const char *_l, const char *_r, size_t n);
 void* memcpy(void *dest, const void *src, size_t n);
 void *memset(void *dest, int c, size_t n);
 
+static int memcmp(const void *vl, const void *vr, size_t n)
+{
+  const unsigned char *l=vl, *r=vr;
+  for (; n && *l == *r; n--, l++, r++);
+  return n ? *l-*r : 0;
+}
+
 static int isdigit(int ch) {
   return (ch >= '0') && (ch <= '9');
 }

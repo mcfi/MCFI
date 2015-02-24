@@ -1,3 +1,6 @@
+#ifndef SYSCALL_H
+#define SYSCALL_H
+
 #define SYS_read        0
 #define SYS_write       1
 #define SYS_open        2
@@ -94,3 +97,5 @@ void quit(int status);
     } } while (0)
 
 #define assert CHECK
+
+#endif
