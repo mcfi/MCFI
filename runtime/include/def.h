@@ -26,6 +26,18 @@
 #define __NEED_ptrdiff_t
 #define __NEED_intptr_t
 
+#define __NEED_dev_t
+#define __NEED_ino_t
+#define __NEED_mode_t
+#define __NEED_nlink_t
+#define __NEED_uid_t
+#define __NEED_gid_t
+#define __NEED_off_t
+#define __NEED_time_t
+#define __NEED_blksize_t
+#define __NEED_blkcnt_t
+#define __NEED_struct_timespec
+
 #include <alltypes.h>
 
 typedef int8_t int_fast8_t;

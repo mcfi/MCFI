@@ -443,6 +443,11 @@ static void extract_elf_load_data(int argc, char **argv) {
   lt_array_area_size += (lt_auxc + 1) * sizeof(auxv_t);
 }
 
+static void load_symbols(const void *elf) {
+  const Ehdr *ehdr = (const Ehdr *)elf;
+  
+}
+
 void load_libc(void) {
   char libc_path[256] = {0};
   if (MCFI_SDK) {
@@ -456,7 +461,20 @@ void load_libc(void) {
     dprintf(STDERR_FILENO, "[load_libc] libc open failed with %d\n", errn);
     quit(-1);
   }
-  char *libc_elf= mmap(0, (1 << 23),
+
+  struct stat st;
+
+  if (0 != fstat(fd, &st)) {
+    dprintf(STDERR_FILENO, "[load_libc] fstat failed with %d\n", errn);
+    quit(-1);
+  }
+
+  /* dprintf(STDERR_FILENO, "[load_lib] libc size = %lx\n", st.st_size); */
+
+  size_t libc_size_rounded_to_page_boundary =
+    (st.st_size + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
+
+  char *libc_elf= mmap(0, libc_size_rounded_to_page_boundary,
                        PROT_READ | PROT_WRITE, MAP_PRIVATE,
                        fd, 0);
   if (libc_elf == MAP_FAILED) {
@@ -475,10 +493,6 @@ void load_libc(void) {
       if (phdr->p_vaddr + phdr->p_memsz > phdr_vaddr_end)
         phdr_vaddr_end = phdr->p_vaddr + phdr->p_memsz;
     }
-  }
-  if (phdr_vaddr_end >= (1 << 23)) {
-    dprintf(STDERR_FILENO, "[load_libc] suspicious libc is provided\n");
-    quit(-1);
   }
   
   /* find a consecutive region of memory */
@@ -525,8 +539,10 @@ void load_libc(void) {
                VMMAP_ENTRY_ANONYMOUS);
     }
   }
+  /* Load symbols and rewrite bary entries */
+  load_symbols(libc_elf);
   /* VmmapDebug(&VM, "After libc loaded\n"); */
-  munmap(libc_elf, (1 << 23));
+  munmap(libc_elf, libc_size_rounded_to_page_boundary);
 }
 
 /* main function of the runtime */
@@ -560,6 +576,6 @@ void* runtime_init(int argc, char **argv) {
 
   /* copy data from kernel-allocated stack to sandbox-stack */
   stack_init();
-  
+
   return stack;
 }
