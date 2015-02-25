@@ -113,7 +113,10 @@ struct code_module_t {
   dict     *classes;   /* classes */  
   dict     *cha;       /* class hierarchy */
   dict     *aliases;   /* aliases */
-  symbol   *sym;       /* symbols */
+  symbol   *rai;       /* return addresses of indirect calls */
+  symbol   *rad;       /* return addresses of direct calls */
+  symbol   *funcsyms;  /* function symbols */
+  symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
 };
 

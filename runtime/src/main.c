@@ -11,6 +11,12 @@
 
 #define MAX_PATH 256
 
+/* x64 Linux loads images from 0x400000 */
+#define X64ABIBASE 0x400000
+
+/* size of the plt entry */
+#define PLT_ENT_SIZE 32
+
 /* the table region holding Bary and Tary */
 void* table = 0;
 
@@ -82,7 +88,7 @@ static void alloc_sandbox(void) {
    * guaranteed not to be mapped by the kernel.
    */
   start = 0;
-  end = 0x400000;
+  end = X64ABIBASE;
   VmmapAdd(&VM, start >> PAGESHIFT, (end-start) >> PAGESHIFT,
            PROT_NONE, PROT_NONE, VMMAP_ENTRY_ANONYMOUS);
   
@@ -450,13 +456,39 @@ static void extract_elf_load_data(int argc, char **argv) {
   lt_array_area_size += (lt_auxc + 1) * sizeof(auxv_t);
 }
 
+/* eat a hex number and an underscore */
+static char *eat_hex_and_udscore(char *c) {
+  while (isalnum(*c))
+    c++;
+  if (*c == '_')
+    c++;
+  return c;
+}
+
+static unsigned int alloc_bid_slot(void) {
+  /* the first page pointed to by %gs is used for trampolines,
+   * so the bid slots start from the second page.
+   * Later we should extend this function to be an ID allocation routine.
+   */
+  static unsigned int bid_slot = 0x1000;
+  unsigned int rbid_slot = bid_slot;
+  bid_slot += 8; /* 8 bytes */
+  return rbid_slot;
+}
+
 static code_module *load_mcfi_metadata(const char *elf) {
   const Elf64_Ehdr *ehdr = (const Ehdr *)elf;
   const Elf64_Shdr *shdr = (const Elf64_Shdr *)(elf + ehdr->e_shoff);
   const Elf64_Shdr *shstrtbl = &shdr[ehdr->e_shstrndx];
   const char *shstrpool = (const char *)(elf + shstrtbl->sh_offset);
   const Elf64_Sym *sym = 0;
+  const Elf64_Sym *dynsym = 0;
+  Elf64_Rela *relaplt = 0;
+  size_t plt_offset = 0;
+  size_t numrelaplt = 0;
   const char *strtab = 0;
+  const char *dynstr = 0;
+
   size_t cnt;
   size_t numsym = 0;
 
@@ -501,21 +533,74 @@ static code_module *load_mcfi_metadata(const char *elf) {
       // TODO: Add handling code here
     } else if (0 == strcmp(shname, ".MCFIDtorCxaThrow")) {
       // TODO: Add handling code here
+    } else if (0 == strcmp(shname, ".rela.plt")) {
+      relaplt = (Elf64_Rela*)(elf + shdr[cnt].sh_offset);
+      numrelaplt = shdr[cnt].sh_size / sizeof(*relaplt);
+      //dprintf(STDERR_FILENO, "%d\n", numrelaplt);
+    } else if (0 == strcmp(shname, ".plt")) {
+      plt_offset = shdr[cnt].sh_offset;
+    } else if (0 == strcmp(shname, ".dynsym")) {
+      dynsym = (Elf64_Sym*)(elf + shdr[cnt].sh_offset);
+    } else if (0 == strcmp(shname, ".dynstr")) {
+      dynstr = elf + shdr[cnt].sh_offset;
     }
   }
 
-  for (cnt = 0; cnt < numsym; cnt++) {
-    const char *symname = strtab + sym[cnt].st_name;
-    //dprintf(STDERR_FILENO, "%d, %x, %s\n", cnt, sym[cnt].st_name, symname);
-  }
-
   code_module *cm = alloc_code_module();
+  if (ehdr->e_type == ET_EXEC)
+    cm->base_addr = X64ABIBASE;
   cm->icfs = icfs;
   cm->functions = functions;
   cm->classes = classes;
   cm->cha = cha;
   cm->aliases = aliases;
   cm->fats = fats;
+
+  for (cnt = 0; cnt < numsym; cnt++) {
+    const char *symname = strtab + sym[cnt].st_name;
+    if (0 == strncmp(symname, "__mcfi_dcj_", 11)) {
+      symbol *dcjsym = alloc_sym();
+      dcjsym->name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 11));
+      dcjsym->offset = sym[cnt].st_value - cm->base_addr;
+      //dprintf(STDERR_FILENO, "%x, %s\n", dcjsym->offset, dcjsym->name);
+      DL_APPEND(cm->rad, dcjsym);
+    } else if (0 == strncmp(symname, "__mcfi_icj_", 11)) {
+      symbol *icjsym = alloc_sym();
+      icjsym->name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 11));
+      icjsym->offset = sym[cnt].st_value - cm->base_addr;
+      //dprintf(STDERR_FILENO, "%s\n", icjsym->name);
+      DL_APPEND(cm->rai, icjsym);
+    } else if (0 == strncmp(symname, "__mcfi_bary_", 12)) {
+      symbol *icfsym = alloc_sym();
+      icfsym->name = sp_intern_string(&stringpool, symname + 12);
+      unsigned int bid_slot = alloc_bid_slot();
+      memcpy(elf + sym[cnt].st_value - cm->base_addr - sizeof(unsigned int),
+             &bid_slot,
+             sizeof(unsigned int));
+      icfsym->offset = bid_slot;
+      //dprintf(STDERR_FILENO, "%s, %x\n", icfsym->name, icfsym->offset);
+      DL_APPEND(cm->icfsyms, icfsym);
+    } else if (ELF64_ST_TYPE(sym[cnt].st_info) == STT_FUNC) {
+      //dprintf(STDERR_FILENO, "%s\n", symname);
+      symbol *funcsym = alloc_sym();
+      funcsym->name = sp_intern_string(&stringpool, symname);
+      funcsym->offset = sym[cnt].st_value - cm->base_addr;
+      //dprintf(STDERR_FILENO, "%lx, %s\n", funcsym->offset, funcsym->name);
+      DL_APPEND(cm->funcsyms, funcsym);
+    }
+  }
+
+  /* PLT entries are essentially functions */
+  for (cnt = 0; cnt < numrelaplt; cnt++) {
+    size_t dynsymidx = ELF64_R_SYM(relaplt[cnt].r_info);
+    symbol *funcsym = alloc_sym();
+    funcsym->name =
+      sp_intern_string(&stringpool, dynstr + dynsym[dynsymidx].st_name);
+    funcsym->offset = plt_offset + (cnt + 1) * PLT_ENT_SIZE;
+    DL_APPEND(cm->funcsyms, funcsym);
+    //dprintf(STDERR_FILENO, "%x, %x, %s\n", cnt + 1, funcsym->offset, funcsym->name);
+  }
+
   return cm;
 }
 
@@ -562,6 +647,10 @@ void load_libc(void) {
   size_t libc_size_rounded_to_page_boundary = 0;
   char *libc_elf = load_elf_into_memory(libc_path, &libc_size_rounded_to_page_boundary);
 
+  /* Load symbols and rewrite bary entries */
+  code_module *cm = load_mcfi_metadata(libc_elf);
+  DL_APPEND(modules, cm);
+
   /* compute how many consecutive memory pages we need */
   size_t phdr_vaddr_end = 0;
   
@@ -585,6 +674,8 @@ void load_libc(void) {
 
   libc <<= PAGESHIFT;
   libc_base = (void*)libc;
+
+  dprintf(STDERR_FILENO, "libc: %p\n", libc_base);
   /* load the actual program headers */
   phdr = (Phdr*)(libc_elf + ((Ehdr*)libc_elf)->e_phoff);
   cnt = ((Ehdr*)libc_elf)->e_phnum;
@@ -619,11 +710,40 @@ void load_libc(void) {
                VMMAP_ENTRY_ANONYMOUS);
     }
   }
-  /* Load symbols and rewrite bary entries */
-  code_module *cm = load_mcfi_metadata(libc_elf);
-  DL_APPEND(modules, cm);
   /* VmmapDebug(&VM, "After libc loaded\n"); */
   munmap(libc_elf, libc_size_rounded_to_page_boundary);
+}
+
+/* load the bid rewritten exe */
+static void load_bid_rewritten_exe(const char *exe_name) {
+  size_t exe_size = 0;
+  void *exe = load_elf_into_memory(exe_name, &exe_size);
+  code_module *cm = load_mcfi_metadata(exe);
+  DL_APPEND(modules, cm);
+
+  /* copy the modified code into the loaded region */
+  Phdr *phdr = (Phdr*)aux[AT_PHDR];
+  size_t cnt = aux[AT_PHNUM];
+  for (; cnt; cnt--, phdr = (void *)((char *)phdr + aux[AT_PHENT])) {
+    if (phdr->p_type == PT_LOAD) {
+      size_t start = CurPage(phdr->p_vaddr);
+      size_t end = RoundToPage(phdr->p_vaddr + phdr->p_memsz);
+      int prot = _prot(phdr->p_flags);
+      if (prot & PROT_EXEC) {
+        if (0 != mprotect(start, end - start, PROT_WRITE)) {
+          dprintf(STDERR_FILENO, "[runtime_init] mprotect W failed with %d\n", errn);
+          quit(-1);
+        }
+        memcpy((char*)start, exe, end - start);
+        if (0 != mprotect(start, end - start, prot)) {
+          dprintf(STDERR_FILENO, "[runtime_init] mprotect RE failed with %d\n", errn);
+          quit(-1);
+        }
+        break;
+      }
+    }
+  }
+  munmap(exe, exe_size);
 }
 
 /* main function of the runtime */
@@ -659,11 +779,13 @@ void* runtime_init(int argc, char **argv) {
   stack_init();
 
   /* load mcfi metadata for the exe */
-  size_t exe_size = 0;
-  void *exe = load_elf_into_memory(argv[0], &exe_size);
-  code_module *cm = load_mcfi_metadata(exe);
-  DL_APPEND(modules, cm);
-  munmap(exe, exe_size);
-
+  load_bid_rewritten_exe(argv[0]);
+    
+  /*
+  dict *all_funcs_grouped_by_name = 0;
+  graph *callgraph =
+    build_callgraph(cm->icfs, cm->functions, cm->classes, cm->cha,
+                    cm->fats, cm->aliases, &all_funcs_grouped_by_name);
+  */
   return stack;
 }

@@ -10,7 +10,7 @@ SRCS = $(sort $(wildcard src/*.c src/*/*.c))
 OBJS = $(SRCS:.c=.o)
 OBJS += src/start.o
 OBJS += src/runtime_interface.o
-INCLUDES = $(sort $(wildcard include/*.h))
+INCLUDES = $(sort $(wildcard include/*.h include/*/*.h))
 
 RTIME = rock
 
