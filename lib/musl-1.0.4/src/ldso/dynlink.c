@@ -17,6 +17,7 @@
 #include <dlfcn.h>
 #include "pthread_impl.h"
 #include "libc.h"
+#include <trampolines.h>
 
 static int errflag;
 static char errbuf[128];
@@ -374,6 +375,7 @@ static void *map_library(int fd, struct dso *dso)
 	 * use the invalid part; we just need to reserve the right
 	 * amount of virtual address space to map over later. */
 	map = mmap((void *)addr_min, map_len, prot, MAP_PRIVATE, fd, off_start);
+        dprintf(2, "Initial map: map = %lx, addr_min = %x, len = %x\n", map, addr_min, map_len);
 	if (map==MAP_FAILED) goto error;
 	/* If the loaded file is not relocatable and the requested address is
 	 * not available, then the load operation must fail. */
@@ -395,7 +397,18 @@ static void *map_library(int fd, struct dso *dso)
 			dso->phnum = eh->e_phnum;
 		}
 		/* Reuse the existing mapping for the lowest-address LOAD */
-		if ((ph->p_vaddr & -PAGE_SIZE) == addr_min) continue;
+		if ((ph->p_vaddr & -PAGE_SIZE) == addr_min) {
+                  prot = (((ph->p_flags&PF_R) ? PROT_READ : 0) |
+                          ((ph->p_flags&PF_W) ? PROT_WRITE: 0) |
+                          ((ph->p_flags&PF_X) ? PROT_EXEC : 0));
+                  if (prot & PROT_EXEC) {
+                    if (prot & PROT_WRITE)
+                      goto error;
+                    if (trampoline_load_native_code(fd, map, ph->p_vaddr))
+                      goto error;
+                  }
+                  continue;
+                }
 		this_min = ph->p_vaddr & -PAGE_SIZE;
 		this_max = ph->p_vaddr+ph->p_memsz+PAGE_SIZE-1 & -PAGE_SIZE;
 		off_start = ph->p_offset & -PAGE_SIZE;
@@ -571,6 +584,7 @@ static struct dso *load_library(const char *name, struct dso *needed_by)
 		}
 		return ldso;
 	}
+
 	if (strchr(name, '/')) {
 		pathname = name;
 		fd = open(name, O_RDONLY|O_CLOEXEC);
@@ -623,6 +637,7 @@ static struct dso *load_library(const char *name, struct dso *needed_by)
 			if (!sys_path) sys_path = "/lib:/usr/local/lib:/usr/lib";
 			fd = path_open(name, sys_path, buf, sizeof buf);
 		}
+                dprintf(2, "%s\n", name);
 		pathname = buf;
 	}
 	if (fd < 0) return 0;

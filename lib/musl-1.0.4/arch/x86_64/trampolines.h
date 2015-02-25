@@ -17,6 +17,7 @@
 #define ROCK_SET_TCB      0x70
 #define ROCK_ALLOCSET_TCB 0x78
 #define ROCK_FREE_TCB     0x80
+#define ROCK_LOAD_NATIVE_CODE 0x88
 
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
@@ -107,4 +108,16 @@ void trampoline_free_tcb(unsigned long n1) {
                        "D"(n1):
                        "memory");
 }
+
+static __inline
+long trampoline_load_native_code(unsigned long n1,
+                                 unsigned long n2,
+                                 unsigned long n3) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_LOAD_NATIVE_CODE)
+                       "D"(n1), "S"(n2), "d"(n3):
+                       "memory");
+  return ret;
+}
+
 #endif
