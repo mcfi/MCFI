@@ -476,18 +476,18 @@ static unsigned int alloc_bid_slot(void) {
   return rbid_slot;
 }
 
-static code_module *load_mcfi_metadata(const char *elf) {
-  const Elf64_Ehdr *ehdr = (const Ehdr *)elf;
-  const Elf64_Shdr *shdr = (const Elf64_Shdr *)(elf + ehdr->e_shoff);
-  const Elf64_Shdr *shstrtbl = &shdr[ehdr->e_shstrndx];
-  const char *shstrpool = (const char *)(elf + shstrtbl->sh_offset);
-  const Elf64_Sym *sym = 0;
-  const Elf64_Sym *dynsym = 0;
+code_module *load_mcfi_metadata(char *elf) {
+  Elf64_Ehdr *ehdr = (Ehdr *)elf;
+  Elf64_Shdr *shdr = (Elf64_Shdr *)(elf + ehdr->e_shoff);
+  Elf64_Shdr *shstrtbl = &shdr[ehdr->e_shstrndx];
+  char *shstrpool = (char *)(elf + shstrtbl->sh_offset);
+  Elf64_Sym *sym = 0;
+  Elf64_Sym *dynsym = 0;
   Elf64_Rela *relaplt = 0;
   size_t plt_offset = 0;
   size_t numrelaplt = 0;
-  const char *strtab = 0;
-  const char *dynstr = 0;
+  char *strtab = 0;
+  char *dynstr = 0;
 
   size_t cnt;
   size_t numsym = 0;
@@ -502,10 +502,10 @@ static code_module *load_mcfi_metadata(const char *elf) {
   for (cnt = 0; cnt < ehdr->e_shnum; cnt++) {
     if (cnt == ehdr->e_shstrndx)
       continue;
-    const char *shname = shstrpool + shdr[cnt].sh_name;
+    char *shname = shstrpool + shdr[cnt].sh_name;
     //dprintf(STDERR_FILENO, "%d, %x, %s\n", cnt, shdr[cnt].sh_name, shname);
     if (0 == strcmp(shname, ".symtab")) {
-      sym = (const Elf64_Sym *)(elf + shdr[cnt].sh_offset);
+      sym = (Elf64_Sym *)(elf + shdr[cnt].sh_offset);
       numsym = shdr[cnt].sh_size / sizeof(*sym);
     } else if (0 == strcmp(shname, ".strtab")) {
       strtab = elf + shdr[cnt].sh_offset;
@@ -557,7 +557,7 @@ static code_module *load_mcfi_metadata(const char *elf) {
   cm->fats = fats;
 
   for (cnt = 0; cnt < numsym; cnt++) {
-    const char *symname = strtab + sym[cnt].st_name;
+    char *symname = strtab + sym[cnt].st_name;
     if (0 == strncmp(symname, "__mcfi_dcj_", 11)) {
       symbol *dcjsym = alloc_sym();
       dcjsym->name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 11));
@@ -604,15 +604,8 @@ static code_module *load_mcfi_metadata(const char *elf) {
   return cm;
 }
 
-static char *load_elf_into_memory(const char *path,
+char *load_opened_elf_into_memory(int fd,
                                   /*out*/size_t *elf_size_rounded_to_page_boundary) {
-  int fd = open(path, O_RDONLY, 0);
-  if (fd == -1) {
-    dprintf(STDERR_FILENO, "[load_elf_into_memory] %s open failed with %d\n",
-            path, errn);
-    quit(-1);
-  }
-
   struct stat st;
 
   if (0 != fstat(fd, &st)) {
@@ -628,14 +621,27 @@ static char *load_elf_into_memory(const char *path,
                    fd, 0);
 
   if (elf == MAP_FAILED) {
-    dprintf(STDERR_FILENO, "[load_elf_into_memory] memory mmap failed\n");
+    dprintf(STDERR_FILENO, "[load_opened_elf_into_memory] memory mmap failed\n");
     quit(-1);
   }
+  return elf;
+}
+
+static char *load_elf_into_memory(const char *path,
+                                  /*out*/size_t *elf_size_rounded_to_page_boundary) {
+  int fd = open(path, O_RDONLY, 0);
+  if (fd == -1) {
+    dprintf(STDERR_FILENO, "[load_elf_into_memory] %s open failed with %d\n",
+            path, errn);
+    quit(-1);
+  }
+  
+  char* elf = load_opened_elf_into_memory(fd, elf_size_rounded_to_page_boundary);
   close(fd);
   return elf;
 }
 
-void load_libc(void) {
+static void load_libc(void) {
   char libc_path[MAX_PATH];
   libc_path[MAX_PATH-1] = '\0';
   if (MCFI_SDK) {
@@ -714,6 +720,34 @@ void load_libc(void) {
   munmap(libc_elf, libc_size_rounded_to_page_boundary);
 }
 
+/* replace the dest elf's executable segment with src elf's executable segment*/
+void replace_prog_seg(char *dest, char *src) {
+  Elf64_Ehdr *ehdr = (Elf64_Ehdr*)dest;
+  Elf64_Phdr *phdr = (Elf64_Phdr*)(dest + ehdr->e_phoff);
+  size_t cnt = ehdr->e_phnum;
+  for (; cnt; cnt--, ++phdr) {
+    if (phdr->p_type == PT_LOAD) {
+      int prot = _prot(phdr->p_flags);
+      if (prot & PROT_EXEC) {
+        if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), PROT_READ | PROT_WRITE)) {
+          dprintf(STDERR_FILENO, "[replace_prog_seg] mprotect W failed with %d\n", errn);
+          quit(-1);
+        }
+        memcpy(dest, src, phdr->p_memsz);
+        if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), prot)) {
+          dprintf(STDERR_FILENO, "[replace_prog_seg] mprotect RE failed with %d\n", errn);
+          quit(-1);
+        }
+        /* compare whether the copied code has been changed by attackers */
+        if (memcmp(dest, src, phdr->p_memsz)) {
+          report_error("[replace_prog_seg]: concurrent code changes detected\n");
+          quit(-1);
+        }
+      }
+    }
+  }
+}
+
 /* load the bid rewritten exe */
 static void load_bid_rewritten_exe(const char *exe_name) {
   size_t exe_size = 0;
@@ -722,27 +756,7 @@ static void load_bid_rewritten_exe(const char *exe_name) {
   DL_APPEND(modules, cm);
 
   /* copy the modified code into the loaded region */
-  Phdr *phdr = (Phdr*)aux[AT_PHDR];
-  size_t cnt = aux[AT_PHNUM];
-  for (; cnt; cnt--, phdr = (void *)((char *)phdr + aux[AT_PHENT])) {
-    if (phdr->p_type == PT_LOAD) {
-      size_t start = CurPage(phdr->p_vaddr);
-      size_t end = RoundToPage(phdr->p_vaddr + phdr->p_memsz);
-      int prot = _prot(phdr->p_flags);
-      if (prot & PROT_EXEC) {
-        if (0 != mprotect(start, end - start, PROT_WRITE)) {
-          dprintf(STDERR_FILENO, "[runtime_init] mprotect W failed with %d\n", errn);
-          quit(-1);
-        }
-        memcpy((char*)start, exe, end - start);
-        if (0 != mprotect(start, end - start, prot)) {
-          dprintf(STDERR_FILENO, "[runtime_init] mprotect RE failed with %d\n", errn);
-          quit(-1);
-        }
-        break;
-      }
-    }
-  }
+  replace_prog_seg((void*)X64ABIBASE, exe);
   munmap(exe, exe_size);
 }
 

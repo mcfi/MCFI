@@ -148,7 +148,7 @@ static size_t next_symbol(char *cursor, char sym, /*out*/int *stop) {
 }
 
 static void print_string(const void *str) {
-  printf("%s", (const char*)str);
+  dprintf(STDERR_FILENO, "%s", (const char*)str);
 }
 
 static void cha_cc_print(graph *g) {

@@ -6,6 +6,7 @@
 #include <tcb.h>
 #include <errno.h>
 #include "pager.h"
+#include <cfggen/cfggen.h>
 
 static void* prog_brk = 0;
 static void* max_brk = 0;
@@ -46,7 +47,7 @@ static void remove_tcb_marked(void) {
   TCB *tcb = tcb_list;
   TCB *p;
   /* remove the marked nodes except the head */
-  while (p = tcb->next) {
+  while (0 != (p = tcb->next)) {
     if (p->remove) {
       tcb->next = p->next;
       dealloc_tcb(p);
@@ -188,7 +189,7 @@ void *rock_mremap(void *old_addr, size_t old_len, size_t new_len,
 void* rock_brk(void* newbrk) {
   if (!prog_brk) {
     /* return the initial break, which should be FourKB aligned */
-    prog_brk = __syscall1(SYS_brk, 0);
+    prog_brk = (void*)__syscall1(SYS_brk, (long)0);
     if ((unsigned long)prog_brk >= FourGB) {
       dprintf(STDERR_FILENO, "[rock_brk] initial program break is outside of sandbox\n");
       quit(-1);
@@ -205,7 +206,7 @@ void* rock_brk(void* newbrk) {
     dprintf(STDERR_FILENO, "[rock_brk] newbrk is outside of sandbox\n");
     quit(-1);
   }
-  prog_brk = __syscall1(SYS_brk, newbrk);
+  prog_brk = (void*)__syscall1(SYS_brk, (long)newbrk);
   if (prog_brk > max_brk) {
     void *old_max_brk = max_brk;
     max_brk = (void*)(RoundToPage(prog_brk) + BRK_LEAP);
@@ -220,7 +221,23 @@ void* rock_brk(void* newbrk) {
   return prog_brk;
 }
 
-void load_native_code(const char* code_file_name) {
+extern code_module *modules;
+
+char *load_opened_elf_into_memory(int fd,
+                                  /*out*/size_t *elf_size_rounded_to_page_boundary);
+code_module *load_mcfi_metadata(char *elf);
+
+void replace_prog_seg(char *dest, char *src);
+
+int load_native_code(int fd, void *load_addr, size_t seg_base) {
+  dprintf(STDERR_FILENO, "[load_native_code] %d, %p, %lx\n", fd, load_addr, seg_base);
+  size_t elf_size = 0;
+  void *elf = load_opened_elf_into_memory(fd, &elf_size);
+  code_module *cm = load_mcfi_metadata(elf);
+  DL_APPEND(modules, cm);
+  replace_prog_seg(load_addr, elf);
+  munmap(elf, elf_size);
+  return 0;
 }
 
 void unload_native_code(const char* code_file_name) {

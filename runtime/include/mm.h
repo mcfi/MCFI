@@ -60,6 +60,7 @@ void *mremap(void *old_addr, size_t old_len, size_t new_len,
              int flags, void *new_addr);
 
 int mprotect(void *addr, size_t len, int prot);
+int madvise(void *addr, size_t length, int advice);
 
 void *malloc(size_t n);
 void *realloc(void *p, size_t n);

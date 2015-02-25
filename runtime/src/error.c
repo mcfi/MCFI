@@ -9,6 +9,8 @@
 #include <io.h>
 #include <stdarg.h>
 
+int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+
 #define ROCK_ERROR_REPORT "rock_error_report"
 unsigned errn = 0; /* errno for the runtime */
 

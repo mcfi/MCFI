@@ -69,6 +69,7 @@ static void dict_dtor(keyvalue **dict,
   }
 }
 
+/*
 static void dict_print(keyvalue *dict,
                        void (*print_key)(const void *key),
                        void (*print_value)(const void *value)) {
@@ -85,7 +86,7 @@ static void dict_print(keyvalue *dict,
   }
   printf("}\n");
 }
-
+*/
 typedef keyvalue dict;
 
 #endif
