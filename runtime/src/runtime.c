@@ -240,6 +240,23 @@ int load_native_code(int fd, void *load_addr, size_t seg_base) {
   return 0;
 }
 
+/* generate the cfg */
+int gen_cfg(void) {
+  dprintf(STDERR_FILENO, "[gen_cfg] called\n");
+  icf *icfs = 0;
+  function *functions = 0;
+  dict *classes = 0;
+  graph *cha = 0;
+  dict *fats = 0;
+  graph *aliases = 0;
+  merge_mcfi_metainfo(modules, &icfs, &functions, &classes, &cha, &fats, &aliases);
+  dict *all_funcs_grouped_by_name = 0;
+  graph *callgraph =
+    build_callgraph(icfs, functions, classes, cha,
+                    fats, aliases, &all_funcs_grouped_by_name);
+  return 0;
+}
+
 void unload_native_code(const char* code_file_name) {
 }
 

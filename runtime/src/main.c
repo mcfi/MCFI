@@ -174,6 +174,7 @@ void install_trampolines(void) {
     void *allocset_tcb;
     void *free_tcb;
     void *load_native_code;
+    void *gen_cfg;
     void *unload_native_code;
     void *create_code_heap;
     void *dyncode_install;
@@ -191,6 +192,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_allocset_tcb;
   extern unsigned long runtime_free_tcb;
   extern unsigned long runtime_load_native_code;
+  extern unsigned long runtime_gen_cfg;
   extern unsigned long runtime_unload_native_code;
   extern unsigned long runtime_create_code_heap;
   extern unsigned long runtime_dyncode_install;
@@ -207,6 +209,7 @@ void install_trampolines(void) {
   tp->allocset_tcb = &runtime_allocset_tcb;
   tp->free_tcb = &runtime_free_tcb;
   tp->load_native_code = &runtime_load_native_code;
+  tp->gen_cfg = &runtime_gen_cfg;
   tp->unload_native_code = &runtime_unload_native_code;
   tp->create_code_heap = &runtime_create_code_heap;
   tp->dyncode_install = &runtime_dyncode_install;
@@ -473,6 +476,7 @@ static unsigned int alloc_bid_slot(void) {
   static unsigned int bid_slot = 0x1000;
   unsigned int rbid_slot = bid_slot;
   bid_slot += 8; /* 8 bytes */
+  //dprintf(STDERR_FILENO, "%x\n", rbid_slot);
   return rbid_slot;
 }
 
@@ -794,12 +798,6 @@ void* runtime_init(int argc, char **argv) {
 
   /* load mcfi metadata for the exe */
   load_bid_rewritten_exe(argv[0]);
-    
-  /*
-  dict *all_funcs_grouped_by_name = 0;
-  graph *callgraph =
-    build_callgraph(cm->icfs, cm->functions, cm->classes, cm->cha,
-                    cm->fats, cm->aliases, &all_funcs_grouped_by_name);
-  */
+
   return stack;
 }

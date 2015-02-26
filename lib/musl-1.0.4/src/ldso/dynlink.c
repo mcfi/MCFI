@@ -1157,6 +1157,9 @@ void *__dynlink(int argc, char **argv)
 	load_deps(app);
 	make_global(app);
 
+        /* Before relocation (plt.got is recomputed), we should generate
+           the CFG */
+        trampoline_gen_cfg();
 	reloc_all(app->next);
 	reloc_all(app);
 
@@ -1278,6 +1281,7 @@ void *dlopen(const char *file, int mode)
 
 	if (ssp_used) __init_ssp(libc.auxv);
 
+        
 	_dl_debug_state();
 	orig_tail = tail;
 end:
@@ -1286,6 +1290,8 @@ end:
 	pthread_rwlock_unlock(&lock);
 	if (p) do_init_fini(orig_tail);
 	pthread_setcancelstate(cs, 0);
+        /* cfg generation for all the loaded libs */
+        trampoline_gen_cfg();
 	return p;
 }
 

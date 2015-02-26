@@ -42,7 +42,7 @@ struct icf_t {
   UT_hash_handle hh;
 };
 
-static icf *alloc_icf(enum Vertex_Type ty) {
+static icf *alloc_icf(void) {
   icf *i = malloc(sizeof(*i));
   if (!i) oom();
   return i;
@@ -307,7 +307,7 @@ static void parse_icfs(char *content, const char *end, /*out*/icf **icfs,
     */
     id = sp_intern_string(sp, id);
 
-    icf *ic = alloc_icf(CALL);
+    icf *ic = alloc_icf();
 
     ic->id = id;
 
@@ -624,6 +624,69 @@ static void _build_cha_relations(/*out*/graph **callgraph,
     DL_DELETE(cha_lcc, n);
     dict_clear((dict**)(&(n->val)));
     free(n);
+  }
+}
+
+static void merge_icfs(/*out*/icf **icfs, icf *mic) {
+  icf *ic, *tmp;
+  HASH_ITER(hh, mic, ic, tmp) {
+    /* copy the info of ic */
+    icf *newic = alloc_icf();
+    memcpy(newic, ic, sizeof(*ic));
+    /* insert the new ic into icfs */
+    HASH_ADD_PTR(*icfs, id, newic);
+  }
+}
+
+static void merge_functions(/*out*/function **functions, function *mf) {
+  function *f;
+  DL_FOREACH(mf, f) {
+    /* copy the info of func */
+    function *newf = alloc_function();
+    memcpy(newf, f, sizeof(*f));
+    DL_APPEND(*functions, newf);
+  }
+}
+
+static void merge_dicts(/*out*/dict **classes, dict *mc) {
+  keyvalue *c, *tmp;
+  HASH_ITER(hh, mc, c, tmp) {
+    /* copy the info of classes */
+    keyvalue *kv = dict_find(*classes, c->key);
+
+    /*TODO: here we assume that if two entries have the same key,
+     *      their values are equivalent */
+    if (!kv) {
+      dict_add(classes, c->key, c->value);
+    }
+  }
+}
+
+static void merge_graphs(/*out*/graph **graphs, graph *mg) {
+  graph *v, *tmp;
+  HASH_ITER(hh, mg, v, tmp) {
+    g_add_edge(graphs, v->key, v->value);
+  }
+}
+
+/**
+ * Traverse a list of modules and combine all mcfi metainfo.
+ */
+static void merge_mcfi_metainfo(code_module *modules,
+                                /*out*/icf **icfs,
+                                /*out*/function **functions,
+                                /*out*/dict **classes,
+                                /*out*/graph **cha,
+                                /*out*/dict **fats,
+                                /*out*/graph *aliases) {
+  code_module *m;
+  DL_FOREACH(modules, m) {
+    merge_icfs(icfs, m->icfs);
+    merge_functions(functions, m->functions);
+    merge_dicts(classes, m->classes);
+    merge_graphs(cha, m->cha);
+    merge_dicts(fats, m->fats);
+    merge_graphs(aliases, m->aliases);
   }
 }
 

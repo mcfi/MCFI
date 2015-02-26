@@ -118,6 +118,7 @@ runtime_\func:
         runtime_function allocset_tcb
         runtime_function free_tcb
         runtime_function load_native_code
+        runtime_function gen_cfg
         runtime_function unload_native_code
         runtime_function create_code_heap
         runtime_function dyncode_install
