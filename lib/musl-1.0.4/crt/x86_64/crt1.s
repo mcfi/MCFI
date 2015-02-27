@@ -14,3 +14,7 @@ _start:
 	movl $main,%edi  /* 1st arg: application entry ip */
 	call __libc_start_main /* musl init will run the program */
 1:	jmp 1b
+
+        .section        .MCFIAddrTaken,"",@progbits
+        .ascii "main"
+        .byte 0
