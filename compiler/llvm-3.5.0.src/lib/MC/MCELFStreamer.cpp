@@ -272,9 +272,15 @@ void MCELFStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 // test if ID is an identifier in C
-static bool isID(const std::string &ID) {
+static bool isID(std::string &ID) {
   if (ID[0] != '_' && !isalpha(ID[0]))
     return false;
+  /* A function's address may be taken in expressions
+     such as func@GOTPCREL*/
+  size_t at_sym = ID.find_first_of('@');
+  if (at_sym != std::string::npos) {
+    ID = ID.substr(0, at_sym);
+  }  
   for (const auto c : ID) {
     if (c != '_' && !isalnum(c))
       return false;

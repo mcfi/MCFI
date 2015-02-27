@@ -633,6 +633,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(signalhandler);
   KEYWORD(threadentry);
   KEYWORD(cxxinstancemethod);
+  KEYWORD(cxxctor);
   KEYWORD(optnone);
   KEYWORD(optsize);
   KEYWORD(readnone);
