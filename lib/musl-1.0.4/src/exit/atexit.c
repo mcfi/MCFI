@@ -16,6 +16,12 @@ static int lock[2];
 
 extern void __call_dtor(void (*)(void*), void *arg);
 
+static struct aefl
+{
+	struct aefl *next;
+	void (*f[COUNT])(void);
+} aebuiltin, *aehead;
+
 void __funcs_on_exit()
 {
 	int i;
@@ -28,6 +34,16 @@ void __funcs_on_exit()
 		head->f[i] = 0;
 		UNLOCK(lock);
                 __call_dtor(func, arg);
+		LOCK(lock);
+	}
+
+        void (*aefunc)(void);
+        for (; aehead; aehead=aehead->next) for (i=COUNT-1; i>=0; i--) {
+		if (!aehead->f[i]) continue;
+		aefunc = aehead->f[i];
+		aehead->f[i] = 0;
+		UNLOCK(lock);
+                aefunc();
 		LOCK(lock);
 	}
 }
@@ -67,5 +83,29 @@ int __cxa_atexit(void (*func)(void *), void *arg, void *dso)
 
 int atexit(void (*func)(void))
 {
-	return __cxa_atexit(((void (*)(void*))(uintptr_t)func), 0, 0);
+  	int i;
+
+	LOCK(lock);
+
+	/* Defer initialization of head so it can be in BSS */
+	if (!aehead) aehead = &aebuiltin;
+
+	/* If the current function list is full, add a new one */
+	if (aehead->f[COUNT-1]) {
+		struct aefl *new_aefl = calloc(sizeof(struct aefl), 1);
+		if (!new_aefl) {
+			UNLOCK(lock);
+			return -1;
+		}
+		new_aefl->next = aehead;
+		aehead = new_aefl;
+	}
+
+	/* Append function to the list. */
+	for (i=0; i<COUNT && aehead->f[i]; i++);
+	aehead->f[i] = func;
+
+	UNLOCK(lock);
+	return 0;
+	//return __cxa_atexit(((void (*)(void*))(uintptr_t)func), 0, 0);
 }

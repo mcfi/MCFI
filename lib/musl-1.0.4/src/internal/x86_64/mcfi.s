@@ -135,10 +135,10 @@ die6:
         .ascii "{ __call_thread_func\nR __call_dtor\n}"
         .byte 0
 
-        .section	.MCFIIndirectCall,"",@progbits
-        .ascii "__call_dtor_invoke#N#DTOR@"
+        .section	.MCFIIndirectCalls,"",@progbits
+        .ascii "__call_dtor_invoke#N#GblDtor"
         .byte 0
-        .ascii "__call_exn_dtor_invoke#N#EXN_DTOR@"
+        .ascii "__call_exn_dtor_invoke#N#GblExnDtor"
         .byte 0
-        .ascii "__call_thread_func#N#ThreadEntry@"
+        .ascii "__call_thread_func#N#ThreadEntry"
         .byte 0

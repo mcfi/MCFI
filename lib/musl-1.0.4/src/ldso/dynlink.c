@@ -809,7 +809,7 @@ static void find_map_range(Phdr *ph, size_t cnt, size_t stride, struct dso *p)
 	p->map_len = max_addr - min_addr;
 }
 
-static void do_fini()
+static void do_fini(void)
 {
 	struct dso *p;
 	size_t dyn[DYN_CNT] = {0};
@@ -846,7 +846,7 @@ static void do_init_fini(struct dso *p)
 		}
 #ifndef NO_LEGACY_INITFINI
 		if ((dyn[0] & (1<<DT_INIT)) && dyn[DT_INIT])
-			((void (*)(void))(p->base + dyn[DT_INIT]))();
+                  ((void (*)(void))(p->base + dyn[DT_INIT]))();
 #endif
 		if (dyn[0] & (1<<DT_INIT_ARRAY)) {
 			size_t n = dyn[DT_INIT_ARRAYSZ]/sizeof(size_t);
