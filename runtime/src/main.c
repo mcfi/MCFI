@@ -551,8 +551,23 @@ code_module *load_mcfi_metadata(char *elf) {
   }
 
   code_module *cm = alloc_code_module();
-  if (ehdr->e_type == ET_EXEC)
+  if (ehdr->e_type == ET_EXEC) {
     cm->base_addr = X64ABIBASE;
+    /* add the entry point of the exe as a fake function */
+    function *f = alloc_function();
+    f->name = sp_intern_string(&stringpool, "__exe_elf_entry");
+    f->type = sp_intern_string(&stringpool, "ExeElfEntry");
+    DL_APPEND(functions, f);
+
+    /* the fake function's address is taken */
+    dict_add(&fats, f->name, 0);
+
+    /* add the fake function's address */
+    symbol *funcsym = alloc_sym();
+    funcsym->name = f->name;
+    funcsym->offset = ehdr->e_entry - cm->base_addr;
+    DL_APPEND(cm->funcsyms, funcsym);
+  }
   cm->icfs = icfs;
   cm->functions = functions;
   cm->classes = classes;
