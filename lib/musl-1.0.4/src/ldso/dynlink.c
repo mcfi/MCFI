@@ -1157,8 +1157,7 @@ void *__dynlink(int argc, char **argv)
 	load_deps(app);
 	make_global(app);
 
-        /* Before relocation (plt.got is recomputed), we should generate
-           the CFG */
+        /* generate the CFG after all dependent libraries have been loaded */
         trampoline_gen_cfg();
 	reloc_all(app->next);
 	reloc_all(app);

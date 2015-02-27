@@ -20,11 +20,14 @@ __mcfi_dcj_1___dynlink:
         movl %eax, %eax
 try:
         movq %gs:0x1000, %rdx
-__mcfi_bary_entry:      
+__mcfi_bary___exe_elf_entry:
         cmpq %rdx, %gs:(%rax)
-        jne die # this indirect jump only executes once and cannot fail
+        jne die # this indirect jump only executes once
         xor %edx,%edx
 	jmp *%rax
 die:
         hlt
         
+        .section	.MCFIIndirectCalls,"",@progbits
+        .ascii "__exe_elf_entry#N#ExeElfEntry"
+        .byte 0
