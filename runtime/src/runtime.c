@@ -234,11 +234,15 @@ int load_native_code(int fd, void *load_addr, size_t seg_base) {
   size_t elf_size = 0;
   void *elf = load_opened_elf_into_memory(fd, &elf_size);
   code_module *cm = load_mcfi_metadata(elf);
+  cm->base_addr = (uintptr_t)load_addr;
   DL_APPEND(modules, cm);
   replace_prog_seg(load_addr, elf);
   munmap(elf, elf_size);
   return 0;
 }
+
+static unsigned long version = 0;
+extern void *table; /* table region defined in main.c */
 
 /* generate the cfg */
 int gen_cfg(void) {
@@ -254,6 +258,47 @@ int gen_cfg(void) {
   graph *callgraph =
     build_callgraph(icfs, functions, classes, cha,
                     fats, aliases, &all_funcs_grouped_by_name);
+  node *lcg = g_get_lcc(&callgraph);
+
+  int count;
+  node *n;
+  DL_COUNT(lcg, n, count);
+  dprintf(STDERR_FILENO, "EQCs: %d\n", count);
+  
+  dict *callids = gen_mcfi_id(lcg, &version);
+
+  /* The CFG generation and update strategy is the following:
+   * 1. generate the new bary and tary tables for all modules.
+   * 2. for each module whose cfggened == FALSE, populate their tary
+   *    and bary tables.
+   * 3. for each module whose cfggened == TRUE, populate their
+   *    tary tables.
+   * 4. for each module whose cfggened == TRUE, populate their bary
+   *    tables.
+   * 5. mark all modules' cfggened field to be one.
+   */
+  code_module *m = 0;
+
+  DL_FOREACH(modules, m) {
+    if (!m->cfggened) {
+      gen_tary(m, callids, table);
+      gen_bary(m, callids, table);
+    }
+  }
+  
+  DL_FOREACH(modules, m) {
+    if (m->cfggened)
+      gen_tary(m, callids, table);
+  }
+
+  /* write barrier, if needed */
+  
+  DL_FOREACH(modules, m) {
+    if (m->cfggened)
+      gen_bary(m, callids, table);
+    else
+      m->cfggened = TRUE;
+  }
   return 0;
 }
 

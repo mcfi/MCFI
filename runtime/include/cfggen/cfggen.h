@@ -105,19 +105,19 @@ static symbol *alloc_sym(void) {
  * A code module may be an executable or a *.so library.
  */
 struct code_module_t {
-  struct code_module_t *next, *prev;  
-  char     *path;      /* absolute path of the code module */
+  struct code_module_t *next, *prev;
   uintptr_t base_addr; /* base addr */
   icf      *icfs;      /* indirect call instructions */
   function *functions; /* functions */
   dict     *classes;   /* classes */  
   dict     *cha;       /* class hierarchy */
-  dict     *aliases;   /* aliases */
+  graph    *aliases;   /* aliases */
   symbol   *rai;       /* return addresses of indirect calls */
   symbol   *rad;       /* return addresses of direct calls */
   symbol   *funcsyms;  /* function symbols */
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
+  int      cfggened;   /* the cfg has been generated for this module before */
 };
 
 static code_module *alloc_code_module(void) {
@@ -644,28 +644,48 @@ static void merge_functions(/*out*/function **functions, function *mf) {
     /* copy the info of func */
     function *newf = alloc_function();
     memcpy(newf, f, sizeof(*f));
+    //dprintf(STDERR_FILENO, "%s\n", f->name);
     DL_APPEND(*functions, newf);
   }
 }
 
-static void merge_dicts(/*out*/dict **classes, dict *mc) {
+static void print_classes(dict *classes) {
+  keyvalue *class_entry, *ctmp;
+  HASH_ITER(hh, classes, class_entry, ctmp) {
+    dprintf(STDERR_FILENO, "%s\n", class_entry->key);
+    dict *method_entry = (dict*)(class_entry->value);
+    keyvalue *m, *mtmp;
+    HASH_ITER(hh, method_entry, m, mtmp) {
+      dprintf(STDERR_FILENO, "  %s\n", m->key);
+    }
+  }
+}
+
+static void merge_dicts(/*out*/dict **d, dict *mc) {
   keyvalue *c, *tmp;
   HASH_ITER(hh, mc, c, tmp) {
     /* copy the info of classes */
-    keyvalue *kv = dict_find(*classes, c->key);
-
+    keyvalue *kv = dict_find(*d, c->key);
     /*TODO: here we assume that if two entries have the same key,
      *      their values are equivalent */
     if (!kv) {
-      dict_add(classes, c->key, c->value);
+      //dprintf(STDERR_FILENO, "%s\n", c->key);
+      dict_add(d, c->key, c->value);
     }
   }
 }
 
 static void merge_graphs(/*out*/graph **graphs, graph *mg) {
-  graph *v, *tmp;
+  vertex *v, *tmp;
   HASH_ITER(hh, mg, v, tmp) {
-    g_add_edge(graphs, v->key, v->value);
+    g_add_vertex(graphs, v->key);
+    vertex *nv = dict_find(*graphs, v->key);
+    //dprintf(STDERR_FILENO, "%s\n", v->key);
+    vertex *vv, *vtmp;
+    HASH_ITER(hh, ((graph*)v->value), vv, vtmp) {
+      g_add_vertex(&(nv->value), vv->key);
+      //dprintf(STDERR_FILENO, "%s, %s\n", v->key, vv->key);
+    }
   }
 }
 
@@ -678,7 +698,7 @@ static void merge_mcfi_metainfo(code_module *modules,
                                 /*out*/dict **classes,
                                 /*out*/graph **cha,
                                 /*out*/dict **fats,
-                                /*out*/graph *aliases) {
+                                /*out*/graph **aliases) {
   code_module *m;
   DL_FOREACH(modules, m) {
     merge_icfs(icfs, m->icfs);
@@ -711,7 +731,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
   int virtual;
   int instance;
   unsigned char attrs;
-  
+
   /* Compute aliases transitive closure, need to be freed */
   graph *aliases_tc = g_transitive_closure(&aliases);
 
@@ -735,6 +755,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
     if (is_virtual(attrs)) {
       g_add_directed_l2_edge(&all_virtual_funcs_grouped_by_cls_mtd_name,
                              f->class_name, f->method_name, f->name);
+      //dprintf(STDERR_FILENO, "1: %s\n", f->name);
       keyvalue *alias_entry = dict_find(aliases_tc, f->name);
       if (alias_entry) {
         keyvalue *v, *tmp;
@@ -742,12 +763,14 @@ static graph *build_callgraph(icf *icfs, function *functions,
         HASH_ITER(hh, (vertex*)(alias_entry->value), v, tmp) {
           g_add_directed_l2_edge(&all_virtual_funcs_grouped_by_cls_mtd_name,
                                  f->class_name, f->method_name, v->key);
+          //dprintf(STDERR_FILENO, "2: %s\n", v->key);
         }
       }
     }
 
     if (dict_in(fats, f->name) && f->type) {
       if (!instance) {/* global or static member functions */
+        //dprintf(STDERR_FILENO, "%s, %s\n", f->name, f->type);
         g_add_directed_edge(&global_funcs_grouped_by_types,
                             f->type, f->name);
       } else {
@@ -781,7 +804,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
   }
 
   graph *chacc = g_transitive_closure(&cha);
-
+  //g_print_trantive_closure(chacc);
   /* get the list of inheritance relationship */
   _build_cha_relations(&callgraph, classes, cha,
                        all_virtual_funcs_grouped_by_cls_mtd_name);
@@ -802,6 +825,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
         HASH_ITER(hh, (dict*)(virtual_method_entry->value),
                   method_name, tmpkv) {
           g_add_edge(&callgraph, _mark_ptr(ic->id), method_name->key);
+          //dprintf(STDERR_FILENO, "%s, %s\n", ic->id, method_name->key);
         }
       } else {
         /* it is possible that if the class_name::method_name is inlined
@@ -859,6 +883,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
 
       if (funcs_with_same_type) {
         HASH_ITER(hh, (dict*)(funcs_with_same_type->value), v, tmp) {
+          //dprintf(STDERR_FILENO, "%s, %s\n", ic->id, v->key);
           g_add_edge(&callgraph, _mark_ptr(ic->id), v->key);
         }
       }
@@ -926,6 +951,32 @@ static dict *gen_mcfi_id(node *lcc, /*out*/unsigned long *version) {
   }
 
   return rs;
+}
+
+/* generate and populate the tary table for module m */
+static void gen_tary(code_module *m, dict *callids, char *table) {
+  char *tary = table + m->base_addr;
+  symbol *funcsym;
+  DL_FOREACH(m->funcsyms, funcsym) {
+    keyvalue *f = dict_find(callids, funcsym->name);
+    //dprintf(STDERR_FILENO, "%s, %x\n", funcsym->name, funcsym->offset);
+    if (f) {
+      //dprintf(STDERR_FILENO, "%s, %x, %lx\n", funcsym->name, funcsym->offset, f->value);
+      *((unsigned long*)(tary + funcsym->offset)) = (unsigned long)f->value;
+    }
+  }
+}
+
+/* generate and populate the bary table for module m */
+static void gen_bary(code_module *m, dict *callids, char *table) {
+  symbol *icfsym;
+  DL_FOREACH(m->icfsyms, icfsym) {
+    keyvalue *i = dict_find(callids, _mark_ptr(icfsym->name));
+    if (i) {
+      //dprintf(STDERR_FILENO, "%s, %x, %lx\n", icfsym->name, icfsym->offset, i->value);
+      *((unsigned long*)(table + icfsym->offset)) = (unsigned long)i->value;
+    }
+  }
 }
 
 #endif

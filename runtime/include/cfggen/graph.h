@@ -171,6 +171,22 @@ static void print_cc(void *cc) {
   }
 }
 
+static void l_print(node *l, void (*print)(void *)) {
+  node *elt;
+  DL_FOREACH(l, elt) {
+    dprintf(STDERR_FILENO, "\n***********************************\n");
+    print(elt->val);
+  }
+}
+
+static void g_print_trantive_closure(vertex *g) {
+  vertex *v, *tmp;
+  HASH_ITER(hh, g, v, tmp) {
+    dprintf(STDERR_FILENO, "\n********************\n");
+    print_cc(v->value);
+  }
+}
+
 static graph *g_transitive_closure(vertex **g) {
   assert(g);
   graph *rs = 0;
@@ -178,8 +194,9 @@ static graph *g_transitive_closure(vertex **g) {
 
   lcc = g_get_lcc(g);
 
-  // l_print(lcc, print_cc);
+  //l_print(lcc, print_cc);
 
+  //quit(-1);
   if (lcc) {
     node *n, *ntmp;
 

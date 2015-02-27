@@ -12,7 +12,7 @@
 #define MAX_PATH 256
 
 /* x64 Linux loads images from 0x400000 */
-#define X64ABIBASE 0x400000
+#define X64ABIBASE 0x400000UL
 
 /* size of the plt entry */
 #define PLT_ENT_SIZE 32
@@ -575,6 +575,7 @@ code_module *load_mcfi_metadata(char *elf) {
       //dprintf(STDERR_FILENO, "%s\n", icjsym->name);
       DL_APPEND(cm->rai, icjsym);
     } else if (0 == strncmp(symname, "__mcfi_bary_", 12)) {
+      //dprintf(STDERR_FILENO, "%s\n", symname);
       symbol *icfsym = alloc_sym();
       icfsym->name = sp_intern_string(&stringpool, symname + 12);
       unsigned int bid_slot = alloc_bid_slot();
@@ -584,7 +585,8 @@ code_module *load_mcfi_metadata(char *elf) {
       icfsym->offset = bid_slot;
       //dprintf(STDERR_FILENO, "%s, %x\n", icfsym->name, icfsym->offset);
       DL_APPEND(cm->icfsyms, icfsym);
-    } else if (ELF64_ST_TYPE(sym[cnt].st_info) == STT_FUNC) {
+    } else if (ELF64_ST_TYPE(sym[cnt].st_info) == STT_FUNC &&
+               sym[cnt].st_shndx != SHN_UNDEF) {
       //dprintf(STDERR_FILENO, "%s\n", symname);
       symbol *funcsym = alloc_sym();
       funcsym->name = sp_intern_string(&stringpool, symname);
@@ -684,6 +686,7 @@ static void load_libc(void) {
 
   libc <<= PAGESHIFT;
   libc_base = (void*)libc;
+  cm->base_addr = (uintptr_t)libc_base;
 
   dprintf(STDERR_FILENO, "libc: %p\n", libc_base);
   /* load the actual program headers */
@@ -758,6 +761,7 @@ static void load_bid_rewritten_exe(const char *exe_name) {
   void *exe = load_elf_into_memory(exe_name, &exe_size);
   code_module *cm = load_mcfi_metadata(exe);
   DL_APPEND(modules, cm);
+  cm->base_addr = X64ABIBASE;
 
   /* copy the modified code into the loaded region */
   replace_prog_seg((void*)X64ABIBASE, exe);

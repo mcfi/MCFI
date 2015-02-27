@@ -12,16 +12,6 @@ void *memset(void *dest, int c, size_t n);
 
 static int memcmp(const void *vl, const void *vr, size_t n)
 {
-  if (n >= 8) {
-    size_t m = (n >> 3);
-    const uint64_t *l = (const uint64_t*) vl, *r = (const uint64_t*)vr;
-    for (; m && *l == *r; m--, l++, r++);
-    if (m)
-      return *l - *r;
-    vl = l;
-    vr = r;
-  }
-  n = n % 8;
   const unsigned char *l=vl, *r=vr;
   for (; n && *l == *r; n--, l++, r++);
   return n ? *l-*r : 0;
