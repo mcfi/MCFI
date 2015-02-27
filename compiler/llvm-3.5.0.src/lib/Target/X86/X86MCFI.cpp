@@ -218,8 +218,6 @@ private:
       FuncInfo += "SignalHandler\n";
     } else if (F->hasFnAttribute(Attribute::ThreadEntry)) {
       FuncInfo += "ThreadEntry\n";
-    } else if (GlobalCtors.find(FuncName) != std::end(GlobalCtors)) {
-      FuncInfo += "GblCtor\n";
     } else if (GlobalDtors.find(FuncName) != std::end(GlobalDtors) ||
                (FuncName.size() > 12 && FuncName.substr(0, 12) == "_GLOBAL__D__")) {
       FuncInfo += "GblDtor\n";
@@ -362,6 +360,21 @@ bool MCFI::runOnMachineFunction(MachineFunction &MF) {
     // global constructors and destructors
     extractGlobalArray("llvm.global_ctors", GlobalCtors);
     extractGlobalArray("llvm.global_dtors", GlobalDtors);
+
+    // add global constructors and destructors to address taken functions
+    for (const auto& s: GlobalCtors) {
+      llvm::NamedMDNode* MD = M->getOrInsertNamedMetadata("MCFIAddrTaken");
+      MD->addOperand(llvm::MDNode::get(M->getContext(),
+                                       llvm::MDString::get(
+                                         M->getContext(), s.data())));
+    }
+
+    for (const StringRef& s: GlobalDtors) {
+      llvm::NamedMDNode* MD = M->getOrInsertNamedMetadata("MCFIAddrTaken");
+      MD->addOperand(llvm::MDNode::get(M->getContext(),
+                                       llvm::MDString::get(
+                                         M->getContext(), s.data())));
+    }
   }
   // we only support AMD64
   if (MF.getTarget().getSubtarget<X86Subtarget>().isTarget64BitLP64())
