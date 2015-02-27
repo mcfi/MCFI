@@ -224,7 +224,8 @@ private:
     } else if (FuncName.size() > 12 && FuncName.substr(0, 12) == "_GLOBAL__E__") {
       FuncInfo += "GblExnDtor\n";
     } else if (FuncName.equals("main")) {
-      FuncInfo += "MAIN\n";
+      // all main functions have the same type int (*)(int, char**, char**);
+      FuncInfo += "i32!i32@i8**@i8**@\n";
     } else {
       FuncInfo += FuncTypeStr(MF.getFunction()->getFunctionType()) + '\n';
     }
