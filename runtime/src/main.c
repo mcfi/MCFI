@@ -598,7 +598,8 @@ code_module *load_mcfi_metadata(char *elf) {
              &bid_slot,
              sizeof(unsigned int));
       icfsym->offset = bid_slot;
-      //dprintf(STDERR_FILENO, "%s, %x\n", icfsym->name, icfsym->offset);
+      //dprintf(STDERR_FILENO, "%s, %x, %x\n", icfsym->name, icfsym->offset,
+      //        sym[cnt].st_value - cm->base_addr);
       DL_APPEND(cm->icfsyms, icfsym);
     } else if (ELF64_ST_TYPE(sym[cnt].st_info) == STT_FUNC &&
                sym[cnt].st_shndx != SHN_UNDEF) {

@@ -264,8 +264,9 @@ int gen_cfg(void) {
   node *n;
   DL_COUNT(lcg, n, count);
   dprintf(STDERR_FILENO, "EQCs: %d\n", count);
-  
-  dict *callids = gen_mcfi_id(lcg, &version);
+
+  unsigned long id_for_others;
+  dict *callids = gen_mcfi_id(lcg, &version, &id_for_others);
 
   /* The CFG generation and update strategy is the following:
    * 1. generate the new bary and tary tables for all modules.
@@ -282,7 +283,7 @@ int gen_cfg(void) {
   DL_FOREACH(modules, m) {
     if (!m->cfggened) {
       gen_tary(m, callids, table);
-      gen_bary(m, callids, table);
+      gen_bary(m, callids, table, id_for_others);
     }
   }
   
@@ -295,7 +296,7 @@ int gen_cfg(void) {
   
   DL_FOREACH(modules, m) {
     if (m->cfggened)
-      gen_bary(m, callids, table);
+      gen_bary(m, callids, table, id_for_others);
     else
       m->cfggened = TRUE;
   }

@@ -32,6 +32,7 @@ typedef struct icf_t icf;
 typedef struct sym_t sym;
 
 struct icf_t {
+  UT_hash_handle hh;  
   char *id;
   enum ICF_Type ity;
   char *type;
@@ -39,7 +40,6 @@ struct icf_t {
   char *class_name;
   char *method_name;
   size_t offset;
-  UT_hash_handle hh;
 };
 
 static icf *alloc_icf(void) {
@@ -399,8 +399,9 @@ static void parse_fats(char *content, const char *end, /*out*/dict **fats,
 
     keyvalue *kv = dict_find(*fats, fat);
 
-    if (!kv)
+    if (!kv) {
       dict_add(fats, fat, 0);
+    }
   }
 }
 
@@ -669,7 +670,6 @@ static void merge_dicts(/*out*/dict **d, dict *mc) {
     /*TODO: here we assume that if two entries have the same key,
      *      their values are equivalent */
     if (!kv) {
-      //dprintf(STDERR_FILENO, "%s\n", c->key);
       dict_add(d, c->key, c->value);
     }
   }
@@ -710,6 +710,26 @@ static void merge_mcfi_metainfo(code_module *modules,
   }
 }
 
+/* test whether a function or any of its alias's address is taken */
+static int _func_or_alias_addr_taken(dict *fats, char *name, graph *aliases_tc) {
+  keyvalue *kv = dict_find(fats, name);
+  if (kv)
+    return TRUE;
+
+  keyvalue *alias_entry = dict_find(aliases_tc, name);
+      
+  if (alias_entry) {
+
+    keyvalue *tmp;
+
+    HASH_ITER(hh, (vertex*)(alias_entry->value), kv, tmp) {
+      if (kv->key != name && dict_in(fats, kv->key))
+        return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 /**
  * Based on the CFG-related meta information, build a call graph.
  */
@@ -739,13 +759,18 @@ static graph *build_callgraph(icf *icfs, function *functions,
     {
       /* handle aliased function names */
       g_add_directed_edge(all_funcs_grouped_by_name, f->name, f);
-
+      //dprintf(STDERR_FILENO, "-%s\n", f->name);
       keyvalue *alias_entry = dict_find(aliases_tc, f->name);
+      
       if (alias_entry) {
+        //dprintf(STDERR_FILENO, "%s\n", alias_entry->key);
         keyvalue *v, *tmp;
 
         HASH_ITER(hh, (vertex*)(alias_entry->value), v, tmp) {
-          g_add_directed_edge(all_funcs_grouped_by_name, v->key, f);
+          if (v->key != f->name) {
+            g_add_directed_edge(all_funcs_grouped_by_name, v->key, f);
+            //dprintf(STDERR_FILENO, "  %s\n", v->key);
+          }
         }
       }
     }
@@ -767,8 +792,8 @@ static graph *build_callgraph(icf *icfs, function *functions,
         }
       }
     }
-
-    if (dict_in(fats, f->name) && f->type) {
+    //dprintf(STDERR_FILENO, "%s, %s\n", f->name, f->type);
+    if (_func_or_alias_addr_taken(fats, f->name, aliases_tc) && f->type) {
       if (!instance) {/* global or static member functions */
         //dprintf(STDERR_FILENO, "%s, %s\n", f->name, f->type);
         g_add_directed_edge(&global_funcs_grouped_by_types,
@@ -777,6 +802,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
         if (!is_constant(attrs) && !is_volatile(attrs)) {
           g_add_directed_edge(&instance_funcs_grouped_by_types,
                               f->type, f->name);
+          //dprintf(STDERR_FILENO, "%s, %s\n", f->type, f->name);
           /*
            * Some destructors are aliased to others, and we should take care
            * of all alises
@@ -929,7 +955,9 @@ static graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name) 
   return retgraph;
 }
 
-static dict *gen_mcfi_id(node *lcc, /*out*/unsigned long *version) {
+static dict *gen_mcfi_id(node *lcc,
+                         /*out*/unsigned long *version,
+                         /*out*/unsigned long *id_for_other_icfs) {
   node *n, *ntmp;
 
   dict *rs = 0;
@@ -950,6 +978,9 @@ static dict *gen_mcfi_id(node *lcc, /*out*/unsigned long *version) {
     }
   }
 
+  *id_for_other_icfs = ((_convert_to_mcfi_half_id_format(&eqc_number) << 32UL) |
+                        mcfi_version | 1);
+
   return rs;
 }
 
@@ -968,13 +999,22 @@ static void gen_tary(code_module *m, dict *callids, char *table) {
 }
 
 /* generate and populate the bary table for module m */
-static void gen_bary(code_module *m, dict *callids, char *table) {
+static void gen_bary(code_module *m, dict *callids, char *table,
+                     unsigned long id_for_other_icfs) {
   symbol *icfsym;
   DL_FOREACH(m->icfsyms, icfsym) {
     keyvalue *i = dict_find(callids, _mark_ptr(icfsym->name));
     if (i) {
       //dprintf(STDERR_FILENO, "%s, %x, %lx\n", icfsym->name, icfsym->offset, i->value);
       *((unsigned long*)(table + icfsym->offset)) = (unsigned long)i->value;
+    } else {
+      //dprintf(STDERR_FILENO, "%s, %x, %lx\n", icfsym->name, icfsym->offset, id_for_other_icfs);
+      /* for all indirect calls whose target set is empty, populate their bid slots
+         with id_for_other_icfs */
+      icf *ic = 0;
+      HASH_FIND_PTR(m->icfs, &(icfsym->name), ic);
+      if (ic)
+        *((unsigned long*)(table + icfsym->offset)) = id_for_other_icfs;
     }
   }
 }
