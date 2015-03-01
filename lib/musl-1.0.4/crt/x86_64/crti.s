@@ -1,9 +1,11 @@
-.section .init
-.global _init
+        .section .init
+        .type _init,@function
+        .global _init
 _init:
 	push %rax
 
-.section .fini
-.global _fini
+        .section .fini
+        .type _fini,@function
+        .global _fini
 _fini:
 	push %rax
