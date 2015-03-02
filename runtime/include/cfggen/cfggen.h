@@ -6,13 +6,6 @@
 #include "graph.h"
 #include "stringpool.h"
 
-enum Vertex_Type {
-  RETURN,          /* return instruction */
-  CALL,            /* indirect call */
-  FUNCTION,        /* function */
-  RETURNADDR       /* return address */
-};
-
 enum ICF_Type {
   VirtualMethodCall,
   PointerToMethodCall,
@@ -52,6 +45,14 @@ static void free_icf(icf *i) {
   free(i);
 }
 
+static void icfs_clear(icf **icfs) {
+  icf *i, *tmp;
+  HASH_ITER(hh, *icfs, i, tmp) {
+    HASH_DEL(*icfs, i);
+    free_icf(i);
+  }
+}
+
 struct function_t {
   char *name;
   char *class_name;
@@ -88,9 +89,17 @@ static void free_function(function *f) {
   free(f);
 }
 
+static void functions_clear(function **functions) {
+  function *n, *tmp;
+  DL_FOREACH_SAFE(*functions, n, tmp) {
+    DL_DELETE(*functions, n);
+    free(n);
+  }
+}
+
 typedef struct symbol_t {
   char *name;           /* return address of a direct call */
-  size_t offset;
+  size_t offset;        /* offset in the elf's executable segment */
   struct symbol_t *next, *prev;
 } symbol;
 
@@ -114,6 +123,7 @@ struct code_module_t {
   graph    *aliases;   /* aliases */
   symbol   *rai;       /* return addresses of indirect calls */
   symbol   *rad;       /* return addresses of direct calls */
+  symbol   *lp;        /* landing pads */
   symbol   *funcsyms;  /* function symbols */
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
@@ -145,14 +155,6 @@ static size_t next_symbol(char *cursor, char sym, /*out*/int *stop) {
   *stop = (*cursor == '\0');
 
   return advanced;
-}
-
-static void print_string(const void *str) {
-  dprintf(STDERR_FILENO, "%s", (const char*)str);
-}
-
-static void cha_cc_print(graph *g) {
-  dict_print(g, print_string, print_cc);
 }
 
 static char *_get_string_before_symbol(/*in/out*/char **cursor, char symbol,
@@ -373,6 +375,7 @@ static void parse_icfs(char *content, const char *end, /*out*/icf **icfs,
           sp_intern_string(sp, _get_string_before_symbol(&cursor, '#', &stop, 0));
 
         ic->ity = NormalCall;
+        //dprintf(STDERR_FILENO, "icfN: %s, %s\n", id, ic->type);
       }
       break;
     default:
@@ -400,6 +403,7 @@ static void parse_fats(char *content, const char *end, /*out*/dict **fats,
     keyvalue *kv = dict_find(*fats, fat);
 
     if (!kv) {
+      // dprintf(STDERR_FILENO, "%s\n", fat);
       dict_add(fats, fat, 0);
     }
   }
@@ -434,10 +438,12 @@ static void _add_node_list(char *cursor, char local_symbol, /*out*/node **node_l
   do {
     char *name =
       sp_intern_string(sp, _get_string_before_symbol(&cursor, local_symbol, &stop, 0));
-
-    DL_APPEND(*node_list, new_node(name));
-
+    node * nnode = new_node(name);
+    /* IMPORTANT: don't use function calls as an argument in utlist */
+    DL_APPEND(*node_list, nnode);
+    //dprintf(STDERR_FILENO, "%s ", name);
   } while (!stop);
+  //dprintf(STDERR_FILENO, "\n");
 }
 
 static void parse_functions(char *content, const char *end, function **functions,
@@ -490,6 +496,7 @@ static void parse_functions(char *content, const char *end, function **functions
         _add_node_list(local_cursor, ' ', &(f->itails), sp);
         break;
       case 'R':
+        //dprintf(STDERR_FILENO, "FuncRets: %s ", f->name);
         cursor += 2;
         local_cursor = _get_string_before_symbol(&cursor, '\n', &stop, 0);
         _add_node_list(local_cursor, ' ', &(f->returns), sp);
@@ -533,24 +540,62 @@ static int _is_instance_method(const function *f, dict *classes,
   return FALSE;
 }
 
-/* mark a pointer to an indirect branch */
-static void* _mark_ptr(void *ptr) {
+/* mark a pointer to a functionp */
+static void* _mark_func(void *ptr) {  
+  return ptr;
+}
+
+/* mark a pointer to an indirect call/jmp */
+static void* _mark_icj(void *ptr) {
   unsigned long p = (unsigned long)ptr;
   p |= 0x8000000000000000UL;
   return (void*)p;
 }
 
+/* check if an indirect call/jmp is marked */
+static int _is_marked_icj(const void *ptr) {
+  return !!((unsigned long)ptr & 0x8000000000000000UL);
+}
+
+/* mark a pointer to a ret */
+static void *_mark_ret(void *ptr) {
+  unsigned long p = (unsigned long)ptr;
+  p |= 0x4000000000000000UL;
+  return (void*)p;
+}
+
+static int _is_marked_ret(const void *ptr) {
+  return !!((unsigned long)ptr & 0x4000000000000000UL);
+}
+
+/* mark a pointer to a return address after a direct call */
+static void *_mark_ra_dc(void *ptr) {
+  unsigned long p = (unsigned long)ptr;
+  p |= 0x2000000000000000UL;
+  return (void*)p;
+}
+
+static int _is_marked_ra_dc(const void *ptr) {
+  return !!((unsigned long)ptr & 0x2000000000000000UL);
+}
+
+/* mark a pointer to a return address after an indirect call */
+static void *_mark_ra_ic(void *ptr) {
+  unsigned long p = (unsigned long)ptr;
+  p |= 0x1000000000000000UL;
+  return (void*)p;
+}
+
+static int _is_marked_ra_ic(const void *ptr) {
+  return !!((unsigned long)ptr & 0x1000000000000000UL);
+}
+
 /* unmark a pointer */
 static void* _unmark_ptr(void *ptr) {
   unsigned long p = (unsigned long)ptr;
-  p &= 0x7FFFFFFFFFFFFFFFUL;
+  p &= 0x7FFFFFFFFFFFUL;
   return (void*)p;
 };
-
-/* check if a pointer is marked */
-static int _is_marked(const void *ptr) {
-  return !!((unsigned long)ptr & 0x8000000000000000UL);
-}
 
 /**
  * Based on the class hierarchy, find the relations of all virtual
@@ -683,7 +728,7 @@ static void merge_graphs(/*out*/graph **graphs, graph *mg) {
     //dprintf(STDERR_FILENO, "%s\n", v->key);
     vertex *vv, *vtmp;
     HASH_ITER(hh, ((graph*)v->value), vv, vtmp) {
-      g_add_vertex(&(nv->value), vv->key);
+      g_add_vertex((vertex**)(&(nv->value)), vv->key);
       //dprintf(STDERR_FILENO, "%s, %s\n", v->key, vv->key);
     }
   }
@@ -759,7 +804,6 @@ static graph *build_callgraph(icf *icfs, function *functions,
     {
       /* handle aliased function names */
       g_add_directed_edge(all_funcs_grouped_by_name, f->name, f);
-      //dprintf(STDERR_FILENO, "-%s\n", f->name);
       keyvalue *alias_entry = dict_find(aliases_tc, f->name);
       
       if (alias_entry) {
@@ -850,7 +894,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
 
         HASH_ITER(hh, (dict*)(virtual_method_entry->value),
                   method_name, tmpkv) {
-          g_add_edge(&callgraph, _mark_ptr(ic->id), method_name->key);
+          g_add_edge(&callgraph, _mark_icj(ic->id), method_name->key);
           //dprintf(STDERR_FILENO, "%s, %s\n", ic->id, method_name->key);
         }
       } else {
@@ -871,7 +915,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
               
               HASH_ITER(hh, (dict*)(virtual_method_entry->value),
                         method_name, tmpkv) {
-                g_add_edge(&callgraph, _mark_ptr(ic->id), method_name->key);
+                g_add_edge(&callgraph, _mark_icj(ic->id), method_name->key);
               }
               break;
             }
@@ -900,7 +944,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
       if (typed_methods) {
         keyvalue *v, *tmp;
         HASH_ITER(hh, (dict*)(typed_methods->value), v, tmp) {
-          g_add_edge(&callgraph, _mark_ptr(ic->id), v->key);
+          g_add_edge(&callgraph, _mark_icj(ic->id), v->key);
         }
       }
     } else {
@@ -909,8 +953,8 @@ static graph *build_callgraph(icf *icfs, function *functions,
 
       if (funcs_with_same_type) {
         HASH_ITER(hh, (dict*)(funcs_with_same_type->value), v, tmp) {
-          //dprintf(STDERR_FILENO, "%s, %s\n", ic->id, v->key);
-          g_add_edge(&callgraph, _mark_ptr(ic->id), v->key);
+          //dprintf(STDERR_FILENO, "cgic: %s, %s\n", ic->id, v->key);
+          g_add_edge(&callgraph, _mark_icj(ic->id), v->key);
         }
       }
     }
@@ -950,71 +994,152 @@ static unsigned long _convert_to_mcfi_half_id_format(unsigned long *number) {
   return rs;
 }
 
-static graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name) {
+static graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name,
+                             code_module *modules) {
   graph *retgraph = 0;
+  graph *callgraphcc = g_transitive_closure(&callgraph);
+
+  keyvalue *kv, *tmp;
+
+  /* for all functions, connect their names to the returns and i/d tail calls */
+  HASH_ITER(hh, all_funcs_grouped_by_name, kv, tmp) {
+    node *n;
+    dict *fs = (dict *)(kv->value);
+    keyvalue *fentry, *ftmp;
+    HASH_ITER(hh, fs, fentry, ftmp) {
+      function *f = (function*)(fentry->key);
+
+      /* aliases */
+      g_add_edge(&retgraph, kv->key, f->name);
+
+      /* returns */
+      //dprintf(STDERR_FILENO, "Function: %s\n", kv->key);
+      DL_FOREACH(f->returns, n) {
+        g_add_edge(&retgraph, f->name, _mark_ret(n->val));
+        //dprintf(STDERR_FILENO, "Returns: %s, %s\n", f->name, n->val);
+      }
+
+      /* direct tail calls */
+      DL_FOREACH(f->dtails, n) {
+        g_add_edge(&retgraph, f->name, n->val);
+        //dprintf(STDERR_FILENO, "Dtails: %s, %s\n", f->name, n->val);
+      }
+
+      /* indirect tail calls */
+      DL_FOREACH(f->itails, n) {
+        /* add all possible targets */
+        keyvalue *ijmp;
+        ijmp = dict_find(callgraphcc, _mark_icj(n->val));
+        if (ijmp) {
+          keyvalue *ijtgt, *ijttmp;
+          HASH_ITER(hh, (dict*)(ijmp->value), ijtgt, ijttmp) {
+            /* if it is a function */
+            if (!_is_marked_icj(ijtgt->key)) {
+              g_add_edge(&retgraph, f->name, ijtgt->key);
+              //dprintf(STDERR_FILENO, "Itails: %s, %s\n", f->name, ijtgt->key);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  code_module *m;
+  DL_FOREACH(modules, m) {
+    symbol *s;
+
+    DL_FOREACH(m->rad, s) {
+      /* for each return address that is after a direct call */
+      g_add_edge(&retgraph, _mark_ra_dc(s->name), s->name);
+      //dprintf(STDERR_FILENO, "Rad: %s, %s\n", s->name, s->name);
+    }
+
+    DL_FOREACH(m->rai, s) {
+      /* for each return address that is after an indirect call */
+      keyvalue *icall;
+      icall = dict_find(callgraphcc, _mark_icj(s->name));
+      if (icall) {
+        keyvalue *ictgt, *icttmp;
+        HASH_ITER(hh, (dict*)(icall->value), ictgt, icttmp) {
+          if (!_is_marked_icj(ictgt->key)) {
+            g_add_edge(&retgraph, _mark_ra_ic(s->name), ictgt->key);
+            //dprintf(STDERR_FILENO, "Rai: %s, %s\n", s->name, ictgt->key);
+          }
+        }
+      }
+    }
+  }
+
+  g_free_transitive_closure(&callgraphcc);
   return retgraph;
 }
 
-static dict *gen_mcfi_id(node *lcc,
-                         /*out*/unsigned long *version,
-                         /*out*/unsigned long *id_for_other_icfs) {
+static void gen_mcfi_id(node **lcg, node **lrt,
+                        /*out*/unsigned long *version,
+                        /*out*/unsigned long *id_for_other_icfs,
+                        /*out*/dict **callids, /*out*/dict **retids) {
   node *n, *ntmp;
-
-  dict *rs = 0;
 
   unsigned long eqc_number = 0;
 
   unsigned long mcfi_version = _convert_to_mcfi_half_id_format(version);
-
-  DL_FOREACH_SAFE(lcc, n, ntmp) {
-    vertex *v, *tmp;
-
-    unsigned long id = _convert_to_mcfi_half_id_format(&eqc_number);
-
-    id = ((id << 32UL) | mcfi_version | 1); /* least significant bit should be one */
-    
-    HASH_ITER(hh, (vertex*)(n->val), v, tmp) {
-      dict_add(&rs, v->key, (void*)id);
-    }
-  }
-
+#define GEN_IDS(lcc, ids) do {                  \
+    DL_FOREACH_SAFE(*lcc, n, ntmp) {            \
+      vertex *v, *tmp;                          \
+      unsigned long id = _convert_to_mcfi_half_id_format(&eqc_number);  \
+      id = ((id << 32UL) | mcfi_version | 1); /* least significant bit should be one */ \
+      HASH_ITER(hh, (vertex*)(n->val), v, tmp) {                        \
+        dict_add(ids, v->key, (void*)id);                               \
+      }                                                                 \
+      DL_DELETE(*lcc, n);                                               \
+      free(n);                                                          \
+    }                                                                   \
+  } while (0)
+  GEN_IDS(lcg, callids);
+  GEN_IDS(lrt, retids);
+#undef GEN_IDS
   *id_for_other_icfs = ((_convert_to_mcfi_half_id_format(&eqc_number) << 32UL) |
                         mcfi_version | 1);
-
-  return rs;
 }
 
 /* generate and populate the tary table for module m */
-static void gen_tary(code_module *m, dict *callids, char *table) {
+static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
   char *tary = table + m->base_addr;
-  symbol *funcsym;
-  DL_FOREACH(m->funcsyms, funcsym) {
-    keyvalue *f = dict_find(callids, funcsym->name);
-    //dprintf(STDERR_FILENO, "%s, %x\n", funcsym->name, funcsym->offset);
-    if (f) {
-      //dprintf(STDERR_FILENO, "%s, %x, %lx\n", funcsym->name, funcsym->offset, f->value);
-      *((unsigned long*)(tary + funcsym->offset)) = (unsigned long)f->value;
-    }
-  }
+#define POPULATE_TARY(ids, syms, mark, prefix) do {                     \
+    symbol *sym;                                                        \
+    DL_FOREACH(syms, sym) {                                             \
+      keyvalue *id = dict_find(ids, mark(sym->name));                   \
+      if (id) {                                                         \
+        *((unsigned long*)(tary + sym->offset)) = (unsigned long)id->value; \
+        /*(dprintf(STDERR_FILENO, prefix"%s, %x, %lx\n", sym->name, sym->offset, id->value);*/ \
+      }                                                                 \
+    }                                                                   \
+  } while (0)
+  POPULATE_TARY(callids, m->funcsyms, _mark_func, "Func: ");
+  POPULATE_TARY(retids, m->rad, _mark_ra_dc, "DC: ");
+  POPULATE_TARY(retids, m->rai, _mark_ra_ic, "IC: ");
+#undef POPULATE_TARY
 }
 
 /* generate and populate the bary table for module m */
-static void gen_bary(code_module *m, dict *callids, char *table,
+static void gen_bary(code_module *m, dict *callids, dict *retids, char *table,
                      unsigned long id_for_other_icfs) {
   symbol *icfsym;
   DL_FOREACH(m->icfsyms, icfsym) {
-    keyvalue *i = dict_find(callids, _mark_ptr(icfsym->name));
+    keyvalue *i = dict_find(callids, _mark_icj(icfsym->name));
+    if (!i) {
+      i = dict_find(retids, _mark_ret(icfsym->name));
+    }
+
     if (i) {
-      //dprintf(STDERR_FILENO, "%s, %x, %lx\n", icfsym->name, icfsym->offset, i->value);
+      //dprintf(STDERR_FILENO, "bary: %s, %x, %lx\n", icfsym->name, icfsym->offset, i->value);
       *((unsigned long*)(table + icfsym->offset)) = (unsigned long)i->value;
     } else {
-      //dprintf(STDERR_FILENO, "%s, %x, %lx\n", icfsym->name, icfsym->offset, id_for_other_icfs);
+      //dprintf(STDERR_FILENO, "non-bary: %s, %x, %lx\n", icfsym->name, icfsym->offset,
+      //        id_for_other_icfs);
       /* for all indirect calls whose target set is empty, populate their bid slots
          with id_for_other_icfs */
-      icf *ic = 0;
-      HASH_FIND_PTR(m->icfs, &(icfsym->name), ic);
-      if (ic)
-        *((unsigned long*)(table + icfsym->offset)) = id_for_other_icfs;
+      *((unsigned long*)(table + icfsym->offset)) = id_for_other_icfs;
     }
   }
 }

@@ -589,6 +589,11 @@ code_module *load_mcfi_metadata(char *elf) {
       icjsym->offset = sym[cnt].st_value - cm->base_addr;
       //dprintf(STDERR_FILENO, "%s\n", icjsym->name);
       DL_APPEND(cm->rai, icjsym);
+    } else if (0 == strncmp(symname, "__mcfi_lp_", 10)) {
+      symbol *lpsym = alloc_sym();
+      /* no needs to record the name for a landing pad symbol */
+      lpsym->offset = sym[cnt].st_value - cm->base_addr;
+      DL_APPEND(cm->lp, lpsym);
     } else if (0 == strncmp(symname, "__mcfi_bary_", 12)) {
       //dprintf(STDERR_FILENO, "%s\n", symname);
       symbol *icfsym = alloc_sym();
@@ -598,7 +603,7 @@ code_module *load_mcfi_metadata(char *elf) {
              &bid_slot,
              sizeof(unsigned int));
       icfsym->offset = bid_slot;
-      //dprintf(STDERR_FILENO, "%s, %x, %x\n", icfsym->name, icfsym->offset,
+      //dprintf(STDERR_FILENO, "icfsym: %s, %x, %x\n", icfsym->name, icfsym->offset,
       //        sym[cnt].st_value - cm->base_addr);
       DL_APPEND(cm->icfsyms, icfsym);
     } else if (ELF64_ST_TYPE(sym[cnt].st_info) == STT_FUNC &&

@@ -244,6 +244,22 @@ int load_native_code(int fd, void *load_addr, size_t seg_base) {
 static unsigned long version = 0;
 extern void *table; /* table region defined in main.c */
 
+static void print_cfgcc(void *cc) {
+  vertex *v, *tmp;
+  HASH_ITER(hh, (vertex*)cc, v, tmp) {
+    if (_is_marked_ret(v->key))
+      dprintf(STDERR_FILENO, "Return: %s\n", _unmark_ptr(v->key));
+    else if (_is_marked_ra_dc(v->key))
+      dprintf(STDERR_FILENO, "Rad: %s\n", _unmark_ptr(v->key));
+    else if (_is_marked_ra_ic(v->key))
+      dprintf(STDERR_FILENO, "Rai: %s\n", _unmark_ptr(v->key));
+    else if (_is_marked_icj(v->key)) {
+      dprintf(STDERR_FILENO, "ICF: %s\n", _unmark_ptr(v->key));
+    } else
+      dprintf(STDERR_FILENO, "Func: %s\n", v->key);
+  }
+}
+
 /* generate the cfg */
 int gen_cfg(void) {
   dprintf(STDERR_FILENO, "[gen_cfg] called\n");
@@ -253,20 +269,32 @@ int gen_cfg(void) {
   graph *cha = 0;
   dict *fats = 0;
   graph *aliases = 0;
-  merge_mcfi_metainfo(modules, &icfs, &functions, &classes, &cha, &fats, &aliases);
-  dict *all_funcs_grouped_by_name = 0;
+
+  merge_mcfi_metainfo(modules, &icfs, &functions, &classes,
+                      &cha, &fats, &aliases);
+
+  graph *all_funcs_grouped_by_name = 0;
   graph *callgraph =
     build_callgraph(icfs, functions, classes, cha,
                     fats, aliases, &all_funcs_grouped_by_name);
+
+  graph *retgraph = build_retgraph(callgraph, all_funcs_grouped_by_name, modules);
+  
   node *lcg = g_get_lcc(&callgraph);
 
   int count;
   node *n;
   DL_COUNT(lcg, n, count);
-  dprintf(STDERR_FILENO, "EQCs: %d\n", count);
+  dprintf(STDERR_FILENO, "Callgraph EQCs: %d\n", count);
+
+  node *lrt = g_get_lcc(&retgraph);
+  DL_COUNT(lrt, n, count);
+  dprintf(STDERR_FILENO, "Retgraph EQCs: %d\n", count);
+  //l_print(lrt, print_cfgcc);
 
   unsigned long id_for_others;
-  dict *callids = gen_mcfi_id(lcg, &version, &id_for_others);
+  dict *callids = 0, *retids = 0;
+  gen_mcfi_id(&lcg, &lrt, &version, &id_for_others, &callids, &retids);
 
   /* The CFG generation and update strategy is the following:
    * 1. generate the new bary and tary tables for all modules.
@@ -282,24 +310,36 @@ int gen_cfg(void) {
 
   DL_FOREACH(modules, m) {
     if (!m->cfggened) {
-      gen_tary(m, callids, table);
-      gen_bary(m, callids, table, id_for_others);
+      gen_tary(m, callids, retids, table);
+      gen_bary(m, callids, retids, table, id_for_others);
     }
   }
   
   DL_FOREACH(modules, m) {
     if (m->cfggened)
-      gen_tary(m, callids, table);
+      gen_tary(m, callids, retids, table);
   }
 
   /* write barrier, if needed */
   
   DL_FOREACH(modules, m) {
     if (m->cfggened)
-      gen_bary(m, callids, table, id_for_others);
+      gen_bary(m, callids, retids, table, id_for_others);
     else
       m->cfggened = TRUE;
   }
+
+  icfs_clear(&icfs);
+  functions_clear(&functions);
+  dict_clear(&classes);
+  g_dtor(&cha);
+  dict_clear(&fats);
+  g_dtor(&aliases);
+  g_dtor(&all_funcs_grouped_by_name);
+  g_dtor(&callgraph);
+  g_dtor(&retgraph);
+  dict_clear(&callids);
+  dict_clear(&retids);
   return 0;
 }
 
