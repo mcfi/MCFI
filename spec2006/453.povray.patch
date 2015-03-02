@@ -1,0 +1,654 @@
+diff -rupN src/bezier.cpp src.patched/bezier.cpp
+--- src/bezier.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/bezier.cpp	2015-03-02 09:12:50.757931247 -0500
+@@ -85,7 +85,7 @@ static int All_Bicubic_Patch_Intersectio
+ static int Inside_Bicubic_Patch (VECTOR IPoint, OBJECT *Object);
+ static void Bicubic_Patch_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+ static void Bicubic_Patch_UVCoord (UV_VECT Result, OBJECT *Object, INTERSECTION *Inter);
+-static BICUBIC_PATCH *Copy_Bicubic_Patch (OBJECT *Object);
++static void *Copy_Bicubic_Patch (OBJECT *Object);
+ static void Translate_Bicubic_Patch (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Bicubic_Patch (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Bicubic_Patch (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -2138,7 +2138,7 @@ BICUBIC_PATCH *Create_Bicubic_Patch()
+ *
+ ******************************************************************************/
+ 
+-static BICUBIC_PATCH *Copy_Bicubic_Patch(OBJECT *Object)
++static void *Copy_Bicubic_Patch(OBJECT *Object)
+ {
+   int i, j;
+   BICUBIC_PATCH *New;
+diff -rupN src/blob.cpp src.patched/blob.cpp
+--- src/blob.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/blob.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -159,7 +159,7 @@ static void insert_node (BLOB *Blob, BSP
+ static int  All_Blob_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int  Inside_Blob (VECTOR point, OBJECT *Object);
+ static void Blob_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static BLOB *Copy_Blob (OBJECT *Object);
++static void *Copy_Blob (OBJECT *Object);
+ static void Translate_Blob (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Blob (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Blob (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -2234,7 +2234,7 @@ BLOB *Create_Blob()
+ *
+ ******************************************************************************/
+ 
+-static BLOB *Copy_Blob(OBJECT *Object)
++static void *Copy_Blob(OBJECT *Object)
+ {
+   int i;
+   BLOB *New, *Old = (BLOB *)Object;
+diff -rupN src/boxes.cpp src.patched/boxes.cpp
+--- src/boxes.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/boxes.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -942,7 +942,7 @@ BOX *Create_Box()
+ *
+ ******************************************************************************/
+ 
+-BOX *Copy_Box(OBJECT *Object)
++void *Copy_Box(OBJECT *Object)
+ {
+   BOX *New;
+ 
+diff -rupN src/boxes.h src.patched/boxes.h
+--- src/boxes.h	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/boxes.h	2015-03-02 09:12:50.749931247 -0500
+@@ -72,7 +72,7 @@ extern METHODS Box_Methods;
+ int  Intersect_Box (RAY *Ray, TRANSFORM *Trans, VECTOR Corner1, VECTOR Corner2, DBL *Depth1, DBL *Depth2, int *Side1, int *Side2);
+ BOX  *Create_Box (void);
+ void Destroy_Box (OBJECT *Object);
+-BOX *Copy_Box (OBJECT *Object);
++void *Copy_Box (OBJECT *Object);
+ void Compute_Box_BBox (BOX *Box);
+ 
+ END_POV_NAMESPACE
+diff -rupN src/cones.cpp src.patched/cones.cpp
+--- src/cones.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/cones.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -80,7 +80,7 @@ static void Destroy_Cone (OBJECT *Object
+ static int All_Cone_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int Inside_Cone (VECTOR point, OBJECT *Object);
+ static void Cone_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static CONE *Copy_Cone (OBJECT *Object);
++static void *Copy_Cone (OBJECT *Object);
+ static void Translate_Cone (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Cone (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Cone (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -736,7 +736,7 @@ CONE *Create_Cone()
+ *
+ ******************************************************************************/
+ 
+-static CONE *Copy_Cone(OBJECT *Object)
++static void *Copy_Cone(OBJECT *Object)
+ {
+   CONE *New;
+ 
+diff -rupN src/csg.cpp src.patched/csg.cpp
+--- src/csg.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/csg.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -63,7 +63,7 @@ static int All_CSG_Merge_Intersections (
+ static int All_CSG_Intersect_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int Inside_CSG_Union (VECTOR point, OBJECT *Object);
+ static int Inside_CSG_Intersection (VECTOR point, OBJECT *Object);
+-static CSG *Copy_CSG (OBJECT *Object);
++static void *Copy_CSG (OBJECT *Object);
+ static void Translate_CSG (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_CSG (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_CSG (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -894,7 +894,7 @@ CSG *Create_CSG_Intersection ()
+ *
+ ******************************************************************************/
+ 
+-static CSG *Copy_CSG (OBJECT *Object)
++static void *Copy_CSG (OBJECT *Object)
+ {
+   CSG *New;
+   OBJECT *Old_Sib, *New_Sib, *Prev_Sib;
+diff -rupN src/discs.cpp src.patched/discs.cpp
+--- src/discs.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/discs.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -55,7 +55,7 @@ static int Intersect_Disc (RAY *Ray, DIS
+ static int All_Disc_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int Inside_Disc (VECTOR point, OBJECT *Object);
+ static void Disc_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static DISC *Copy_Disc (OBJECT *Object);
++static void *Copy_Disc (OBJECT *Object);
+ static void Translate_Disc (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Disc (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Disc (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -536,7 +536,7 @@ DISC *Create_Disc ()
+ *
+ ******************************************************************************/
+ 
+-static DISC *Copy_Disc (OBJECT *Object)
++static void *Copy_Disc (OBJECT *Object)
+ {
+   DISC *New;
+ 
+diff -rupN src/fractal.cpp src.patched/fractal.cpp
+--- src/fractal.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/fractal.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -65,7 +65,7 @@ const DBL Fractal_Tolerance = 1e-7;
+ static int All_Fractal_Intersections (OBJECT * Object, RAY * Ray, ISTACK * Depth_Stack);
+ static int Inside_Fractal (VECTOR IPoint, OBJECT * Object);
+ static void Fractal_Normal (VECTOR Result, OBJECT * Object, INTERSECTION * Intersect);
+-static FRACTAL *Copy_Fractal (OBJECT * Object);
++static void *Copy_Fractal (OBJECT * Object);
+ static void Translate_Fractal (OBJECT * Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Fractal (OBJECT * Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Fractal (OBJECT * Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -753,7 +753,7 @@ FRACTAL *Create_Fractal()
+ *
+ ******************************************************************************/
+ 
+-static FRACTAL *Copy_Fractal(OBJECT *Object)
++static void *Copy_Fractal(OBJECT *Object)
+ {
+   FRACTAL *New;
+ 
+diff -rupN src/hfield.cpp src.patched/hfield.cpp
+--- src/hfield.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/hfield.cpp	2015-03-02 09:12:50.757931247 -0500
+@@ -104,7 +104,7 @@ static void Rotate_HField (OBJECT *Objec
+ static void Scale_HField (OBJECT *Object,VECTOR Vector, TRANSFORM *Trans);
+ static void Invert_HField (OBJECT *Object);
+ static void Transform_HField (OBJECT *Object,TRANSFORM *Trans);
+-static HFIELD *Copy_HField (OBJECT *Object);
++static void *Copy_HField (OBJECT *Object);
+ static void Destroy_HField (OBJECT *Object);
+ 
+ static int dda_traversal (RAY *Ray, HFIELD *HField, VECTOR Start, HFIELD_BLOCK *Block, ISTACK *&HField_Stack, RAY *&RRay, DBL& mindist, DBL& maxdist);
+@@ -1351,7 +1351,7 @@ HFIELD *Create_HField()
+ *
+ ******************************************************************************/
+ 
+-static HFIELD *Copy_HField(OBJECT *Object)
++static void *Copy_HField(OBJECT *Object)
+ {
+   HFIELD *New;
+ 
+diff -rupN src/lathe.cpp src.patched/lathe.cpp
+--- src/lathe.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/lathe.cpp	2015-03-02 09:12:50.757931247 -0500
+@@ -158,7 +158,7 @@ static int  All_Lathe_Intersections (OBJ
+ static int  Inside_Lathe (VECTOR point, OBJECT *Object);
+ static void Lathe_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+ static void Lathe_UVCoord (UV_VECT Result, OBJECT *Object, INTERSECTION *Inter);
+-static LATHE *Copy_Lathe (OBJECT *Object);
++static void *Copy_Lathe (OBJECT *Object);
+ static void Translate_Lathe (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Lathe (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Lathe (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -966,7 +966,7 @@ LATHE *Create_Lathe()
+ *
+ ******************************************************************************/
+ 
+-static LATHE *Copy_Lathe(OBJECT *Object)
++static void *Copy_Lathe(OBJECT *Object)
+ {
+   LATHE *New, *Lathe = (LATHE *)Object;
+ 
+diff -rupN src/matrices.cpp src.patched/matrices.cpp
+--- src/matrices.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/matrices.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -1151,10 +1151,10 @@ TRANSFORM *Copy_Transform (TRANSFORM *Ol
+ *
+ ******************************************************************************/
+ 
+-void Destroy_Transform (TRANSFORM *Trans)
++void Destroy_Transform (void *Trans)
+ {
+ 	if(Trans != NULL)
+-		POV_FREE(Trans);
++          POV_FREE(Trans);
+ }
+ 
+ 
+diff -rupN src/matrices.h src.patched/matrices.h
+--- src/matrices.h	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/matrices.h	2015-03-02 09:12:50.753931247 -0500
+@@ -87,7 +87,7 @@ void Compute_Axis_Rotation_Transform (TR
+ void Compute_Coordinate_Transform (TRANSFORM *trans, VECTOR origin, VECTOR up, DBL r, DBL len);
+ TRANSFORM *Create_Transform (void);
+ TRANSFORM *Copy_Transform (TRANSFORM *Old);
+-void Destroy_Transform (TRANSFORM *Trans);
++void Destroy_Transform (void *Trans);
+ UV_VECT *Create_UV_Vect (void);
+ VECTOR *Create_Vector (void);
+ VECTOR_4D *Create_Vector_4D (void);
+diff -rupN src/mesh.cpp src.patched/mesh.cpp
+--- src/mesh.cpp	2015-03-02 09:12:50.757931247 -0500
++++ src.patched/mesh.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -111,7 +111,7 @@ static int All_Mesh_Intersections  (OBJE
+ static int Inside_Mesh  (VECTOR IPoint, OBJECT *Object);
+ static void Mesh_Normal  (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+ static void Mesh_UVCoord  (UV_VECT Result, OBJECT *Object, INTERSECTION *Inter);
+-static MESH *Copy_Mesh  (OBJECT *Object);
++static void *Copy_Mesh  (OBJECT *Object);
+ static void Translate_Mesh  (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Mesh  (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Mesh  (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -779,7 +779,7 @@ MESH *Create_Mesh()
+ *
+ ******************************************************************************/
+ 
+-static MESH *Copy_Mesh(OBJECT *Object)
++static void *Copy_Mesh(OBJECT *Object)
+ {
+   MESH *New;
+   int i;
+diff -rupN src/optout.cpp src.patched/optout.cpp
+--- src/optout.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/optout.cpp	2015-03-02 09:12:50.757931247 -0500
+@@ -302,9 +302,9 @@ const char *Extract_Version(const char *
+ 
+ 	for(; *str != 0; str++)
+ 	{
+-		if(isdigit(*str))
++          if(::isdigit(*str))
+ 		{
+-			while(((isalnum(*str)) || (*str == '.')) && (pos < 10))
++                  while(((::isalnum(*str)) || (*str == '.')) && (pos < 10))
+ 			{
+ 				LibVersionStringBuffer[pos] = *str;
+ 				str++;
+diff -rupN src/parse.cpp src.patched/parse.cpp
+--- src/parse.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/parse.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -8406,7 +8406,7 @@ char *Get_Reserved_Words (const char *ad
+ 
+   for (i = 0; i < LAST_TOKEN; i++)
+   {
+-    if (!isalpha (Reserved_Words [i].Token_Name [0]))
++    if (!::isalpha (Reserved_Words [i].Token_Name [0]))
+       continue ;
+     if (strchr (Reserved_Words [i].Token_Name, ' ') != NULL)
+       continue ;
+@@ -8421,7 +8421,7 @@ char *Get_Reserved_Words (const char *ad
+ 
+   for (i = 0 ; i < LAST_TOKEN ; i++)
+   {
+-    if (!isalpha (Reserved_Words [i].Token_Name [0]))
++    if (!::isalpha (Reserved_Words [i].Token_Name [0]))
+       continue ;
+     if (strchr (Reserved_Words [i].Token_Name, ' ') != NULL)
+       continue ;
+diff -rupN src/pgm.cpp src.patched/pgm.cpp
+--- src/pgm.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/pgm.cpp	2015-03-02 09:12:50.757931247 -0500
+@@ -88,12 +88,12 @@ int Read_ASCII_File_Number(IStream *file
+   }
+   while ( isspace(value) );
+ 
+-  if ( isdigit(value) ) buffer[pos] = (char)value;
++  if ( ::isdigit(value) ) buffer[pos] = (char)value;
+   else return -1;
+ 
+   while ( !isspace(value = filep->Read_Byte()) && (pos<48))
+   {
+-    if ( isdigit(value) )
++    if ( ::isdigit(value) )
+     {
+       pos++;
+       buffer[pos] = (char)value;
+diff -rupN src/pigment.cpp src.patched/pigment.cpp
+--- src/pigment.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/pigment.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -272,11 +272,11 @@ PIGMENT *Copy_Pigment (PIGMENT *Old)
+ *
+ ******************************************************************************/
+ 
+-void Destroy_Pigment (PIGMENT *Pigment)
++void Destroy_Pigment (void *Pigment)
+ {
+   if (Pigment != NULL)
+   {
+-    Destroy_Pigment((PIGMENT *)Pigment->Next);
++    Destroy_Pigment(((PIGMENT *)Pigment)->Next);
+ 
+     Destroy_TPat_Fields ((TPATTERN *)Pigment);
+ 
+diff -rupN src/pigment.h src.patched/pigment.h
+--- src/pigment.h	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/pigment.h	2015-03-02 09:12:50.753931247 -0500
+@@ -70,7 +70,7 @@ extern BLEND_MAP Check_Default_Map;
+ 
+ PIGMENT *Create_Pigment (void);
+ PIGMENT *Copy_Pigment (PIGMENT *Old);
+-void Destroy_Pigment (PIGMENT *Pigment);
++void Destroy_Pigment (void *Pigment);
+ int Post_Pigment (PIGMENT *Pigment);
+ int Compute_Pigment (COLOUR Colour, PIGMENT *Pigment, VECTOR IPoint, INTERSECTION *Intersect);
+ void Make_Pigment_Entries (void);
+diff -rupN src/planes.cpp src.patched/planes.cpp
+--- src/planes.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/planes.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -52,7 +52,7 @@ static int   Intersect_Plane (RAY *Ray,
+ static int   All_Plane_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int   Inside_Plane (VECTOR point, OBJECT *Object);
+ static void  Plane_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static PLANE *Copy_Plane (OBJECT *Object);
++static void *Copy_Plane (OBJECT *Object);
+ static void  Translate_Plane (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void  Rotate_Plane (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void  Scale_Plane (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -572,7 +572,7 @@ PLANE *Create_Plane()
+ *
+ ******************************************************************************/
+ 
+-static PLANE *Copy_Plane (OBJECT *Object)
++static void *Copy_Plane (OBJECT *Object)
+ {
+   PLANE *New;
+ 
+diff -rupN src/point.cpp src.patched/point.cpp
+--- src/point.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/point.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -65,7 +65,7 @@ static void Rotate_Light_Source (OBJECT
+ static void Scale_Light_Source (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Transform_Light_Source (OBJECT *Object, TRANSFORM *Trans);
+ static void Invert_Light_Source (OBJECT *Object);
+-static LIGHT_SOURCE *Copy_Light_Source (OBJECT *Object);
++static void *Copy_Light_Source (OBJECT *Object);
+ static void Destroy_Light_Source (OBJECT *Object);
+ 
+ /*****************************************************************************
+@@ -530,7 +530,7 @@ LIGHT_SOURCE *Create_Light_Source ()
+ *
+ ******************************************************************************/
+ 
+-static LIGHT_SOURCE *Copy_Light_Source (OBJECT *Old)
++static void *Copy_Light_Source (OBJECT *Old)
+ {
+   int i, j;
+   LIGHT_SOURCE *New;
+diff -rupN src/poly.cpp src.patched/poly.cpp
+--- src/poly.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/poly.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -95,7 +95,7 @@ static DBL evaluate_quadratic (VECTOR P,
+ static int All_Poly_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int Inside_Poly (VECTOR IPoint, OBJECT *Object);
+ static void Poly_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static POLY *Copy_Poly (OBJECT *Object);
++static void *Copy_Poly (OBJECT *Object);
+ static void Translate_Poly (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Poly (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Poly (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -1423,7 +1423,7 @@ POLY *Create_Poly(int Order)
+ *
+ ******************************************************************************/
+ 
+-static POLY *Copy_Poly(OBJECT *Object)
++static void *Copy_Poly(OBJECT *Object)
+ {
+   POLY *New;
+   int i;
+diff -rupN src/polygon.cpp src.patched/polygon.cpp
+--- src/polygon.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/polygon.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -87,7 +87,7 @@ static int in_polygon (int Number, UV_VE
+ static int  All_Polygon_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int  Inside_Polygon (VECTOR point, OBJECT *Object);
+ static void Polygon_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static POLYGON *Copy_Polygon (OBJECT *Object);
++static void *Copy_Polygon (OBJECT *Object);
+ static void Translate_Polygon (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Polygon (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Polygon (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -615,7 +615,7 @@ POLYGON *Create_Polygon()
+ *
+ ******************************************************************************/
+ 
+-static POLYGON *Copy_Polygon(OBJECT *Object)
++static void *Copy_Polygon(OBJECT *Object)
+ {
+   POLYGON *New, *Polyg = (POLYGON *)Object;
+ 
+diff -rupN src/prism.cpp src.patched/prism.cpp
+--- src/prism.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/prism.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -153,7 +153,7 @@ static int test_rectangle (VECTOR P, VEC
+ static int   All_Prism_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int   Inside_Prism (VECTOR point, OBJECT *Object);
+ static void  Prism_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static PRISM *Copy_Prism (OBJECT *Object);
++static void *Copy_Prism (OBJECT *Object);
+ static void  Translate_Prism (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void  Rotate_Prism (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void  Scale_Prism (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -1168,7 +1168,7 @@ PRISM *Create_Prism()
+ *
+ ******************************************************************************/
+ 
+-static PRISM *Copy_Prism(OBJECT *Object)
++static void *Copy_Prism(OBJECT *Object)
+ {
+   PRISM *New, *Prism = (PRISM *)Object;
+ 
+diff -rupN src/processoptions.cpp src.patched/processoptions.cpp
+--- src/processoptions.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/processoptions.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -870,7 +870,7 @@ bool ProcessOptions::Parse_INI_String_Sm
+ 		#if(FILENAME_SEPARATOR != '/')
+ 		case '/':
+ 		#endif
+-			if(isalpha(file->getchar()))
++                  if(::isalpha(file->getchar()))
+ 				break; // return false, this is most likely a command-line
+ 			else
+ 				file->seekg(backtrackpos); // most likely an unquoted string, so allow parsing it as a whole
+diff -rupN src/processrenderoptions.cpp src.patched/processrenderoptions.cpp
+--- src/processrenderoptions.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/processrenderoptions.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -485,7 +485,7 @@ int ProcessRenderOptions::ReadSpecialSwi
+ 			param++;
+ 			if((err == kNoErr) && (*param > ' '))
+ 			{
+-				if(isdigit(*param) != 0)
++                          if(::isdigit(*param) != 0)
+ 				{
+ 					if(sscanf(param, "%d", &intval) == 1)
+ 						err = POVMSUtil_SetInt(obj, kPOVAttrib_BitsPerColor, intval);
+diff -rupN src/quadrics.cpp src.patched/quadrics.cpp
+--- src/quadrics.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/quadrics.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -82,7 +82,7 @@ static void Matrix_To_Quadric (MATRIX Ma
+ static int All_Quadric_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int Inside_Quadric (VECTOR IPoint, OBJECT *Object);
+ static void Quadric_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static QUADRIC *Copy_Quadric (OBJECT *Object);
++static void *Copy_Quadric (OBJECT *Object);
+ static void Translate_Quadric (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Quadric (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Quadric (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -702,7 +702,7 @@ QUADRIC *Create_Quadric()
+ *
+ ******************************************************************************/
+ 
+-static QUADRIC *Copy_Quadric(OBJECT *Object)
++static void *Copy_Quadric(OBJECT *Object)
+ {
+   QUADRIC *New;
+ 
+diff -rupN src/spheres.cpp src.patched/spheres.cpp
+--- src/spheres.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/spheres.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -511,7 +511,7 @@ static void Ellipsoid_Normal(VECTOR Resu
+ *
+ ******************************************************************************/
+ 
+-SPHERE *Copy_Sphere(OBJECT *Object)
++void *Copy_Sphere(OBJECT *Object)
+ {
+   SPHERE *New;
+ 
+diff -rupN src/spheres.h src.patched/spheres.h
+--- src/spheres.h	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/spheres.h	2015-03-02 09:12:50.753931247 -0500
+@@ -69,7 +69,7 @@ struct Sphere_Struct
+ SPHERE *Create_Sphere (void);
+ void Compute_Sphere_BBox (SPHERE *Sphere);
+ int Intersect_Sphere (RAY *Ray, VECTOR Center, DBL Radius2, DBL *Depth1, DBL *Depth2);
+-SPHERE *Copy_Sphere (OBJECT *Object);
++void *Copy_Sphere (OBJECT *Object);
+ void Transform_Sphere (OBJECT *Object, TRANSFORM *Trans);
+ void Destroy_Sphere (OBJECT *Object);
+ 
+diff -rupN src/splines.cpp src.patched/splines.cpp
+--- src/splines.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/splines.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -556,9 +556,9 @@ SPLINE * Copy_Spline(SPLINE * Old)
+ *
+ ******************************************************************************/
+ 
+-void Destroy_Spline(SPLINE * Spline)
++void Destroy_Spline(void * Spline)
+ {
+-    POV_FREE(Spline->SplineEntries);
++    POV_FREE(((SPLINE*)Spline)->SplineEntries);
+     POV_FREE(Spline);
+ }
+ 
+diff -rupN src/splines.h src.patched/splines.h
+--- src/splines.h	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/splines.h	2015-03-02 09:12:50.753931247 -0500
+@@ -59,7 +59,7 @@ BEGIN_POV_NAMESPACE
+ 
+ SPLINE * Create_Spline(int Type);
+ SPLINE * Copy_Spline(SPLINE * Old);
+-void Destroy_Spline(SPLINE * Spline);
++void Destroy_Spline(void * Spline);
+ void Insert_Spline_Entry(SPLINE * Spline, DBL p, EXPRESS v);
+ DBL Get_Spline_Val(SPLINE * sp, DBL p, EXPRESS v, int *Terms);
+ 
+diff -rupN src/tokenize.cpp src.patched/tokenize.cpp
+--- src/tokenize.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/tokenize.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -1779,7 +1779,7 @@ static bool Read_Float()
+ 
+         Phase = 1;
+ 
+-        if (isdigit(c))
++        if (::isdigit(c))
+         {
+           Stuff_Character_Fast(c);
+         }
+@@ -1794,7 +1794,7 @@ static bool Read_Float()
+               Error ("Unexpected end of file");
+             }
+ 
+-            if (isdigit(c))
++            if (::isdigit(c))
+             {
+               Stuff_Character_Fast('0');
+               Stuff_Character_Fast('.');
+@@ -1820,7 +1820,7 @@ static bool Read_Float()
+         break;
+ 
+       case 1:
+-        if (isdigit(c))
++        if (::isdigit(c))
+         {
+           Stuff_Character_Fast(c);
+         }
+@@ -1847,7 +1847,7 @@ static bool Read_Float()
+ 
+       case 2:
+ 
+-        if (isdigit(c))
++        if (::isdigit(c))
+         {
+           Stuff_Character_Fast(c);
+         }
+@@ -1867,7 +1867,7 @@ static bool Read_Float()
+ 
+       case 3:
+ 
+-        if (isdigit(c) || (c == '+') || (c == '-'))
++        if (::isdigit(c) || (c == '+') || (c == '-'))
+         {
+           Stuff_Character_Fast(c); Phase = 4;
+         }
+@@ -1880,7 +1880,7 @@ static bool Read_Float()
+ 
+       case 4:
+ 
+-        if (isdigit(c))
++        if (::isdigit(c))
+         {
+           Stuff_Character_Fast(c);
+         }
+@@ -1953,7 +1953,7 @@ static void Read_Symbol()
+       Error ("Unexpected end of file.");
+     }
+ 
+-    if (isalpha(c) || isdigit(c) || c == (int) '_')
++    if (::isalpha(c) || ::isdigit(c) || c == (int) '_')
+     {
+       Stuff_Character_Fast(c);
+     }
+diff -rupN src/torus.cpp src.patched/torus.cpp
+--- src/torus.cpp	2015-03-02 09:12:50.761931247 -0500
++++ src.patched/torus.cpp	2015-03-02 09:12:50.749931247 -0500
+@@ -75,7 +75,7 @@ static int   All_Torus_Intersections (OB
+ static int   Inside_Torus (VECTOR point, OBJECT *Object);
+ static void  Torus_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+ static void  Torus_UVCoord(UV_VECT Result, OBJECT *Object, INTERSECTION *Inter);
+-static TORUS *Copy_Torus (OBJECT *Object);
++static void *Copy_Torus (OBJECT *Object);
+ static void  Translate_Torus (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void  Rotate_Torus (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void  Scale_Torus (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -690,7 +690,7 @@ TORUS *Create_Torus()
+ *
+ ******************************************************************************/
+ 
+-static TORUS *Copy_Torus(OBJECT *Object)
++static void *Copy_Torus(OBJECT *Object)
+ {
+   TORUS *New, *Torus = (TORUS *)Object;
+ 
+diff -rupN src/triangle.cpp src.patched/triangle.cpp
+--- src/triangle.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/triangle.cpp	2015-03-02 09:12:50.753931247 -0500
+@@ -68,7 +68,7 @@ static void Scale_Triangle  (OBJECT *Obj
+ static void Transform_Triangle  (OBJECT *Object, TRANSFORM *Trans);
+ static void Invert_Triangle  (OBJECT *Object);
+ static void Smooth_Triangle_Normal  (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static SMOOTH_TRIANGLE *Copy_Smooth_Triangle (OBJECT *Object);
++static void *Copy_Smooth_Triangle (OBJECT *Object);
+ static void Translate_Smooth_Triangle  (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_Smooth_Triangle  (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_Smooth_Triangle  (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -1380,7 +1380,7 @@ SMOOTH_TRIANGLE *Create_Smooth_Triangle(
+ *
+ ******************************************************************************/
+ 
+-static SMOOTH_TRIANGLE *Copy_Smooth_Triangle(OBJECT *Object)
++static void *Copy_Smooth_Triangle(OBJECT *Object)
+ {
+   SMOOTH_TRIANGLE *New;
+ 
+diff -rupN src/truetype.cpp src.patched/truetype.cpp
+--- src/truetype.cpp	2015-03-02 09:12:50.765931247 -0500
++++ src.patched/truetype.cpp	2015-03-02 09:12:50.757931247 -0500
+@@ -359,7 +359,7 @@ static TTF *Create_TTF (void);
+ static int All_TTF_Intersections (OBJECT *Object, RAY *Ray, ISTACK *Depth_Stack);
+ static int Inside_TTF (VECTOR IPoint, OBJECT *Object);
+ static void TTF_Normal (VECTOR Result, OBJECT *Object, INTERSECTION *Inter);
+-static TTF  *Copy_TTF (OBJECT *Object);
++static void  *Copy_TTF (OBJECT *Object);
+ static void Translate_TTF (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Rotate_TTF (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+ static void Scale_TTF (OBJECT *Object, VECTOR Vector, TRANSFORM *Trans);
+@@ -3075,7 +3075,7 @@ static void TTF_Normal(VECTOR Result, OB
+   Assign_Vector(Result, Inter->INormal);
+ }
+ 
+-static TTF *Copy_TTF(OBJECT *Object)
++static void *Copy_TTF(OBJECT *Object)
+ {
+   TTF *New, *Old = (TTF *) Object;
+ 

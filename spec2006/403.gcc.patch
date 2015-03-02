@@ -1,0 +1,619 @@
+diff -rupN src/builtins.c src.patched/builtins.c
+--- src/builtins.c	2015-03-02 09:12:50.473931247 -0500
++++ src.patched/builtins.c	2015-03-02 09:12:50.453931247 -0500
+@@ -1644,8 +1644,8 @@ expand_builtin_strlen (exp, target)
+ 							    char_mode))
+ 	char_rtx = copy_to_mode_reg (char_mode, char_rtx);
+ 
+-      pat = GEN_FCN (icode) (result, gen_rtx_MEM (BLKmode, src_reg),
+-			     char_rtx, GEN_INT (align));
++      pat = GEN_FCN_ARG_4 (icode) (result, gen_rtx_MEM (BLKmode, src_reg),
++                                   char_rtx, GEN_INT (align));
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+diff -rupN src/c-lex.c src.patched/c-lex.c
+--- src/c-lex.c	2015-03-02 09:12:50.465931247 -0500
++++ src.patched/c-lex.c	2015-03-02 09:12:50.449931247 -0500
+@@ -108,9 +108,9 @@ init_c_lex (filename)
+   struct c_fileinfo *toplevel;
+ 
+   /* Set up filename timing.  Must happen before cpp_read_main_file.  */
+-  file_info_tree = splay_tree_new ((splay_tree_compare_fn)strcmp,
++  file_info_tree = splay_tree_new (splay_tree_compare_strs,
+ 				   0,
+-				   (splay_tree_delete_value_fn)free);
++				   splay_tree_default_delete_value);
+   toplevel = get_fileinfo ("<top level>");
+   if (flag_detailed_statistics)
+     {
+diff -rupN src/cppfiles.c src.patched/cppfiles.c
+--- src/cppfiles.c	2015-03-02 09:12:50.465931247 -0500
++++ src.patched/cppfiles.c	2015-03-02 09:12:50.449931247 -0500
+@@ -150,8 +150,8 @@ _cpp_init_includes (pfile)
+      cpp_reader *pfile;
+ {
+   pfile->all_include_files
+-    = splay_tree_new ((splay_tree_compare_fn) strcmp,
+-		      (splay_tree_delete_key_fn) free,
++    = splay_tree_new (splay_tree_compare_strs,
++		      splay_tree_default_delete_key,
+ 		      destroy_node);
+ }
+ 
+diff -rupN src/expmed.c src.patched/expmed.c
+--- src/expmed.c	2015-03-02 09:12:50.469931247 -0500
++++ src.patched/expmed.c	2015-03-02 09:12:50.449931247 -0500
+@@ -444,7 +444,7 @@ store_bit_field (str_rtx, bitsize, bitnu
+ 	    abort ();
+ 	}
+ 
+-      emit_insn (GEN_FCN (icode)
++      emit_insn (GEN_FCN_ARG_2 (icode)
+ 		 (gen_rtx_SUBREG (fieldmode, op0,
+ 				  (bitnum % BITS_PER_WORD) / BITS_PER_UNIT
+ 				  + (offset * UNITS_PER_WORD)),
+@@ -4410,7 +4410,7 @@ emit_store_flag (target, code, op0, op1,
+ 	  || ! (*pred) (subtarget, compare_mode))
+ 	subtarget = gen_reg_rtx (compare_mode);
+ 
+-      pattern = GEN_FCN (icode) (subtarget);
++      pattern = GEN_FCN_ARG_1 (icode) (subtarget);
+       if (pattern)
+ 	{
+ 	  emit_insn (pattern);
+diff -rupN src/expr.c src.patched/expr.c
+--- src/expr.c	2015-03-02 09:12:50.481931247 -0500
++++ src.patched/expr.c	2015-03-02 09:12:50.457931247 -0500
+@@ -1584,7 +1584,7 @@ move_by_pieces_1 (genfun, mode, data)
+ 				  GEN_INT (-(HOST_WIDE_INT)size)));
+ 
+       if (data->to)
+-	emit_insn ((*genfun) (to1, from1));
++	emit_insn ((*((insn_gen_fn_arg2)genfun)) (to1, from1));
+       else
+ 	{
+ #ifdef PUSH_ROUNDING
+@@ -1692,7 +1692,7 @@ emit_block_move (x, y, size)
+ 	      if (pred != 0 && ! (*pred) (op2, mode))
+ 		op2 = copy_to_mode_reg (mode, op2);
+ 
+-	      pat = GEN_FCN ((int) code) (x, y, op2, opalign);
++	      pat = GEN_FCN_ARG_4 ((int) code) (x, y, op2, opalign);
+ 	      if (pat)
+ 		{
+ 		  emit_insn (pat);
+@@ -2553,7 +2553,7 @@ store_by_pieces_2 (genfun, mode, data)
+ 				  GEN_INT (-(HOST_WIDE_INT) size)));
+ 
+       cst = (*data->constfun) (data->constfundata, data->offset, mode);
+-      emit_insn ((*genfun) (to1, cst));
++      emit_insn ((*((insn_gen_fn_arg2)genfun)) (to1, cst));
+ 
+       if (HAVE_POST_INCREMENT && data->explicit_inc_to > 0)
+ 	emit_insn (gen_add2_insn (data->to_addr, GEN_INT (size)));
+@@ -2633,7 +2633,7 @@ clear_storage (object, size)
+ 		  if (pred != 0 && ! (*pred) (op1, mode))
+ 		    op1 = copy_to_mode_reg (mode, op1);
+ 
+-		  pat = GEN_FCN ((int) code) (object, op1, opalign);
++		  pat = GEN_FCN_ARG_3 ((int) code) (object, op1, opalign);
+ 		  if (pat)
+ 		    {
+ 		      emit_insn (pat);
+@@ -2820,7 +2820,7 @@ emit_move_insn_1 (x, y)
+ 
+   if (mov_optab->handlers[(int) mode].insn_code != CODE_FOR_nothing)
+     return
+-      emit_insn (GEN_FCN (mov_optab->handlers[(int) mode].insn_code) (x, y));
++      emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) mode].insn_code) (x, y));
+ 
+   /* Expand complex moves by moving real part and imag part, if possible.  */
+   else if ((class == MODE_COMPLEX_FLOAT || class == MODE_COMPLEX_INT)
+@@ -2894,17 +2894,17 @@ emit_move_insn_1 (x, y)
+ 	  /* Note that the real part always precedes the imag part in memory
+ 	     regardless of machine's endianness.  */
+ #ifdef STACK_GROWS_DOWNWARD
+-	  emit_insn (GEN_FCN (mov_optab->handlers[(int) submode].insn_code)
++	  emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) submode].insn_code)
+ 		     (gen_rtx_MEM (submode, XEXP (x, 0)),
+ 		      gen_imagpart (submode, y)));
+-	  emit_insn (GEN_FCN (mov_optab->handlers[(int) submode].insn_code)
++	  emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) submode].insn_code)
+ 		     (gen_rtx_MEM (submode, XEXP (x, 0)),
+ 		      gen_realpart (submode, y)));
+ #else
+-	  emit_insn (GEN_FCN (mov_optab->handlers[(int) submode].insn_code)
++	  emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) submode].insn_code)
+ 		     (gen_rtx_MEM (submode, XEXP (x, 0)),
+ 		      gen_realpart (submode, y)));
+-	  emit_insn (GEN_FCN (mov_optab->handlers[(int) submode].insn_code)
++	  emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) submode].insn_code)
+ 		     (gen_rtx_MEM (submode, XEXP (x, 0)),
+ 		      gen_imagpart (submode, y)));
+ #endif
+@@ -2981,9 +2981,9 @@ emit_move_insn_1 (x, y)
+ 		  || GET_CODE (imagpart_x) == SUBREG))
+ 	    emit_insn (gen_rtx_CLOBBER (VOIDmode, x));
+ 
+-	  emit_insn (GEN_FCN (mov_optab->handlers[(int) submode].insn_code)
++	  emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) submode].insn_code)
+ 		     (realpart_x, realpart_y));
+-	  emit_insn (GEN_FCN (mov_optab->handlers[(int) submode].insn_code)
++	  emit_insn (GEN_FCN_ARG_2 (mov_optab->handlers[(int) submode].insn_code)
+ 		     (imagpart_x, imagpart_y));
+ 	}
+ 
+@@ -3184,7 +3184,7 @@ emit_single_push_insn (mode, x, type)
+       if (((pred = insn_data[(int) icode].operand[0].predicate)
+ 	   && !((*pred) (x, mode))))
+ 	x = force_reg (mode, x);
+-      emit_insn (GEN_FCN (icode) (x));
++      emit_insn (GEN_FCN_ARG_1 (icode) (x));
+       return;
+     }
+   if (GET_MODE_SIZE (mode) == rounded_size)
+@@ -3431,7 +3431,7 @@ emit_push_insn (x, mode, type, size, ali
+ 		      if (pred != 0 && ! (*pred) (op2, mode))
+ 			op2 = copy_to_mode_reg (mode, op2);
+ 
+-		      pat = GEN_FCN ((int) code) (target, xinner,
++		      pat = GEN_FCN_ARG_4 ((int) code) (target, xinner,
+ 						  op2, opalign);
+ 		      if (pat)
+ 			{
+@@ -9125,7 +9125,7 @@ expand_increment (exp, post, ignore)
+ 	  if (! (*insn_data[icode].operand[2].predicate) (op1, mode))
+ 	    op1 = force_reg (mode, op1);
+ 
+-	  return enqueue_insn (op0, GEN_FCN (icode) (op0, op0, op1));
++	  return enqueue_insn (op0, GEN_FCN_ARG_3 (icode) (op0, op0, op1));
+ 	}
+       if (icode != (int) CODE_FOR_nothing && GET_CODE (op0) == MEM)
+ 	{
+@@ -9142,7 +9142,7 @@ expand_increment (exp, post, ignore)
+ 	  /* The increment queue is LIFO, thus we have to `queue'
+ 	     the instructions in reverse order.  */
+ 	  enqueue_insn (op0, gen_move_insn (op0, temp));
+-	  result = enqueue_insn (temp, GEN_FCN (icode) (temp, temp, op1));
++	  result = enqueue_insn (temp, GEN_FCN_ARG_3 (icode) (temp, temp, op1));
+ 	  return result;
+ 	}
+     }
+diff -rupN src/i386.c src.patched/i386.c
+--- src/i386.c	2015-03-02 09:12:50.477931247 -0500
++++ src.patched/i386.c	2015-03-02 09:12:50.453931247 -0500
+@@ -11511,7 +11511,7 @@ ix86_expand_binop_builtin (icode, arglis
+   if (GET_CODE (op0) == MEM && GET_CODE (op1) == MEM)
+     op0 = copy_to_mode_reg (mode0, op0);
+ 
+-  pat = GEN_FCN (icode) (target, op0, op1);
++  pat = GEN_FCN_ARG_3 (icode) (target, op0, op1);
+   if (! pat)
+     return 0;
+   emit_insn (pat);
+@@ -11549,7 +11549,7 @@ ix86_expand_timode_binop_builtin (icode,
+   if (GET_CODE (op0) == MEM && GET_CODE (op1) == MEM)
+     op0 = copy_to_mode_reg (TImode, op0);
+ 
+-  pat = GEN_FCN (icode) (target, op0, op1);
++  pat = GEN_FCN_ARG_3 (icode) (target, op0, op1);
+   if (! pat)
+     return 0;
+   emit_insn (pat);
+@@ -11580,7 +11580,7 @@ ix86_expand_store_builtin (icode, arglis
+   if (! (*insn_data[icode].operand[1].predicate) (op1, mode1))
+     op1 = copy_to_mode_reg (mode1, op1);
+ 
+-  pat = GEN_FCN (icode) (op0, op1);
++  pat = GEN_FCN_ARG_2 (icode) (op0, op1);
+   if (pat)
+     emit_insn (pat);
+   return 0;
+@@ -11616,7 +11616,7 @@ ix86_expand_unop_builtin (icode, arglist
+ 	op0 = copy_to_mode_reg (mode0, op0);
+     }
+ 
+-  pat = GEN_FCN (icode) (target, op0);
++  pat = GEN_FCN_ARG_2 (icode) (target, op0);
+   if (! pat)
+     return 0;
+   emit_insn (pat);
+@@ -11653,7 +11653,7 @@ ix86_expand_unop1_builtin (icode, arglis
+   if (! (*insn_data[icode].operand[2].predicate) (op1, mode0))
+     op1 = copy_to_mode_reg (mode0, op1);
+   
+-  pat = GEN_FCN (icode) (target, op0, op1);
++  pat = GEN_FCN_ARG_3 (icode) (target, op0, op1);
+   if (! pat)
+     return 0;
+   emit_insn (pat);
+@@ -11705,7 +11705,7 @@ ix86_expand_sse_compare (d, arglist, tar
+     op1 = copy_to_mode_reg (mode1, op1);
+ 
+   op2 = gen_rtx_fmt_ee (comparison, mode0, op0, op1);
+-  pat = GEN_FCN (d->icode) (target, op0, op1, op2);
++  pat = GEN_FCN_ARG_4 (d->icode) (target, op0, op1, op2);
+   if (! pat)
+     return 0;
+   emit_insn (pat);
+@@ -11754,7 +11754,7 @@ ix86_expand_sse_comi (d, arglist, target
+     op1 = copy_to_mode_reg (mode1, op1);
+ 
+   op2 = gen_rtx_fmt_ee (comparison, mode0, op0, op1);
+-  pat = GEN_FCN (d->icode) (op0, op1, op2);
++  pat = GEN_FCN_ARG_3 (d->icode) (op0, op1, op2);
+   if (! pat)
+     return 0;
+   emit_insn (pat);
+@@ -11823,7 +11823,7 @@ ix86_expand_builtin (exp, target, subtar
+ 	  || GET_MODE (target) != tmode
+ 	  || ! (*insn_data[icode].operand[0].predicate) (target, tmode))
+ 	target = gen_reg_rtx (tmode);
+-      pat = GEN_FCN (icode) (target, op0, op1);
++      pat = GEN_FCN_ARG_3 (icode) (target, op0, op1);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+@@ -11856,7 +11856,7 @@ ix86_expand_builtin (exp, target, subtar
+ 	  || GET_MODE (target) != tmode
+ 	  || ! (*insn_data[icode].operand[0].predicate) (target, tmode))
+ 	target = gen_reg_rtx (tmode);
+-      pat = GEN_FCN (icode) (target, op0, op1, op2);
++      pat = GEN_FCN_ARG_4 (icode) (target, op0, op1, op2);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+@@ -11881,7 +11881,7 @@ ix86_expand_builtin (exp, target, subtar
+ 	op1 = copy_to_mode_reg (mode1, op1);
+       if (! (*insn_data[icode].operand[2].predicate) (op2, mode2))
+ 	op2 = copy_to_mode_reg (mode2, op2);
+-      pat = GEN_FCN (icode) (op0, op1, op2);
++      pat = GEN_FCN_ARG_3 (icode) (op0, op1, op2);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+@@ -11943,7 +11943,7 @@ ix86_expand_builtin (exp, target, subtar
+ 	  || GET_MODE (target) != tmode
+ 	  || ! (*insn_data[icode].operand[0].predicate) (target, tmode))
+ 	target = gen_reg_rtx (tmode);
+-      pat = GEN_FCN (icode) (target, op0, op1);
++      pat = GEN_FCN_ARG_3 (icode) (target, op0, op1);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+@@ -11964,7 +11964,7 @@ ix86_expand_builtin (exp, target, subtar
+       if (! (*insn_data[icode].operand[2].predicate) (op1, mode1))
+ 	op1 = copy_to_mode_reg (mode1, op1);
+ 
+-      pat = GEN_FCN (icode) (op0, op0, op1);
++      pat = GEN_FCN_ARG_3 (icode) (op0, op0, op1);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+@@ -12014,7 +12014,7 @@ ix86_expand_builtin (exp, target, subtar
+ 	  || GET_MODE (target) != tmode
+ 	  || ! (*insn_data[icode].operand[0].predicate) (target, tmode))
+ 	target = gen_reg_rtx (tmode);
+-      pat = GEN_FCN (icode) (target, op0, op1, op2);
++      pat = GEN_FCN_ARG_4 (icode) (target, op0, op1, op2);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+@@ -12042,7 +12042,7 @@ ix86_expand_builtin (exp, target, subtar
+ 	  || GET_MODE (target) != tmode
+ 	  || ! (*insn_data[icode].operand[0].predicate) (target, tmode))
+ 	target = gen_reg_rtx (tmode);
+-      pat = GEN_FCN (icode) (target, op0, op1);
++      pat = GEN_FCN_ARG_3 (icode) (target, op0, op1);
+       if (! pat)
+ 	return 0;
+       emit_insn (pat);
+diff -rupN src/obstack.c src.patched/obstack.c
+--- src/obstack.c	2015-03-02 09:12:50.481931247 -0500
++++ src.patched/obstack.c	2015-03-02 09:12:50.457931247 -0500
+@@ -111,7 +111,7 @@ struct obstack *_obstack;
+ #define CALL_CHUNKFUN(h, size) \
+   (((h) -> use_extra_arg) \
+    ? (*(h)->chunkfun) ((h)->extra_arg, (size)) \
+-   : (*(struct _obstack_chunk *(*) (long)) (h)->chunkfun) ((size)))
++   : (*(void *(*) (size_t)) (h)->chunkfun) ((size)))
+ 
+ #define CALL_FREEFUN(h, old_chunk) \
+   do { \
+diff -rupN src/optabs.c src.patched/optabs.c
+--- src/optabs.c	2015-03-02 09:12:50.473931247 -0500
++++ src.patched/optabs.c	2015-03-02 09:12:50.453931247 -0500
+@@ -796,7 +796,7 @@ expand_binop (mode, binoptab, op0, op1,
+       if (! (*insn_data[icode].operand[0].predicate) (temp, mode))
+ 	temp = gen_reg_rtx (mode);
+ 
+-      pat = GEN_FCN (icode) (temp, xop0, xop1);
++      pat = GEN_FCN_ARG_3 (icode) (temp, xop0, xop1);
+       if (pat)
+ 	{
+ 	  /* If PAT is a multi-insn sequence, try to add an appropriate
+@@ -1997,7 +1997,7 @@ expand_twoval_binop (binoptab, op0, op1,
+ 	  || ! (*insn_data[icode].operand[3].predicate) (targ1, mode))
+ 	abort ();
+ 	
+-      pat = GEN_FCN (icode) (targ0, xop0, xop1, targ1);
++      pat = GEN_FCN_ARG_4 (icode) (targ0, xop0, xop1, targ1);
+       if (pat)
+ 	{
+ 	  emit_insn (pat);
+@@ -2117,7 +2117,7 @@ expand_unop (mode, unoptab, op0, target,
+       if (! (*insn_data[icode].operand[0].predicate) (temp, mode))
+ 	temp = gen_reg_rtx (mode);
+ 
+-      pat = GEN_FCN (icode) (temp, xop0);
++      pat = GEN_FCN_ARG_2 (icode) (temp, xop0);
+       if (pat)
+ 	{
+ 	  if (GET_CODE (pat) == SEQUENCE
+@@ -2509,7 +2509,7 @@ expand_complex_abs (mode, op0, target, u
+       if (! (*insn_data[icode].operand[0].predicate) (temp, submode))
+ 	temp = gen_reg_rtx (submode);
+ 
+-      pat = GEN_FCN (icode) (temp, xop0);
++      pat = GEN_FCN_ARG_2 (icode) (temp, xop0);
+       if (pat)
+ 	{
+ 	  if (GET_CODE (pat) == SEQUENCE
+@@ -2679,7 +2679,7 @@ emit_unop_insn (icode, target, op0, code
+       || (flag_force_mem && GET_CODE (temp) == MEM))
+     temp = gen_reg_rtx (GET_MODE (temp));
+ 
+-  pat = GEN_FCN (icode) (temp, op0);
++  pat = GEN_FCN_ARG_2 (icode) (temp, op0);
+ 
+   if (GET_CODE (pat) == SEQUENCE && code != UNKNOWN)
+     add_equal_note (pat, temp, code, op0, NULL_RTX);
+@@ -3294,7 +3294,7 @@ emit_cmp_and_jump_insn_1 (x, y, mode, co
+ 	    {
+ 	      x = prepare_operand (icode, x, 1, mode, wider_mode, unsignedp);
+ 	      y = prepare_operand (icode, y, 2, mode, wider_mode, unsignedp);
+-	      emit_jump_insn (GEN_FCN (icode) (test, x, y, label));
++	      emit_jump_insn (GEN_FCN_ARG_4 (icode) (test, x, y, label));
+ 	      return;
+ 	    }
+ 	}
+@@ -3304,7 +3304,7 @@ emit_cmp_and_jump_insn_1 (x, y, mode, co
+       if (y == CONST0_RTX (mode) && icode != CODE_FOR_nothing)
+ 	{
+ 	  x = prepare_operand (icode, x, 0, mode, wider_mode, unsignedp);
+-	  emit_insn (GEN_FCN (icode) (x));
++	  emit_insn (GEN_FCN_ARG_1 (icode) (x));
+ 	  if (label)
+ 	    emit_jump_insn ((*bcc_gen_fctn[(int) comparison]) (label));
+ 	  return;
+@@ -3317,7 +3317,7 @@ emit_cmp_and_jump_insn_1 (x, y, mode, co
+ 	{
+ 	  x = prepare_operand (icode, x, 0, mode, wider_mode, unsignedp);
+ 	  y = prepare_operand (icode, y, 1, mode, wider_mode, unsignedp);
+-	  emit_insn (GEN_FCN (icode) (x, y));
++	  emit_insn (GEN_FCN_ARG_2 (icode) (x, y));
+ 	  if (label)
+ 	    emit_jump_insn ((*bcc_gen_fctn[(int) comparison]) (label));
+ 	  return;
+@@ -3765,7 +3765,7 @@ emit_conditional_move (target, code, op0
+   if (GET_CODE (comparison) != code)
+     return NULL_RTX;
+   
+-  insn = GEN_FCN (icode) (subtarget, comparison, op2, op3);
++  insn = GEN_FCN_ARG_4 (icode) (subtarget, comparison, op2, op3);
+ 
+   /* If that failed, then give up.  */
+   if (insn == 0)
+@@ -3822,7 +3822,7 @@ gen_add2_insn (x, y)
+ 	    (y, insn_data[icode].operand[2].mode)))
+     abort ();
+ 
+-  return (GEN_FCN (icode) (x, x, y));
++  return (GEN_FCN_ARG_3 (icode) (x, x, y));
+ }
+ 
+ /* Generate and return an insn body to add r1 and c,
+@@ -3842,7 +3842,7 @@ gen_add3_insn (r0, r1, c)
+ 	    (c, insn_data[icode].operand[2].mode)))
+     return NULL_RTX;
+ 
+-  return (GEN_FCN (icode) (r0, r1, c));
++  return (GEN_FCN_ARG_3 (icode) (r0, r1, c));
+ }
+ 
+ int
+@@ -3886,7 +3886,7 @@ gen_sub2_insn (x, y)
+ 	    (y, insn_data[icode].operand[2].mode)))
+     abort ();
+ 
+-  return (GEN_FCN (icode) (x, x, y));
++  return (GEN_FCN_ARG_3 (icode) (x, x, y));
+ }
+ 
+ /* Generate and return an insn body to subtract r1 and c,
+@@ -3906,7 +3906,7 @@ gen_sub3_insn (r0, r1, c)
+ 	    (c, insn_data[icode].operand[2].mode)))
+     return NULL_RTX;
+ 
+-  return (GEN_FCN (icode) (r0, r1, c));
++  return (GEN_FCN_ARG_3 (icode) (r0, r1, c));
+ }
+ 
+ int
+@@ -4001,7 +4001,7 @@ gen_move_insn (x, y)
+ 	}
+ 	  
+       insn_code = mov_optab->handlers[(int) tmode].insn_code;
+-      return (GEN_FCN (insn_code) (x, y));
++      return (GEN_FCN_ARG_2 (insn_code) (x, y));
+     }
+ 
+   start_sequence ();
+@@ -4037,7 +4037,7 @@ gen_extend_insn (x, y, mto, mfrom, unsig
+      enum machine_mode mto, mfrom;
+      int unsignedp;
+ {
+-  return (GEN_FCN (extendtab[(int) mto][(int) mfrom][unsignedp != 0]) (x, y));
++  return (GEN_FCN_ARG_2 (extendtab[(int) mto][(int) mfrom][unsignedp != 0]) (x, y));
+ }
+ 
+ /* can_fix_p and can_float_p say whether the target machine
+@@ -5128,7 +5128,7 @@ gen_cond_trap (code, op1, op2, tcode)
+     {
+       rtx insn;
+       start_sequence();
+-      emit_insn (GEN_FCN (cmp_optab->handlers[(int) mode].insn_code) (op1, op2));
++      emit_insn (GEN_FCN_ARG_2 (cmp_optab->handlers[(int) mode].insn_code) (op1, op2));
+       PUT_CODE (trap_rtx, code);
+       insn = gen_conditional_trap (trap_rtx, tcode);
+       if (insn)
+diff -rupN src/optabs.h src.patched/optabs.h
+--- src/optabs.h	2015-03-02 09:12:50.481931247 -0500
++++ src.patched/optabs.h	2015-03-02 09:12:50.461931247 -0500
+@@ -50,6 +50,11 @@ typedef struct optab
+ /* Given an enum insn_code, access the function to construct
+    the body of that kind of insn.  */
+ #define GEN_FCN(CODE) (*insn_data[(int) (CODE)].genfun)
++#define GEN_FCN_ARG_1(CODE) (*((insn_gen_fn_arg1)insn_data[(int) (CODE)].genfun))
++#define GEN_FCN_ARG_2(CODE) (*((insn_gen_fn_arg2)insn_data[(int) (CODE)].genfun))
++#define GEN_FCN_ARG_3(CODE) (*((insn_gen_fn_arg3)insn_data[(int) (CODE)].genfun))
++#define GEN_FCN_ARG_4(CODE) (*((insn_gen_fn_arg4)insn_data[(int) (CODE)].genfun))
++#define GEN_FCN_ARG_5(CODE) (*((insn_gen_fn_arg5)insn_data[(int) (CODE)].genfun))
+ 
+ /* Enumeration of valid indexes into optab_table.  */
+ enum optab_index
+diff -rupN src/recog.h src.patched/recog.h
+--- src/recog.h	2015-03-02 09:12:50.481931247 -0500
++++ src.patched/recog.h	2015-03-02 09:12:50.461931247 -0500
+@@ -213,6 +213,12 @@ typedef int (*insn_operand_predicate_fn)
+ typedef const char * (*insn_output_fn) PARAMS ((rtx *, rtx));
+ typedef rtx (*insn_gen_fn) PARAMS ((rtx, ...));
+ 
++typedef rtx (*insn_gen_fn_arg1) PARAMS ((rtx));
++typedef rtx (*insn_gen_fn_arg2) PARAMS ((rtx, rtx));
++typedef rtx (*insn_gen_fn_arg3) PARAMS ((rtx, rtx, rtx));
++typedef rtx (*insn_gen_fn_arg4) PARAMS ((rtx, rtx, rtx, rtx));
++typedef rtx (*insn_gen_fn_arg5) PARAMS ((rtx, rtx, rtx, rtx, rtx));
++
+ struct insn_operand_data
+ {
+   const insn_operand_predicate_fn predicate;
+diff -rupN src/reload1.c src.patched/reload1.c
+--- src/reload1.c	2015-03-02 09:12:50.469931247 -0500
++++ src.patched/reload1.c	2015-03-02 09:12:50.449931247 -0500
+@@ -6551,8 +6551,8 @@ emit_input_reload_insns (chain, rl, old,
+ 	{
+ 	  if (icode != CODE_FOR_nothing)
+ 	    {
+-	      emit_insn (GEN_FCN (icode) (reloadreg, real_oldequiv,
+-					  second_reload_reg));
++	      emit_insn (GEN_FCN_ARG_3 (icode) (reloadreg, real_oldequiv,
++                                                second_reload_reg));
+ 	      special = 1;
+ 	    }
+ 	  else
+@@ -6567,7 +6567,7 @@ emit_input_reload_insns (chain, rl, old,
+ 		  rtx third_reload_reg
+ 		    = rld[rld[secondary_reload].secondary_in_reload].reg_rtx;
+ 
+-		  emit_insn ((GEN_FCN (tertiary_icode)
++		  emit_insn ((GEN_FCN_ARG_3 (tertiary_icode)
+ 			      (second_reload_reg, real_oldequiv,
+ 			       third_reload_reg)));
+ 		}
+@@ -6683,7 +6683,7 @@ emit_output_reload_insns (chain, rl, j)
+ 	     or as an intermediate register.  */
+ 	  if (rl->secondary_out_icode != CODE_FOR_nothing)
+ 	    {
+-	      emit_insn ((GEN_FCN (rl->secondary_out_icode)
++	      emit_insn ((GEN_FCN_ARG_3 (rl->secondary_out_icode)
+ 			  (real_old, second_reloadreg, reloadreg)));
+ 	      special = 1;
+ 	    }
+@@ -6722,7 +6722,7 @@ emit_output_reload_insns (chain, rl, j)
+ 
+ 		  gen_reload (reloadreg, second_reloadreg,
+ 			      rl->opnum, rl->when_needed);
+-		  emit_insn ((GEN_FCN (tertiary_icode)
++		  emit_insn ((GEN_FCN_ARG_3 (tertiary_icode)
+ 			      (real_old, reloadreg, third_reloadreg)));
+ 		  special = 1;
+ 		}
+diff -rupN src/splay-tree.c src.patched/splay-tree.c
+--- src/splay-tree.c	2015-03-02 09:12:50.469931247 -0500
++++ src.patched/splay-tree.c	2015-03-02 09:12:50.449931247 -0500
+@@ -555,3 +555,22 @@ splay_tree_compare_pointers (k1, k2)
+   else 
+     return 0;
+ }
++
++int splay_tree_compare_strs (k1, k2)
++     splay_tree_key k1;
++     splay_tree_key k2;
++{
++  return strcmp((char*)k1, (char*)k2);
++}
++
++void splay_tree_default_delete_key (k)
++     splay_tree_key k;
++{
++  free((void*)k);
++}
++
++void splay_tree_default_delete_value (v)
++     splay_tree_value v;
++{
++  free((void*)v);
++}
+diff -rupN src/splay-tree.h src.patched/splay-tree.h
+--- src/splay-tree.h	2015-03-02 09:12:50.481931247 -0500
++++ src.patched/splay-tree.h	2015-03-02 09:12:50.461931247 -0500
+@@ -153,7 +153,13 @@ extern int splay_tree_compare_ints
+ 						splay_tree_key));
+ extern int splay_tree_compare_pointers  PARAMS((splay_tree_key,
+ 						splay_tree_key));
+-					       
++
++extern int splay_tree_compare_strs      PARAMS((splay_tree_key,
++                                                splay_tree_key));
++
++extern void splay_tree_default_delete_key PARAMS((splay_tree_key));
++extern void splay_tree_default_delete_value PARAMS((splay_tree_value));
++
+ #ifdef __cplusplus
+ }
+ #endif /* __cplusplus */
+diff -rupN src/tree-dump.c src.patched/tree-dump.c
+--- src/tree-dump.c	2015-03-02 09:12:50.477931247 -0500
++++ src.patched/tree-dump.c	2015-03-02 09:12:50.457931247 -0500
+@@ -771,7 +771,7 @@ dump_node (t, flags, stream)
+   di.flags = flags;
+   di.node = t;
+   di.nodes = splay_tree_new (splay_tree_compare_pointers, 0, 
+-			     (splay_tree_delete_value_fn) &free);
++			     splay_tree_default_delete_value);
+ 
+   /* Queue up the first node.  */
+   queue (&di, t, DUMP_NONE);
+diff -rupN src/ucbqsort.c src.patched/ucbqsort.c
+--- src/ucbqsort.c	2015-03-02 09:12:50.469931247 -0500
++++ src.patched/ucbqsort.c	2015-03-02 09:12:50.449931247 -0500
+@@ -13,7 +13,7 @@
+ #define		THRESH		4		/* threshold for insertion */
+ #define		MTHRESH		6		/* threshold for median */
+ 
+-static  int		(*qcmp)();		/* the comparison routine */
++static  int		(*qcmp)(const void *, const void *);		/* the comparison routine */
+ static  int		qsz;			/* size of each record */
+ static  int		thresh;			/* THRESHold in chars */
+ static  int		mthresh;		/* MTHRESHold in chars */
+@@ -32,7 +32,7 @@ void specqsort(base, n, size, compar)
+ 	char	*base;
+ 	int	n;
+ 	int	size;
+-	int	(*compar)();
++	int	(*compar)(const void *, const void *);
+ {
+ 	register char c, *i, *j, *lo, *hi;
+ 	char *min, *max;

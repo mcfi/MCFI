@@ -1,0 +1,45 @@
+diff -rupN src/perlio.c src.patched/perlio.c
+--- src/perlio.c	2015-03-02 09:12:50.421931247 -0500
++++ src.patched/perlio.c	2015-03-02 09:12:50.413931247 -0500
+@@ -61,6 +61,41 @@
+ int mkstemp(char*);
+ #endif
+ 
++#ifdef SPEC_CPU_LINUX
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++
++struct _IO_FILE {
++	unsigned flags;
++	unsigned char *_IO_read_ptr, *_IO_read_end;
++	int (*close)(FILE *);
++	unsigned char *wend, *wpos;
++	unsigned char *mustbezero_1;
++	unsigned char *wbase;
++	size_t (*read)(FILE *, unsigned char *, size_t);
++	size_t (*write)(FILE *, const unsigned char *, size_t);
++	off_t (*seek)(FILE *, off_t, int);
++	unsigned char *_IO_read_base;
++	size_t buf_size;
++	FILE *prev, *next;
++	int fd;
++	int pipe_pid;
++	long lockcount;
++	short dummy3;
++	signed char mode;
++	signed char lbf;
++	int lock;
++	int waiters;
++	void *cookie;
++	off_t off;
++	char *getln_buf;
++	void *mustbezero_2;
++	unsigned char *shend;
++	off_t shlim, shcnt;
++};
++#endif
++
+ /* Call the callback or PerlIOBase, and return failure. */
+ #define Perl_PerlIO_or_Base(f, callback, base, failure, args) 	\
+ 	if (PerlIOValid(f)) {					\

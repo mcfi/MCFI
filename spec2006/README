@@ -1,0 +1,9 @@
+This directory contains the patches we made to compile and harden SPECCPU2006
+C/C++ benchmarks using the MCFI tool chain.
+
+*.patch: you can directly use these files to patch a vanilla benchmark program's
+         src directory. Such files contain both the changes to compile and
+         harden the program.
+
+*.changes: these files document the changes we made to compile the benchmark
+         programs with the libraries coming along with the tool chain.

@@ -1,0 +1,36 @@
+diff -rupN src/objcode.c src.patched/objcode.c
+--- src/objcode.c	2015-03-02 09:12:50.625931247 -0500
++++ src.patched/objcode.c	2015-03-02 09:12:50.621931247 -0500
+@@ -302,7 +302,7 @@ quantum_objcode_file(char *file)
+    not support to supply arguments to a function */
+ 
+ void
+-quantum_objcode_exit(char *file)
++quantum_objcode_exit(void)
+ {
+   quantum_objcode_write(0);
+   quantum_objcode_stop();
+diff -rupN src/objcode.h src.patched/objcode.h
+--- src/objcode.h	2015-03-02 09:12:50.625931247 -0500
++++ src.patched/objcode.h	2015-03-02 09:12:50.621931247 -0500
+@@ -61,7 +61,7 @@ extern void quantum_objcode_stop();
+ extern int quantum_objcode_put(unsigned char operation, ...);
+ extern int quantum_objcode_write(char *file);
+ extern void quantum_objcode_file(char *file);
+-extern void quantum_objcode_exit(char *file);
++extern void quantum_objcode_exit(void);
+ extern void quantum_objcode_run(char *file, quantum_reg *reg);
+ 
+ #endif
+diff -rupN src/qureg.c src.patched/qureg.c
+--- src/qureg.c	2015-03-02 09:12:50.625931247 -0500
++++ src.patched/qureg.c	2015-03-02 09:12:50.621931247 -0500
+@@ -149,7 +149,7 @@ quantum_new_qureg(MAX_UNSIGNED initval,
+     {
+       quantum_objcode_start();
+       quantum_objcode_file(c);
+-      atexit((void *) &quantum_objcode_exit);
++      atexit(&quantum_objcode_exit);
+     }
+ 
+   quantum_objcode_put(INIT, initval);

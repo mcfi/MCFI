@@ -1,0 +1,14 @@
+diff -rupN src/include/grid/tria_accessor.h src.patched/include/grid/tria_accessor.h
+--- src/include/grid/tria_accessor.h	2015-03-02 09:12:50.697931247 -0500
++++ src.patched/include/grid/tria_accessor.h	2015-03-02 09:12:50.685931247 -0500
+@@ -38,8 +38,8 @@ template <int dim>              class Tr
+ 
+ namespace std
+ {
+-  template<class T1, class T2>
+-  struct pair;
++  //  template<class T1, class T2>
++  //  struct pair;
+ }
+ 
+ // note: the file tria_accessor.templates.h is included at the end of

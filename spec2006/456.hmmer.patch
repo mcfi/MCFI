@@ -1,0 +1,21 @@
+diff -rupN src/ucbqsort.c src.patched/ucbqsort.c
+--- src/ucbqsort.c	2015-03-02 09:12:50.593931247 -0500
++++ src.patched/ucbqsort.c	2015-03-02 09:12:50.589931247 -0500
+@@ -12,7 +12,7 @@
+ #define		THRESH		4		/* threshold for insertion */
+ #define		MTHRESH		6		/* threshold for median */
+ 
+-static  int		(*qcmp)();		/* the comparison routine */
++static  int		(*qcmp)(const void *, const void *);		/* the comparison routine */
+ static  int		qsz;			/* size of each record */
+ static  int		thresh;			/* THRESHold in chars */
+ static  int		mthresh;		/* MTHRESHold in chars */
+@@ -31,7 +31,7 @@ void specqsort(base, n, size, compar)
+ 	char	*base;
+ 	int	n;
+ 	int	size;
+-	int	(*compar)();
++	int	(*compar)(const void*, const void*);
+ {
+ 	register char c, *i, *j, *lo, *hi;
+ 	char *min, *max;
