@@ -20,12 +20,12 @@ __clone:
 	pop %rdi
         movl %r9d, %r9d
 try1:   movq %gs:0x1000, %r11
-__mcfi_bary_thread_start:
+__mcfi_bary___thread_start:
         cmpq %r11, %gs:(%r9)
         jne check1
         .byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00
 	call *%r9
-__mcfi_icj_1_thread_start:
+__mcfi_icj_1___thread_start:
 	mov %eax,%edi
 	xor %eax,%eax
 	mov $60,%al
@@ -58,4 +58,8 @@ die1:
         hlt
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ __clone\nR __clone\n}"
+        .byte 0
+
+        .section	.MCFIIndirectCalls,"",@progbits
+        .ascii "__thread_start#N#ThreadEntry"
         .byte 0

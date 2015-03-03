@@ -130,9 +130,9 @@ die6:
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ __call_dtor\nR __call_dtor\n}"
         .byte 0
-        .ascii "{ __call_exn_dtor\nR __call_dtor\n}"
+        .ascii "{ __call_exn_dtor\nR __call_exn_dtor\n}"
         .byte 0
-        .ascii "{ __call_thread_func\nR __call_dtor\n}"
+        .ascii "{ __call_thread_func\nR __call_thread_func\n}"
         .byte 0
 
         .section	.MCFIIndirectCalls,"",@progbits
@@ -140,5 +140,5 @@ die6:
         .byte 0
         .ascii "__call_exn_dtor_invoke#N#GblExnDtor"
         .byte 0
-        .ascii "__call_thread_func#N#ThreadEntry"
+        .ascii "__call_thread_func_invoke#N#ThreadEntry"
         .byte 0

@@ -93,7 +93,9 @@ void __do_cleanup_pop(struct __ptcb *cb)
 
 extern void* __call_thread_func(void * (*f)(void*), void*);
 
-static int __do_pthread_internal_start(void *p)
+static int __do_pthread_internal_start(void *p) __attribute__((threadentry));
+
+int __do_pthread_internal_start(void *p)
 {
 	pthread_t self = p;
 	if (self->startlock[0]) {
