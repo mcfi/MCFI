@@ -5,3 +5,7 @@
 dlsym:
 	mov (%rsp),%rdx
 	jmp __dlsym
+
+        .section	.MCFIFuncInfo,"",@progbits
+        .ascii "{ dlsym\nT __dlsym\n}"
+        .byte 0

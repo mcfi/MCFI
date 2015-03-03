@@ -23,9 +23,10 @@
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
 
+/* the first page after the first unmapped 64KB holds the tramplines */
 #define TRAMP_CALL(x) "leaq 1f(%%rip), %%r11\n\t"       \
   "movq %%r11, %%fs:0x20\n\t"                           \
-  "jmpq *%%gs:"XSTR(x)"\n\t"                            \
+  "jmpq *%%gs:0x10000+"XSTR(x)"\n\t"                    \
   "1:\n\t": "=a"(ret) :                                 \
 
 static __inline

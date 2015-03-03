@@ -1,3 +1,6 @@
+/* TODO: this file is not O3 safe (do_dlsym malfunctions), so we only use O2 to
+ *       compile the library.*/
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -375,7 +378,7 @@ static void *map_library(int fd, struct dso *dso)
 	 * use the invalid part; we just need to reserve the right
 	 * amount of virtual address space to map over later. */
 	map = mmap((void *)addr_min, map_len, prot, MAP_PRIVATE, fd, off_start);
-        dprintf(2, "Initial map: map = %lx, addr_min = %x, len = %x\n", map, addr_min, map_len);
+        //dprintf(2, "Initial map: map = %lx, addr_min = %x, len = %x\n", map, addr_min, map_len);
 	if (map==MAP_FAILED) goto error;
 	/* If the loaded file is not relocatable and the requested address is
 	 * not available, then the load operation must fail. */
@@ -401,9 +404,7 @@ static void *map_library(int fd, struct dso *dso)
                   prot = (((ph->p_flags&PF_R) ? PROT_READ : 0) |
                           ((ph->p_flags&PF_W) ? PROT_WRITE: 0) |
                           ((ph->p_flags&PF_X) ? PROT_EXEC : 0));
-                  if (prot & PROT_EXEC) {
-                    if (prot & PROT_WRITE)
-                      goto error;
+                  if (ph->p_type == PT_LOAD && prot & PROT_EXEC) {
                     if (trampoline_load_native_code(fd, map, ph->p_vaddr))
                       goto error;
                   }
@@ -637,7 +638,7 @@ static struct dso *load_library(const char *name, struct dso *needed_by)
 			if (!sys_path) sys_path = "/lib:/usr/local/lib:/usr/lib";
 			fd = path_open(name, sys_path, buf, sizeof buf);
 		}
-                dprintf(2, "%s\n", name);
+                //dprintf(2, "%s\n", name);
 		pathname = buf;
 	}
 	if (fd < 0) return 0;
@@ -1263,6 +1264,8 @@ void *dlopen(const char *file, int mode)
 			if (!p->deps[i]->global)
 				p->deps[i]->global = -1;
 		if (!p->global) p->global = -1;
+                /* cfg generation for all the loaded libs */
+                trampoline_gen_cfg();
 		reloc_all(p);
 		if (p->deps) for (i=0; p->deps[i]; i++)
 			if (p->deps[i]->global < 0)
@@ -1289,8 +1292,6 @@ end:
 	pthread_rwlock_unlock(&lock);
 	if (p) do_init_fini(orig_tail);
 	pthread_setcancelstate(cs, 0);
-        /* cfg generation for all the loaded libs */
-        trampoline_gen_cfg();
 	return p;
 }
 
