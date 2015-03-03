@@ -230,7 +230,7 @@ code_module *load_mcfi_metadata(char *elf);
 void replace_prog_seg(char *dest, char *src);
 
 int load_native_code(int fd, void *load_addr, size_t seg_base) {
-  dprintf(STDERR_FILENO, "[load_native_code] %d, %p, %lx\n", fd, load_addr, seg_base);
+  //dprintf(STDERR_FILENO, "[load_native_code] %d, %p, %lx\n", fd, load_addr, seg_base);
   size_t elf_size = 0;
   void *elf = load_opened_elf_into_memory(fd, &elf_size);
   code_module *cm = load_mcfi_metadata(elf);
@@ -262,7 +262,7 @@ static void print_cfgcc(void *cc) {
 
 /* generate the cfg */
 int gen_cfg(void) {
-  dprintf(STDERR_FILENO, "[gen_cfg] called\n");
+  //dprintf(STDERR_FILENO, "[gen_cfg] called\n");
   icf *icfs = 0;
   function *functions = 0;
   dict *classes = 0;

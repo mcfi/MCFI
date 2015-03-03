@@ -155,6 +155,8 @@ static void reserve_table_region(void) {
  * to runtime functions.
  */
 void install_trampolines(void) {
+  /* the first 64KB are used for catching NULL-dereference */
+  char *tramp_page = table + 0x10000;
   struct trampolines {
     void *mmap;
     void *mprotect;
@@ -182,7 +184,7 @@ void install_trampolines(void) {
     void *dyncode_delete;
     void *report_cfi_violation;
     void *online_patch;
-  } *tp = (struct trampolines*)table;
+  } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
   extern unsigned long runtime_rock_munmap;
@@ -218,7 +220,7 @@ void install_trampolines(void) {
   tp->report_cfi_violation = &runtime_report_cfi_violation;
   tp->online_patch = &runtime_online_patch;
 
-  if (0 != mprotect(table,  PAGE_SIZE, PROT_READ)) {
+  if (0 != mprotect(table,  0x11000, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
   }
 }
@@ -469,11 +471,11 @@ static char *eat_hex_and_udscore(char *c) {
 }
 
 static unsigned int alloc_bid_slot(void) {
-  /* the first page pointed to by %gs is used for trampolines,
+  /* the first page after the first 64KB pointed to by %gs is used for trampolines,
    * so the bid slots start from the second page.
    * Later we should extend this function to be an ID allocation routine.
    */
-  static unsigned int bid_slot = 0x1000;
+  static unsigned int bid_slot = 0x11000;
   unsigned int rbid_slot = bid_slot;
   bid_slot += 8; /* 8 bytes */
   //dprintf(STDERR_FILENO, "%x\n", rbid_slot);
@@ -495,6 +497,7 @@ code_module *load_mcfi_metadata(char *elf) {
 
   size_t cnt;
   size_t numsym = 0;
+  size_t numdynsym = 0;
 
   icf *icfs = 0;
   function *functions = 0;
@@ -545,8 +548,21 @@ code_module *load_mcfi_metadata(char *elf) {
       plt_offset = shdr[cnt].sh_offset;
     } else if (0 == strcmp(shname, ".dynsym")) {
       dynsym = (Elf64_Sym*)(elf + shdr[cnt].sh_offset);
+      numdynsym = shdr[cnt].sh_size / sizeof(*dynsym);
     } else if (0 == strcmp(shname, ".dynstr")) {
       dynstr = elf + shdr[cnt].sh_offset;
+    }
+  }
+
+  /* Function's whose names appear in .dynsym also have their addresses taken */
+  for (cnt = 0; cnt < numdynsym; ++cnt) {
+    if (ELF64_ST_BIND(dynsym[cnt].st_info) == STB_GLOBAL &&
+        ELF64_ST_TYPE(dynsym[cnt].st_info) == STT_FUNC &&
+        dynsym[cnt].st_shndx != STN_UNDEF) {
+      //dprintf(STDERR_FILENO, "%d, %s\n", numdynsym, dynstr+dynsym[cnt].st_name);
+      char *fname = sp_intern_string(&stringpool,
+                                     dynstr + dynsym[cnt].st_name);
+      g_add_vertex(&fats, fname);
     }
   }
 
@@ -762,6 +778,7 @@ void replace_prog_seg(char *dest, char *src) {
           quit(-1);
         }
         memcpy(dest, src, phdr->p_memsz);
+        //dprintf(STDERR_FILENO, "[replace_prog_seg] %p, %x\n", dest, phdr->p_memsz);
         if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), prot)) {
           dprintf(STDERR_FILENO, "[replace_prog_seg] mprotect RE failed with %d\n", errn);
           quit(-1);

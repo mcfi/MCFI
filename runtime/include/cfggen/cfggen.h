@@ -847,7 +847,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
     //dprintf(STDERR_FILENO, "%s, %s\n", f->name, f->type);
     if (_func_or_alias_addr_taken(fats, f->name, aliases_tc) && f->type) {
       if (!instance) {/* global or static member functions */
-        //dprintf(STDERR_FILENO, "%s, %s\n", f->name, f->type);
+        //dprintf(STDERR_FILENO, "Grouped_by_types: %s, %s\n", f->name, f->type);
         g_add_directed_edge(&global_funcs_grouped_by_types,
                             f->type, f->name);
       } else {
