@@ -1,0 +1,12 @@
+diff -rupN src/libs/cmdenv/cmdenv.h src.patched/libs/cmdenv/cmdenv.h
+--- src/libs/cmdenv/cmdenv.h	2015-03-03 16:25:25.011697319 -0500
++++ src.patched/libs/cmdenv/cmdenv.h	2015-03-03 16:25:25.007697319 -0500
+@@ -83,7 +83,7 @@ class TCmdenvApp : public TOmnetApp
+ 
+      // SIG_USR1 handling
+      void setupSignals();
+-     static void signalHandler(int signum);
++     static void signalHandler(int signum)  __attribute__((signalhandler));
+ };
+ 
+ #endif

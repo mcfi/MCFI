@@ -1,6 +1,18 @@
+diff -rupN src/mg.c src.patched/mg.c
+--- src/mg.c	2015-03-03 16:25:24.615697319 -0500
++++ src.patched/mg.c	2015-03-03 16:25:24.603697319 -0500
+@@ -52,7 +52,7 @@ tie.
+ #  include <sys/pstat.h>
+ #endif
+ 
+-Signal_t Perl_csighandler(int sig);
++Signal_t Perl_csighandler(int sig) __attribute__((signalhandler));
+ 
+ /* if you only have signal() and it resets on each signal, FAKE_PERSISTENT_SIGNAL_HANDLERS fixes */
+ #if !defined(HAS_SIGACTION) && defined(VMS)
 diff -rupN src/perlio.c src.patched/perlio.c
---- src/perlio.c	2015-03-02 09:12:50.421931247 -0500
-+++ src.patched/perlio.c	2015-03-02 09:12:50.413931247 -0500
+--- src/perlio.c	2015-03-03 16:25:24.619697319 -0500
++++ src.patched/perlio.c	2015-03-03 16:25:24.611697319 -0500
 @@ -61,6 +61,41 @@
  int mkstemp(char*);
  #endif
