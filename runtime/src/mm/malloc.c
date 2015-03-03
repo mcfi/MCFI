@@ -1,6 +1,7 @@
 #include <string.h>
 #include <errno.h>
 #include <mm.h>
+#include <io.h>
 #include <atomic.h>
 
 #define inline inline __attribute__((always_inline))
@@ -25,11 +26,14 @@ static struct {
   uintptr_t brk;
   size_t *heap;
   uint64_t binmap;
+  uintptr_t brk0;
   struct bin bins[64];
   int brk_lock[2];
   int free_lock[2];
 } mal;
 
+/* our fake brk region size is 512MB, which is tunable */
+#define BRKSIZE 0x20000000UL
 
 #define SIZE_ALIGN (4*sizeof(size_t))
 #define SIZE_MASK (-SIZE_ALIGN)
@@ -91,6 +95,97 @@ static int bin_index_up(size_t x)
   return ((union { float v; uint32_t r; }){(int)x}.r+0x1fffff>>21) - 496;
 }
 
+#if 0
+void __dump_heap(int x)
+{
+  struct chunk *c;
+  int i;
+  for (c = (void *)mal.heap; CHUNK_SIZE(c); c = NEXT_CHUNK(c))
+    fprintf(stderr, "base %p size %zu (%d) flags %d/%d\n",
+            c, CHUNK_SIZE(c), bin_index(CHUNK_SIZE(c)),
+            c->csize & 15,
+            NEXT_CHUNK(c)->psize & 15);
+  for (i=0; i<64; i++) {
+    if (mal.bins[i].head != BIN_TO_CHUNK(i) && mal.bins[i].head) {
+      fprintf(stderr, "bin %d: %p\n", i, mal.bins[i].head);
+      if (!(mal.binmap & 1ULL<<i))
+        fprintf(stderr, "missing from binmap!\n");
+    } else if (mal.binmap & 1ULL<<i)
+      fprintf(stderr, "binmap wrongly contains %d!\n", i);
+  }
+}
+#endif
+
+static struct chunk *expand_heap(size_t n)
+{
+  struct chunk *w;
+  uintptr_t new;
+
+  lock(mal.brk_lock);
+
+  if (n > SIZE_MAX - mal.brk - 2*PAGE_SIZE) goto fail;
+  new = mal.brk + n + SIZE_ALIGN + PAGE_SIZE - 1 & -PAGE_SIZE;
+  n = new - mal.brk;
+
+  if (new > mal.brk0 + BRKSIZE) goto fail;
+  //if (__brk(new) != new) goto fail;
+
+  w = MEM_TO_CHUNK(new);
+  w->psize = n | C_INUSE;
+  w->csize = 0 | C_INUSE;
+
+  w = MEM_TO_CHUNK(mal.brk);
+  w->csize = n | C_INUSE;
+  mal.brk = new;
+	
+  unlock(mal.brk_lock);
+
+  return w;
+ fail:
+  unlock(mal.brk_lock);
+  errn = ENOMEM;
+  return 0;
+}
+
+static int init_malloc(size_t n)
+{
+  static int init, waiters;
+  int state;
+  struct chunk *c;
+
+  if (init == 1) return 0;
+
+  /* initialize a fake brk region */
+  mal.brk = (uintptr_t)mmap(0, BRKSIZE, PROT_READ | PROT_WRITE,
+                            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  if (mal.brk == (uintptr_t)-1) {
+    dprintf(STDERR_FILENO, "[init_malloc] mmap failed with %d\n", errn);
+    return -1;
+  }
+  mal.brk0 = mal.brk;
+
+  /*
+#ifdef SHARED
+  mal.brk = mal.brk + PAGE_SIZE-1 & -PAGE_SIZE;
+#endif
+  */
+  mal.brk = mal.brk + 2*SIZE_ALIGN-1 & -SIZE_ALIGN;
+
+  c = expand_heap(n);
+
+  if (!c) {
+    return -1;
+  }
+
+  mal.heap = (void *)c;
+  c->psize = 0 | C_INUSE;
+  free(CHUNK_TO_MEM(c));
+
+  init = 1;
+
+  return 1;
+}
+
 static int adjust_size(size_t *n)
 {
   /* Result of pointer difference must fit in ptrdiff_t. */
@@ -109,9 +204,10 @@ static int adjust_size(size_t *n)
 
 static void unbin(struct chunk *c, int i)
 {
-  if (c->prev == c->next)
+  if (c->prev == c->next) {
     mal.binmap &= ~(1ULL<<i);
-  //a_and_64(&mal.binmap, ~(1ULL<<i));
+    //a_and_64(&mal.binmap, ~(1ULL<<i));
+  }
   c->prev->next = c->next;
   c->next->prev = c->prev;
   c->csize |= C_INUSE;
@@ -211,13 +307,46 @@ void *malloc(size_t n)
 
   if (adjust_size(&n) < 0) return 0;
 
-  size_t len = n + OVERHEAD + PAGE_SIZE - 1 & -PAGE_SIZE;
-  char *base = mmap(0, len, PROT_READ|PROT_WRITE,
-                    MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-  if (base == (void *)-1) return 0;
-  c = (void *)(base + SIZE_ALIGN - OVERHEAD);
-  c->csize = len - (SIZE_ALIGN - OVERHEAD);
-  c->psize = SIZE_ALIGN - OVERHEAD;
+  if (n > MMAP_THRESHOLD) {
+    size_t len = n + OVERHEAD + PAGE_SIZE - 1 & -PAGE_SIZE;
+    char *base = mmap(0, len, PROT_READ|PROT_WRITE,
+                      MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if (base == (void *)-1) return 0;
+    c = (void *)(base + SIZE_ALIGN - OVERHEAD);
+    c->csize = len - (SIZE_ALIGN - OVERHEAD);
+    c->psize = SIZE_ALIGN - OVERHEAD;
+    return CHUNK_TO_MEM(c);
+  }
+
+  i = bin_index_up(n);
+  for (;;) {
+    uint64_t mask = mal.binmap & -(1ULL<<i);
+    if (!mask) {
+      if (init_malloc(n) > 0) continue;
+      c = expand_heap(n);
+      if (!c) return 0;
+      if (alloc_rev(c)) {
+        struct chunk *x = c;
+        c = PREV_CHUNK(c);
+        NEXT_CHUNK(x)->psize = c->csize =
+          x->csize + CHUNK_SIZE(c);
+      }
+      break;
+    }
+    j = first_set(mask);
+    lock_bin(j);
+    c = mal.bins[j].head;
+    if (c != BIN_TO_CHUNK(j) && j == bin_index(c->csize)) {
+      if (!pretrim(c, n, i, j)) unbin(c, j);
+      unlock_bin(j);
+      break;
+    }
+    unlock_bin(j);
+  }
+
+  /* Now patch up in case we over-allocated */
+  trim(c, n);
+
   return CHUNK_TO_MEM(c);
 }
 
@@ -325,7 +454,7 @@ void free(void *p)
       madvise((void *)a, b-a, MADV_DONTNEED);
     }
 
-      if (self->psize & next->csize & C_INUSE) {
+    if (self->psize & next->csize & C_INUSE) {
       self->csize = final_size | C_INUSE;
       next->psize = final_size | C_INUSE;
       i = bin_index(final_size);
@@ -337,7 +466,7 @@ void free(void *p)
       unlock_bin(i);
     }
 
-      if (alloc_rev(self)) {
+    if (alloc_rev(self)) {
       self = PREV_CHUNK(self);
       size = CHUNK_SIZE(self);
       final_size += size;
@@ -345,27 +474,27 @@ void free(void *p)
         reclaim = 1;
     }
 
-      if (alloc_fwd(next)) {
+    if (alloc_fwd(next)) {
       size = CHUNK_SIZE(next);
       final_size += size;
       if (new_size+size > RECLAIM && (new_size+size^size) > size)
         reclaim = 1;
       next = NEXT_CHUNK(next);
     }
-    }
+  }
 
-      self->csize = final_size;
-      next->psize = final_size;
-      unlock(mal.free_lock);
+  self->csize = final_size;
+  next->psize = final_size;
+  unlock(mal.free_lock);
 
-      self->next = BIN_TO_CHUNK(i);
-      self->prev = mal.bins[i].tail;
-      self->next->prev = self;
-      self->prev->next = self;
+  self->next = BIN_TO_CHUNK(i);
+  self->prev = mal.bins[i].tail;
+  self->next->prev = self;
+  self->prev->next = self;
 
-      if (!(mal.binmap & 1ULL<<i))
-        mal.binmap |= 1UL<<i;
-      //a_or_64(&mal.binmap, 1ULL<<i);
-
-      unlock_bin(i);
-    }
+  if (!(mal.binmap & 1ULL<<i)) {
+    mal.binmap |= 1ULL<<i;
+    //a_or_64(&mal.binmap, 1ULL<<i);
+  }
+  unlock_bin(i);
+}

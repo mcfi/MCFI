@@ -355,6 +355,7 @@ static void parse_icfs(char *content, const char *end, /*out*/icf **icfs,
 
         char *co = _get_string_before_symbol(&cursor, '#', &stop, &len);
 
+        ic->attrs = 0;
         if (len == 2)
           ic->attrs = CONSTANT | VOLATILE;
         else if (len == 1) {
@@ -805,7 +806,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
       /* handle aliased function names */
       g_add_directed_edge(all_funcs_grouped_by_name, f->name, f);
       keyvalue *alias_entry = dict_find(aliases_tc, f->name);
-      
+
       if (alias_entry) {
         //dprintf(STDERR_FILENO, "%s\n", alias_entry->key);
         keyvalue *v, *tmp;
@@ -846,7 +847,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
         if (!is_constant(attrs) && !is_volatile(attrs)) {
           g_add_directed_edge(&instance_funcs_grouped_by_types,
                               f->type, f->name);
-          //dprintf(STDERR_FILENO, "%s, %s\n", f->type, f->name);
+          //dprintf(STDERR_FILENO, "MTP: %p, %s\n", f->type, f->name);
           /*
            * Some destructors are aliased to others, and we should take care
            * of all alises
@@ -940,7 +941,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
         g = instance_funcs_grouped_by_const_volatile_types;
 
       keyvalue *typed_methods = dict_find(g, ic->type);
-
+      //dprintf(STDERR_FILENO, "PTM: %s, %p\n", ic->id, ic->type);
       if (typed_methods) {
         keyvalue *v, *tmp;
         HASH_ITER(hh, (dict*)(typed_methods->value), v, tmp) {
@@ -994,13 +995,11 @@ static unsigned long _convert_to_mcfi_half_id_format(unsigned long *number) {
   return rs;
 }
 
-static graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name,
-                             code_module *modules) {
-  graph *retgraph = 0;
-  graph *callgraphcc = g_transitive_closure(&callgraph);
-
+static void build_retgraph(graph **callgraph, dict *all_funcs_grouped_by_name,
+                           code_module *modules) {
   keyvalue *kv, *tmp;
 
+  size_t count = 0;
   /* for all functions, connect their names to the returns and i/d tail calls */
   HASH_ITER(hh, all_funcs_grouped_by_name, kv, tmp) {
     node *n;
@@ -1010,36 +1009,27 @@ static graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name,
       function *f = (function*)(fentry->key);
 
       /* aliases */
-      g_add_edge(&retgraph, kv->key, f->name);
+      if (kv->key != f->name)
+        g_add_edge(callgraph, kv->key, f->name);
 
       /* returns */
       //dprintf(STDERR_FILENO, "Function: %s\n", kv->key);
       DL_FOREACH(f->returns, n) {
-        g_add_edge(&retgraph, f->name, _mark_ret(n->val));
+        g_add_edge(callgraph, f->name, _mark_ret(n->val));
         //dprintf(STDERR_FILENO, "Returns: %s, %s\n", f->name, n->val);
       }
 
       /* direct tail calls */
       DL_FOREACH(f->dtails, n) {
-        g_add_edge(&retgraph, f->name, n->val);
-        //dprintf(STDERR_FILENO, "Dtails: %s, %s\n", f->name, n->val);
+        if (f->name != n->val) {
+          g_add_edge(callgraph, f->name, n->val);
+          //dprintf(STDERR_FILENO, "Dtails: %s, %s\n", f->name, n->val);
+        }
       }
 
       /* indirect tail calls */
       DL_FOREACH(f->itails, n) {
-        /* add all possible targets */
-        keyvalue *ijmp;
-        ijmp = dict_find(callgraphcc, _mark_icj(n->val));
-        if (ijmp) {
-          keyvalue *ijtgt, *ijttmp;
-          HASH_ITER(hh, (dict*)(ijmp->value), ijtgt, ijttmp) {
-            /* if it is a function */
-            if (!_is_marked_icj(ijtgt->key)) {
-              g_add_edge(&retgraph, f->name, ijtgt->key);
-              //dprintf(STDERR_FILENO, "Itails: %s, %s\n", f->name, ijtgt->key);
-            }
-          }
-        }
+        g_add_edge(callgraph, f->name, _mark_icj(n->val));
       }
     }
   }
@@ -1050,28 +1040,16 @@ static graph *build_retgraph(graph *callgraph, dict *all_funcs_grouped_by_name,
 
     DL_FOREACH(m->rad, s) {
       /* for each return address that is after a direct call */
-      g_add_edge(&retgraph, _mark_ra_dc(s->name), s->name);
+      g_add_edge(callgraph, _mark_ra_dc(s->name), s->name);
       //dprintf(STDERR_FILENO, "Rad: %s, %s\n", s->name, s->name);
     }
 
     DL_FOREACH(m->rai, s) {
       /* for each return address that is after an indirect call */
-      keyvalue *icall;
-      icall = dict_find(callgraphcc, _mark_icj(s->name));
-      if (icall) {
-        keyvalue *ictgt, *icttmp;
-        HASH_ITER(hh, (dict*)(icall->value), ictgt, icttmp) {
-          if (!_is_marked_icj(ictgt->key)) {
-            g_add_edge(&retgraph, _mark_ra_ic(s->name), ictgt->key);
-            //dprintf(STDERR_FILENO, "Rai: %s, %s\n", s->name, ictgt->key);
-          }
-        }
-      }
+      g_add_edge(callgraph, _mark_ra_ic(s->name), _mark_icj(s->name));
     }
   }
-
-  g_free_transitive_closure(&callgraphcc);
-  return retgraph;
+  //dprintf(STDERR_FILENO, "%x\n", count, g_size(*callgraph));
 }
 
 static void gen_mcfi_id(node **lcg, node **lrt,

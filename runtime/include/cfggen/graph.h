@@ -74,7 +74,7 @@ static void g_del_vertex(vertex **g, void *val) {
   }
 }
 
-static void g_del_edge_helper(vertex **g, void *val1, void *val2) {
+static void g_del_edge_helper(graph **g, void *val1, void *val2) {
   vertex *v = dict_find(*g, val1);
   if (v) {
     dict_del((vertex**)&(v->value), val2);
@@ -84,12 +84,12 @@ static void g_del_edge_helper(vertex **g, void *val1, void *val2) {
   }
 }
 
-static void g_del_edge(vertex **g, void *val1, void *val2) {
+static void g_del_edge(graph **g, void *val1, void *val2) {
   g_del_edge_helper(g, val1, val2);
   g_del_edge_helper(g, val2, val1);
 }
 
-static void g_del_directed_edge(vertex **g, void *val1, void *val2) {
+static void g_del_directed_edge(graph **g, void *val1, void *val2) {
   g_del_edge_helper(g, val1, val2);
 }
 
@@ -97,8 +97,18 @@ static void g_free_adj(void **g) {
   dict_clear((vertex**)g);
 }
 
-static void g_dtor(vertex **g) {
+static void g_dtor(graph **g) {
   dict_dtor(g, 0, g_free_adj);
+}
+
+static unsigned int g_size(graph *g) {
+  vertex *v, *tmp;
+  unsigned num_vertices = 0;
+  unsigned num_edges = 0;
+  HASH_ITER(hh, g, v, tmp) {
+    num_edges += HASH_COUNT((graph*)(v->value));
+  }
+  return num_edges + HASH_COUNT(g);
 }
 
 typedef struct node_t {
@@ -114,24 +124,29 @@ static node *new_node(void *val) {
 }
 
 /* do a breadth-first search from node val */
-static vertex *g_bfs(vertex **g, void *val) {
+static vertex *g_bfs(vertex **g, void *val, vertex **explored) {
   vertex *rg = 0;    /* result nodes */
   node *q = 0;       /* queue of vertices */
   vertex *v, *vi, *tmp;
   node *qv = 0;
   qv = new_node(val);
   DL_APPEND(q, qv); /* add the initial node into the q */
+  g_add_vertex(&rg, val);
+  g_add_vertex(explored, val); /* val has been discovered */
+
   while (q) {       /* q is not empty */
     node *front = q;
     DL_DELETE(q, front);
-    g_add_vertex(&rg, front->val);
     v = dict_find(*g, front->val);
     assert(v);
+
     HASH_ITER(hh, (vertex*)(v->value), vi, tmp) { /* for every adjacent vertex */
-      vertex *vt = dict_find(rg, vi->key);
+      vertex *vt = dict_find(*explored, vi->key);
       if (!vt) {
         qv = new_node(vi->key);
         DL_APPEND(q, qv);
+        g_add_vertex(&rg, vi->key);
+        g_add_vertex(explored, vi->key);
       }
     }
     free(front);
@@ -149,12 +164,13 @@ static node *g_get_lcc(vertex **g) {
   vertex *vi, *tmpi;
   HASH_ITER(hh, *g, v, tmp) {
     if (!g_in(explored, v->key)) {
-      cc = new_node(g_bfs(g, v->key));
+      cc = new_node(g_bfs(g, v->key, &explored));
       DL_APPEND(lcc, cc);
       /* add all nodes in cc to expored */
+      /*
       HASH_ITER(hh, (vertex*)(cc->val), vi, tmpi) {
         g_add_vertex(&explored, vi->key);
-      }
+        }*/
     }
   }
   HASH_CLEAR(hh, explored);

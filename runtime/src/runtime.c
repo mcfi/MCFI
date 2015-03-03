@@ -256,7 +256,7 @@ static void print_cfgcc(void *cc) {
     else if (_is_marked_icj(v->key)) {
       dprintf(STDERR_FILENO, "ICF: %s\n", _unmark_ptr(v->key));
     } else
-      dprintf(STDERR_FILENO, "Func: %s\n", v->key);
+      dprintf(STDERR_FILENO, "Function: %s\n", v->key);
   }
 }
 
@@ -278,20 +278,33 @@ int gen_cfg(void) {
     build_callgraph(icfs, functions, classes, cha,
                     fats, aliases, &all_funcs_grouped_by_name);
 
-  graph *retgraph = build_retgraph(callgraph, all_funcs_grouped_by_name, modules);
-  
+  icfs_clear(&icfs);
+  dict_clear(&classes);
+  g_dtor(&cha);
+  dict_clear(&fats);
+  g_dtor(&aliases);
+
   node *lcg = g_get_lcc(&callgraph);
 
   int count;
   node *n;
   DL_COUNT(lcg, n, count);
-  dprintf(STDERR_FILENO, "Callgraph EQCs: %d\n", count);
 
-  node *lrt = g_get_lcc(&retgraph);
+  dprintf(STDERR_FILENO, "Callgraph EQCs: %d\n", count);
+  //quit(0);
+  /* based on the callgraph, let's build the return graph on top of it */
+  build_retgraph(&callgraph, all_funcs_grouped_by_name, modules);
+
+  g_dtor(&all_funcs_grouped_by_name);
+  functions_clear(&functions);
+
+  node *lrt = g_get_lcc(&callgraph);
+  //l_print(lrt, print_cfgcc);
+  g_dtor(&callgraph);
+
   DL_COUNT(lrt, n, count);
   dprintf(STDERR_FILENO, "Retgraph EQCs: %d\n", count);
-  //l_print(lrt, print_cfgcc);
-
+  //quit(0);
   unsigned long id_for_others;
   dict *callids = 0, *retids = 0;
   gen_mcfi_id(&lcg, &lrt, &version, &id_for_others, &callids, &retids);
@@ -329,15 +342,6 @@ int gen_cfg(void) {
       m->cfggened = TRUE;
   }
 
-  icfs_clear(&icfs);
-  functions_clear(&functions);
-  dict_clear(&classes);
-  g_dtor(&cha);
-  dict_clear(&fats);
-  g_dtor(&aliases);
-  g_dtor(&all_funcs_grouped_by_name);
-  g_dtor(&callgraph);
-  g_dtor(&retgraph);
   dict_clear(&callids);
   dict_clear(&retids);
   return 0;
