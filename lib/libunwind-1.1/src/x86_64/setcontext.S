@@ -105,7 +105,7 @@ _Ux86_64_setcontext:
 	mov    UC_MCONTEXT_GREGS_RIP(%rdi),%r11d
         xorl   %ecx, %ecx
         xorl   %edi, %edi
-        cmpb   $0x0, %gs:(%r11)
+        cmpb   $0xfe, %gs:(%r11)
         jne    die
         jmpq   *%r11
 die:

@@ -325,6 +325,7 @@ int gen_cfg(void) {
     if (!m->cfggened) {
       gen_tary(m, callids, retids, table);
       gen_bary(m, callids, retids, table, id_for_others);
+      populate_landingpads(m, table);
     }
   }
   

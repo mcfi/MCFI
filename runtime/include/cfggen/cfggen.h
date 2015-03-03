@@ -6,6 +6,13 @@
 #include "graph.h"
 #include "stringpool.h"
 
+/* LPV assigned to each landing pad's tary entry */
+#define LPV 0xFE
+
+/* DCV is assigned to each dynamically generated code's
+   indirect branch target's tary entry */
+#define DCV 0xF4
+
 enum ICF_Type {
   VirtualMethodCall,
   PointerToMethodCall,
@@ -987,7 +994,11 @@ static unsigned long _convert_to_mcfi_half_id_format(unsigned long *number) {
     d = (*number >> 21) & 127;
     d <<= 1;
     ++*number;
-    if (a != 0xf4 && b != 0xf4 && c != 0xf4 && d != 0xf4)
+
+    if (a != DCV && a != LPV &&
+        b != DCV && b != LPV &&
+        c != DCV && c != LPV &&
+        d != DCV && d != LPV)
       break;
   }
   unsigned long rs = ((d << 24) | (c << 16) | (b << 8) | a);
@@ -1119,6 +1130,15 @@ static void gen_bary(code_module *m, dict *callids, dict *retids, char *table,
          with id_for_other_icfs */
       *((unsigned long*)(table + icfsym->offset)) = id_for_other_icfs;
     }
+  }
+}
+
+/* populate the landing pads's corresponding tary id to 0xfe */
+static void populate_landingpads(code_module *m, char *table) {
+  symbol *lp;
+  char *tary = table + m->base_addr;
+  DL_FOREACH(m->lp, lp) {
+    *(tary + lp->offset) = LPV;
   }
 }
 
