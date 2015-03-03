@@ -614,7 +614,8 @@ ReSimplify:
 static void LowerTlsAddr(MCStreamer &OutStreamer,
                          X86MCInstLower &MCInstLowering,
                          const MachineInstr &MI,
-                         const MCSubtargetInfo& STI) {
+                         const MCSubtargetInfo& STI,
+                         MCContext &OutContext) {
 
   bool is64Bits = MI.getOpcode() == X86::TLS_addr64 ||
                   MI.getOpcode() == X86::TLS_base_addr64;
@@ -691,6 +692,13 @@ static void LowerTlsAddr(MCStreamer &OutStreamer,
   OutStreamer.EmitInstruction(MCInstBuilder(is64Bits ? X86::CALL64pcrel32
                                                      : X86::CALLpcrel32)
     .addExpr(tlsRef), STI);
+  static size_t TGASeq;
+  MCSymbol *TGASym =
+    OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
+                                 + to_hex(++TGASeq)
+                                 + std::string("___tls_get_addr"));
+  OutStreamer.EmitSymbolAttribute(TGASym, MCSymbolAttr::MCSA_Hidden);
+  OutStreamer.EmitLabel(TGASym);
 }
 
 /// \brief Emit the optimal amount of multi-byte nops on X86.
@@ -823,7 +831,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::TLS_addr64:
   case X86::TLS_base_addr32:
   case X86::TLS_base_addr64:
-    return LowerTlsAddr(OutStreamer, MCInstLowering, *MI, getSubtargetInfo());
+    return LowerTlsAddr(OutStreamer, MCInstLowering, *MI, getSubtargetInfo(), OutContext);
 
   case X86::MOVPC32r: {
     // This is a pseudo op for a two instruction sequence with a label, which
