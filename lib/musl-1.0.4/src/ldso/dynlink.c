@@ -1,6 +1,3 @@
-/* TODO: this file is not O3 safe (do_dlsym malfunctions), so we only use O2 to
- *       compile the library.*/
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>

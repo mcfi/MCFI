@@ -29,14 +29,18 @@
   "jmpq *%%gs:0x10000+"XSTR(x)"\n\t"                    \
   "1:\n\t": "=a"(ret) :                                 \
 
-static __inline
+/* IMPORTANT: do not inline the following functions, because we rely
+              on the calling convention to not save callee reserved
+              registers in the runtime.
+*/
+static __attribute__((noinline))
 long trampoline_mmap(unsigned long n1, unsigned long n2, int n3,
                      int n4, int n5, long n6)
 {
   long ret;
   register int r8 __asm__("r8") = n5;
   register long r9 __asm__("r9") = n6;
-                
+
   __asm__ __volatile__(TRAMP_CALL(ROCK_MMAP)
                        "D"(n1), "S"(n2), "d"(n3),
                        "c"(n4), "r"(r8), "r"(r9):
@@ -44,7 +48,7 @@ long trampoline_mmap(unsigned long n1, unsigned long n2, int n3,
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_mremap(unsigned long n1, unsigned long n2,
                        unsigned long n3,
                        int n4, unsigned long n5)
@@ -59,7 +63,7 @@ long trampoline_mremap(unsigned long n1, unsigned long n2,
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_mprotect(unsigned long n1, unsigned long n2, int n3) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_MPROTECT)
@@ -68,7 +72,7 @@ long trampoline_mprotect(unsigned long n1, unsigned long n2, int n3) {
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_munmap(unsigned long n1, unsigned long n2) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_MUNMAP)
@@ -77,7 +81,7 @@ long trampoline_munmap(unsigned long n1, unsigned long n2) {
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_brk(unsigned long n1) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_BRK)
@@ -86,7 +90,7 @@ long trampoline_brk(unsigned long n1) {
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 void trampoline_set_tcb(unsigned long n1) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_SET_TCB)
@@ -94,7 +98,7 @@ void trampoline_set_tcb(unsigned long n1) {
                        "memory");
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_allocset_tcb(unsigned long n1) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_ALLOCSET_TCB)
@@ -103,7 +107,7 @@ long trampoline_allocset_tcb(unsigned long n1) {
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 void trampoline_free_tcb(unsigned long n1) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_FREE_TCB)
@@ -111,7 +115,7 @@ void trampoline_free_tcb(unsigned long n1) {
                        "memory");
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_load_native_code(unsigned long n1,
                                  unsigned long n2,
                                  unsigned long n3) {
@@ -122,7 +126,7 @@ long trampoline_load_native_code(unsigned long n1,
   return ret;
 }
 
-static __inline
+static __attribute__((noinline))
 long trampoline_gen_cfg(void) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_GEN_CFG):"memory");
