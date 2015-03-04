@@ -135,6 +135,7 @@ struct code_module_t {
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
   int      cfggened;   /* the cfg has been generated for this module before */
+  int      deleted;    /* whether this module has been deleted */
 };
 
 static code_module *alloc_code_module(void) {

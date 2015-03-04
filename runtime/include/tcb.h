@@ -72,9 +72,9 @@ static unsigned long thread_escapes(void) {
 }
 
 static bool thread_in_syscall(void) {
-  bool sleep;
-  __asm__ __volatile__("movb %%fs:0x18, %0" : "=r" (sleep));
-  return sleep;
+  bool in_syscall;
+  __asm__ __volatile__("movb %%fs:0x18, %0" : "=r" (in_syscall));
+  return in_syscall;
 }
 
 TCB* alloc_tcb(void);

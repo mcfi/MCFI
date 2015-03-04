@@ -1,10 +1,11 @@
-#define SELF     0x08
+#define SELF           0x08
 #define THREAD_ESCAPES 0x10
-#define CONTINUATION  0x20
-#define USER_CTX 0x30        
-#define STACK_SIZE $0x10000
-#define FCW      0x80
-#define MXCSR    0x88
+#define IN_SYSCALL     0x18
+#define CONTINUATION   0x20
+#define USER_CTX       0x30
+#define STACK_SIZE     $0x10000
+#define FCW            0x80
+#define MXCSR          0x88
 
 # empty state of the SSE and FP control status
 #        .rodata
@@ -96,6 +97,7 @@ runtime_online_patch:
 .macro runtime_function func
         .global runtime_\func
 runtime_\func:
+        movb $1, %fs:IN_SYSCALL # entering a trusted call
         save_context
         atomic_incr_thread_escapes
         # load system stack pointer
@@ -104,6 +106,7 @@ runtime_\func:
         callq \func
         spin_unlock
         restore_context
+        movb $0, %fs:IN_SYSCALL # exiting a trusted call
         jmpq *%fs:CONTINUATION
 .endm
         runtime_function rock_mmap

@@ -14,6 +14,9 @@ static void* max_brk = 0;
 
 static TCB *tcb_list = 0;
 
+/* tracks which thread escapes the untrusted space for how many times */
+dict *thread_escape_map = 0;
+
 extern struct Vmmap VM;
 
 void set_tcb(unsigned long sb_tcb) {
@@ -24,6 +27,7 @@ void set_tcb(unsigned long sb_tcb) {
   TCB* tcb = thread_self();
   tcb->tcb_inside_sandbox = (void*)sb_tcb;
   tcb_list = tcb; /* add the main thread to the tcb list */
+  dict_add(&thread_escape_map, tcb, 0);
 }
 
 void* allocset_tcb(unsigned long sb_tcb) {
@@ -34,6 +38,9 @@ void* allocset_tcb(unsigned long sb_tcb) {
   }
   
   tcb->tcb_inside_sandbox = (void*)sb_tcb;
+
+  dict_add(&thread_escape_map, tcb, 0);
+
   /* add tcb to the tcb_list */
   tcb->next = tcb_list;
   tcb_list = tcb;
@@ -85,6 +92,7 @@ void free_tcb(void *user_tcb) {
   while (tcb) {
     if (tcb->tcb_inside_sandbox == user_tcb) {
       tcb->remove = 1;
+      dict_del(&thread_escape_map, tcb);
       break;
     }
     tcb = tcb->next;
@@ -260,6 +268,37 @@ static void print_cfgcc(void *cc) {
   }
 }
 
+static int safe(void) {
+  TCB *tcb = tcb_list;
+  int safe = TRUE;
+
+  while (tcb) {
+    if (!tcb->remove) {
+      keyvalue *thesc = dict_find(thread_escape_map, tcb);
+      assert(thesc);
+      unsigned long thescs = tcb->sandbox_escape;
+      /* neither the thread is in a system call, nor
+       * has the thread invoked any system calls */
+      if (!tcb->insyscall && thescs == (unsigned long)thesc->value)
+        safe = FALSE;
+      thesc->value = (void*)thescs;
+    }
+    tcb = tcb->next;
+  }
+  return safe;
+}
+
+/* Version Space
+ * We use four 7-bit fields to represent the version, excluding
+ * 0xfe and 0xf4 for exception landingpads and dynamic code generation.
+ * Therefore the version space is (2**7-2)**4 = 252047376. Although it
+ * is large enough for any reasonable program, we should be careful about
+ * attackers who are possible to exhaust it.
+ */
+
+const unsigned int VERSION_SPACE_MAX = 252047376;
+static unsigned int version_space = 0;
+
 /* generate the cfg */
 int gen_cfg(void) {
   //dprintf(STDERR_FILENO, "[gen_cfg] called\n");
@@ -308,6 +347,20 @@ int gen_cfg(void) {
   unsigned long id_for_others;
   dict *callids = 0, *retids = 0;
   gen_mcfi_id(&lcg, &lrt, &version, &id_for_others, &callids, &retids);
+
+  ++version_space;
+
+  if (version_space < VERSION_SPACE_MAX) {
+    /* We still have more versions to explore */
+    if (safe()) /* if it is safe, then we reset the version_space counter */
+      version_space = 0;
+  } else {
+    /* Wait until it is safe. It is good to have an exponential backoff
+     * algorithm here */
+    while (!safe())
+      ;
+    version_space = 0; /* reset the version_space counter */
+  }
 
   /* The CFG generation and update strategy is the following:
    * 1. generate the new bary and tary tables for all modules.
