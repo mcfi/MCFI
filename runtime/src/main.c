@@ -684,6 +684,26 @@ static char *load_elf_into_memory(const char *path,
   return elf;
 }
 
+static void remove_trampoline_type(code_module *m) {
+  function *f;
+  dict *tramps = 0;
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mmap"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mremap"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mprotect"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_munmap"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_brk"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_set_tcb"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_allocset_tcb"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_free_tcb"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_load_native_code"));
+  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_gen_cfg"));
+
+  DL_FOREACH(m->functions, f) {
+    if (g_in(tramps, f->name))
+      f->type = 0;
+  }
+}
+
 static void load_libc(void) {
   char libc_path[MAX_PATH];
   libc_path[MAX_PATH-1] = '\0';
@@ -698,6 +718,9 @@ static void load_libc(void) {
 
   /* Load symbols and rewrite bary entries */
   code_module *cm = load_mcfi_metadata(libc_elf);
+  /* For trampolines in the libc module, remove their types */
+  remove_trampoline_type(cm);
+  
   DL_APPEND(modules, cm);
 
   /* compute how many consecutive memory pages we need */
@@ -725,7 +748,7 @@ static void load_libc(void) {
   libc_base = (void*)libc;
   cm->base_addr = (uintptr_t)libc_base;
 
-  dprintf(STDERR_FILENO, "libc: %p\n", libc_base);
+  //dprintf(STDERR_FILENO, "libc: %p\n", libc_base);
   /* load the actual program headers */
   phdr = (Phdr*)(libc_elf + ((Ehdr*)libc_elf)->e_phoff);
   cnt = ((Ehdr*)libc_elf)->e_phnum;
