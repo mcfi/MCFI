@@ -73,7 +73,10 @@ private:
   std::vector<std::string> Returns;
   std::vector<std::string> IndirectTailCalls;
   std::vector<std::string> DirectTailCalls;
-  
+
+  const char *__report_cfi_violation_for_return = "__report_cfi_violation_for_return";
+  const char *__report_cfi_violation = "__report_cfi_violation";
+
   std::vector<std::string> IndirectCalls;
 
   void extractGlobalArray(const StringRef ArrayName,
@@ -270,7 +273,8 @@ private:
                    MachineBasicBlock *&IDValidityCheckMBB,
                    MachineBasicBlock *&VerCheckMBB,
                    MachineBasicBlock *&ReportMBB,
-                   DebugLoc &DL);
+                   DebugLoc &DL,
+                   bool isReturn);
 
   void MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
                   MachineBasicBlock::iterator &MI);
@@ -315,7 +319,8 @@ private:
                      MachineBasicBlock *MBB,
                      MachineBasicBlock *IDCmpMBB,
                      const unsigned TargetReg,
-                     DebugLoc& DL);
+                     DebugLoc& DL,
+                     bool isReturn);
   
   bool MCFIx32(MachineFunction &MF);  // x86_64 with ILP32
 
@@ -508,14 +513,14 @@ void MCFI::MCFIx64Report(MachineFunction &MF,
                          MachineBasicBlock *MBB,
                          MachineBasicBlock *IDCmpMBB,
                          const unsigned TargetReg,
-                         DebugLoc &DL) {
+                         DebugLoc &DL, bool isReturn) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
 
   MBB->addLiveIn(TargetReg);
   
   auto I = std::begin(*MBB);
 
-  if (TargetReg != X86::RSI) {
+  if (!isReturn && TargetReg != X86::RSI) {
     BuildMI(*MBB, I, DL, TII->get(X86::MOV64rr))
       .addReg(X86::RSI).addReg(TargetReg);
   }
@@ -524,8 +529,14 @@ void MCFI::MCFIx64Report(MachineFunction &MF,
     .addReg(X86::RDI, RegState::Define).addReg(X86::RIP).addImm(1)
     .addReg(0).addMBB(IDCmpMBB).addReg(0);
  
-  // hlt for now
-  BuildMI(*MBB, I, DL, TII->get(X86::HLT));
+  // report the violation
+  // It is weird that only TAILJMPd64 and CALL64pcrel32 would be
+  // able to generate PIC code.
+  const char *report = isReturn ?
+    __report_cfi_violation_for_return :
+    __report_cfi_violation;
+  BuildMI(*MBB, I, DL, TII->get(X86::TAILJMPd64))
+    .addExternalSymbol(report, X86II::MO_PLT);
 }
 
 void MCFI::MCFIx64MBBs(MachineFunction &MF,
@@ -539,7 +550,8 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
                        MachineBasicBlock *&IDValidityCheckMBB,
                        MachineBasicBlock *&VerCheckMBB,
                        MachineBasicBlock *&ReportMBB,
-                       DebugLoc &DL) {
+                       DebugLoc &DL,
+                       bool isReturn) {
   MachineFunction::iterator MBBI;
   
   IDCmpMBB = MF.CreateMachineBasicBlock();
@@ -568,7 +580,7 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
   ReportMBB = MF.CreateMachineBasicBlock();
   MBBI = VerCheckMBB;
   MF.insert(++MBBI, ReportMBB);
-  MCFIx64Report(MF, ReportMBB, IDCmpMBB, TargetReg, DL); // fill report MBB
+  MCFIx64Report(MF, ReportMBB, IDCmpMBB, TargetReg, DL, isReturn); // fill report MBB
   
   IDValidityCheckMBB->addSuccessor(VerCheckMBB);
   IDValidityCheckMBB->addSuccessor(ReportMBB);
@@ -625,7 +637,7 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
     *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, X86::JMP64r,
-              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL);
+              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, true);
   Returns.push_back(to_hex(ModuleID + BarySlot));
   BarySlot++;
 }
@@ -796,7 +808,7 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
     *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, CJOp,
-              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL);
+              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, false);
 
   if (BIDRegSpill) {
     MCFIx64SpillRegToStack(MBB, MI, TII, BIDReg, -8);
@@ -1081,12 +1093,16 @@ bool MCFI::MCFIx64(MachineFunction &MF) {
         MCFIx64Ret(MF, MBB, MI);
       } else if (MI->getOpcode() == X86::TAILJMPd64) {
         const MachineOperand &MOP = MI->getOperand(0);
+        std::string fn;
         if (MOP.isGlobal()) {
           const GlobalValue *GV = MOP.getGlobal();
-          DirectTailCalls.push_back(GV->getName());
+          fn = GV->getName().str();
         } else if (MOP.isSymbol()) {
-          DirectTailCalls.push_back(MOP.getSymbolName());
+          fn = std::string(MOP.getSymbolName());
         }
+        if (fn != __report_cfi_violation &&
+            fn != __report_cfi_violation_for_return)
+          DirectTailCalls.push_back(fn);
       } else if (MI->getIRInst()) {
         const unsigned op = MI->getOpcode();
         switch (op) {
