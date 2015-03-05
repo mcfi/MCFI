@@ -25,7 +25,8 @@ void report_error(const char* fmt, ...) {
   i = vsnprintf(buf, PAGE_SIZE - 1, fmt, args);
   va_end(args);
   
-  int fd = open(ROCK_ERROR_REPORT, O_WRONLY | O_CREAT, S_IRUSR);
+  int fd = open(ROCK_ERROR_REPORT, O_WRONLY | O_CREAT,
+                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); /* 0644 */
   if (fd == -1)
     goto hell;
   
@@ -37,6 +38,12 @@ void report_error(const char* fmt, ...) {
 
 void report_cfi_violation(unsigned long icf,
                           unsigned long target) {
-  report_error("CFI violation detected:\n\t"
+  dprintf(STDERR_FILENO,
+          "\n==========!!!  You are under attack  !!!=========\n"
+          "CFI violation detected: "
+          "0x%lx ==> 0x%lx\n"
+          "=================================================\n\n",
+          icf, target);
+  report_error("CFI violation detected: "
                "0x%lx ==> 0x%lx\n", icf, target);
 }

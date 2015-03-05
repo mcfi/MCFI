@@ -1003,7 +1003,6 @@ static unsigned long _convert_to_mcfi_half_id_format(unsigned long *number) {
       break;
   }
   unsigned long rs = ((d << 24) | (c << 16) | (b << 8) | a);
-  assert(rs != 0xFFFFFFFFUL);
   return rs;
 }
 
