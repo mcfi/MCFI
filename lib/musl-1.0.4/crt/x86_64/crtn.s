@@ -15,7 +15,8 @@ check1:
         cmpl %esi, %edi
         jne try1
 die1:
-        hlt
+        leaq try1(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
 .section .fini
 	pop %rax
@@ -34,7 +35,8 @@ check2:
         cmpl %esi, %edi
         jne try2
 die2:
-        hlt
+        leaq try2(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ _init\nY void!\nR _libc_init\n}"

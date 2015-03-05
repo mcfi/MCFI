@@ -29,8 +29,9 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt
-        
+        leaq try(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
         .section	.MCFIFuncInfo,"",@progbits
 	.ascii	"{ memmove\nY i8*!i8*@i8*@i64@\nT memcpy\nR memmove\n}"
 	.byte	0

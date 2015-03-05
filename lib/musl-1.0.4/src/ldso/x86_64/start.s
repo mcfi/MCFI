@@ -26,7 +26,9 @@ __mcfi_bary___exe_elf_entry:
         xor %edx,%edx
 	jmp *%rax
 die:
-        hlt
+        leaq try(%rip), %rdi
+        movq %rax, %rsi
+        jmp __report_cfi_violation@PLT
         
         .section	.MCFIIndirectCalls,"",@progbits
         .ascii "__exe_elf_entry#N#ExeElfEntry"

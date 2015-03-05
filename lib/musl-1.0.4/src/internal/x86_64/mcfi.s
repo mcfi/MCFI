@@ -1,3 +1,13 @@
+        .globl __report_cfi_violation_for_return
+        .type __report_cfi_violation_for_return, @function
+__report_cfi_violation_for_return:
+        movq %rcx, %rsi
+        .globl __report_cfi_violation
+        .type __report_cfi_violation, @function
+__report_cfi_violation:
+        andl $-16, %esp
+        jmpq *%gs:0x100c0
+
         .globl __report_invalid_sandbox_escape
         .align 16, 0x90
         .type __report_invalid_sandbox_escape, @function
@@ -35,7 +45,9 @@ check1:
         cmpl %esi, %edi
         jne try1
 die1:
-        hlt
+        leaq try1(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 check4:
         movq %gs:(%rax), %rcx
         testb $0x1, %cl
@@ -43,7 +55,9 @@ check4:
         cmpl %edx, %ecx
         jne try4
 die4:
-        hlt
+        leaq try4(%rip), %rdi
+        movq %rax, %rsi
+        jmp __report_cfi_violation@PLT
 
         .global __call_exn_dtor
         .align 16, 0x90
@@ -76,7 +90,9 @@ check2:
         cmpl %esi, %edi
         jne try2
 die2:
-        hlt
+        leaq try2(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 check5:
         movq %gs:(%rax), %rcx
         testb $0x1, %cl
@@ -84,7 +100,9 @@ check5:
         cmpl %edx, %ecx
         jne try5
 die5:
-        hlt
+        leaq try5(%rip), %rdi
+        movq %rax, %rsi
+        jmp __report_cfi_violation@PLT
 
         .global __call_thread_func
         .align 16, 0x90
@@ -117,7 +135,9 @@ check3:
         cmpl %esi, %edi
         jne try3
 die3:
-        hlt
+        leaq try3(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 check6:
         movq %gs:(%rax), %rcx
         testb $0x1, %cl
@@ -125,7 +145,9 @@ check6:
         cmpl %edx, %ecx
         jne try6
 die6:
-        hlt
+        leaq try6(%rip), %rdi
+        movq %rax, %rsi
+        jmp __report_cfi_violation@PLT
 
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ __call_dtor\nR __call_dtor\n}"

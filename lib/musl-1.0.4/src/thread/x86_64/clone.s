@@ -46,7 +46,8 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt
+        leaq try(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
 check1:
         movq %gs:(%r9), %r10
@@ -55,7 +56,10 @@ check1:
         cmpl %r11d, %r10d
         jne try1
 die1:
-        hlt
+        leaq try1(%rip), %rdi
+        movq %r9, %rsi
+        jmp __report_cfi_violation@PLT
+
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ __clone\nR __clone\n}"
         .byte 0

@@ -20,7 +20,8 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt
+        leaq try(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
 	.section	.MCFIFuncInfo,"",@progbits
         .ascii	"{ lrintl\nY i64!x86_fp80@\nR lrintl\n}"

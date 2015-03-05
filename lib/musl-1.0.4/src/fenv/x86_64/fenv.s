@@ -33,7 +33,8 @@ check1:
         cmpl %esi, %edi
         jne try1
 die1:
-        hlt
+        leaq try1(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
         .global feraiseexcept
         .align 16, 0x90
@@ -59,7 +60,8 @@ check2:
         cmpl %esi, %edi
         jne try2
 die2:
-        hlt
+        leaq try2(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
 
         .global __fesetround
@@ -94,7 +96,8 @@ check3:
         cmpl %esi, %edi
         jne try3
 die3:
-        hlt
+        leaq try3(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
         .global fegetround
         .align 16, 0x90
@@ -120,7 +123,9 @@ check4:
         cmpl %esi, %edi
         jne try4
 die4:
-        hlt
+        leaq try4(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 
         .global fegetenv
         .align 16, 0x90
@@ -144,7 +149,8 @@ check5:
         cmpl %esi, %edi
         jne try5
 die5:
-        hlt
+        leaq try5(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
         .global fesetenv
         .align 16, 0x90
@@ -180,7 +186,8 @@ check6:
         cmpl %esi, %edi
         jne try6
 die6:
-        hlt
+        leaq try6(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
         .global fetestexcept
         .align 16, 0x90
@@ -208,7 +215,8 @@ check7:
         cmpl %esi, %edi
         jne try7
 die7:
-        hlt
+        leaq try7(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
 
         .section	.MCFIFuncInfo,"",@progbits
         .ascii	"{ feclearexcept\nY i32!i32@\nR feclearexcept\n}"

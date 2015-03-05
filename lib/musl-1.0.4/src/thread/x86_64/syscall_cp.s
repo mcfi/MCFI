@@ -41,7 +41,9 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt
+        leaq try(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ __syscall_cp_asm\nR __syscall_cp_asm\n}"
         .byte 0

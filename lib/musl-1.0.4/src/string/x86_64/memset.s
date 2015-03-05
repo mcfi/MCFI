@@ -55,8 +55,9 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt
-       
+        leaq try(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
         .section	.MCFIFuncInfo,"",@progbits
         .ascii	"{ memset\nY i8*!i8*@i32@i64@\nR memset\n}"
 	.byte	0

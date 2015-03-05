@@ -20,7 +20,8 @@ longjmp:
 	mov 48(%rdi),%rdx       /* this ends up being the stack pointer */
 	mov %edx,%esp
 	mov 56(%rdi),%edx       /* this is the instruction pointer */
-5:      
+try:
+5:
         mov %gs:0x1000, %rdi
 __mcfi_bary_longjmp:
 3:      
@@ -34,4 +35,6 @@ __mcfi_bary_longjmp:
         cmp %esi, %edi
         jne 5b
 4:
-        hlt
+        leaq try(%rip), %rdi
+        movq %rdx, %rsi
+        jmp __report_cfi_violation@PLT

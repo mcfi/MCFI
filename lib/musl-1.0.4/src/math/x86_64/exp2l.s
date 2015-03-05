@@ -49,8 +49,9 @@ check1:
         cmpl %esi, %edi
         jne try1
 die1:
-        hlt
-        
+        leaq try1(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
         .global exp2l
         .align 16, 0x90
         .type exp2l,@function
@@ -122,7 +123,9 @@ check2:
         cmpl %esi, %edi
         jne try2
 die2:
-        hlt        
+        leaq try2(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 	.section	.MCFIFuncInfo,"",@progbits
 	.ascii	"{ expm1l\nY x86_fp80!x86_fp80@\nR expm1l\n}"
 	.byte	0
