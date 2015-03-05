@@ -113,8 +113,9 @@ check:
         cmpl %esi, %edi
         jne try
 die:
-        hlt
-        
+        leaq try(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 	.cfi_endproc
 	.size _Ux86_64_getcontext, . - _Ux86_64_getcontext
 
@@ -159,8 +160,9 @@ check2:
         cmpl %esi, %edi
         jne try2
 die2:
-        hlt
-        
+        leaq try2(%rip), %rdi
+        jmp __report_cfi_violation_for_return@PLT
+
 	.cfi_endproc
 	.size _Ux86_64_getcontext_trace, . - _Ux86_64_getcontext_trace
 

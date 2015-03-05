@@ -105,11 +105,14 @@ _Ux86_64_setcontext:
 	mov    UC_MCONTEXT_GREGS_RIP(%rdi),%r11d
         xorl   %ecx, %ecx
         xorl   %edi, %edi
+catchbranch:
         cmpb   $0xfe, %gs:(%r11)
         jne    die
         jmpq   *%r11
 die:
-        hlt
+        leaq   catchbranch(%rip), %rdi
+        movq   %r11, %rsi
+        jmp    __report_cfi_violation@PLT
 
 	.size _Ux86_64_setcontext, . - _Ux86_64_setcontext
 
