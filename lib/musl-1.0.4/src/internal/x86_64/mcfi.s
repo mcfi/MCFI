@@ -1,7 +1,9 @@
         .text
-        .globl __patch_direct_call
-        .type __patch_direct_call,@function
-__patch_direct_call:
+        .globl __patch_call
+        .type __patch_call,@function
+__patch_call:
+        /* save %r11 */
+        movq %r11, %fs:0x88
         /* pop the return address */
         popq %r11
         /* set continuation */
@@ -38,7 +40,8 @@ try4:
 __mcfi_bary___call_dtor_invoke:
         cmpq %rdx, %gs:(%rax)
         jne check4
-        .byte 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00
+        .byte 0x66, 0x90 # 2-byte nop
+        .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
         callq *%rax
 __mcfi_icj_1___call_dtor_invoke:
         addl $8, %esp
@@ -83,7 +86,8 @@ try5:
 __mcfi_bary___call_exn_dtor_invoke:
         cmpq %rdx, %gs:(%rax)
         jne check5
-        .byte 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00
+        .byte 0x66, 0x90 # 2-byte nop
+        .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
         callq *%rax
 __mcfi_icj_1___call_exn_dtor_invoke:
         addl $8, %esp
@@ -128,7 +132,8 @@ try6:
 __mcfi_bary___call_thread_func_invoke:
         cmpq %rdx, %gs:(%rax)
         jne check6
-        .byte 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00
+        .byte 0x66, 0x90 # 2-byte nop
+        .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
         callq *%rax
 __mcfi_icj_1___call_thread_func_invoke:
         addl $8, %esp

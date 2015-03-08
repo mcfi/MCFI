@@ -18,6 +18,21 @@ locked:
         .byte 0
 
         .text
+
+.macro spin_lock
+1:
+        movb $1, %r11b
+        lock
+        xchgb %r11b, locked(%rip)
+        testb %r11b, %r11b
+        jnz 1b
+.endm
+
+.macro spin_unlock
+        movb $0, %r11b
+        lock
+        xchgb %r11b, locked(%rip)
+.endm
         
 .macro switch_runtime_stack
         movq %fs:SELF, %rsp
@@ -60,15 +75,17 @@ runtime_online_patch:
         # rock_patch would not deal with long double
 
         # control and status words
-        stmxcsr %fs:MXCSR
-        fnstcw  %fs:FCW
+        stmxcsr %fs:USER_CTX+MXCSR
+        fnstcw  %fs:USER_CTX+FCW
 
         # atomically increase the number of escapes
         atomic_incr_thread_escapes
         # load system stack pointer
         switch_runtime_stack
         movq %r11, %rdi
+        spin_lock
         callq rock_patch
+        spin_unlock
         # restore states
         movq %fs:USER_CTX, %rax
         movq %fs:USER_CTX+0x10, %rcx
@@ -92,8 +109,8 @@ runtime_online_patch:
         movq %fs:USER_CTX+0x128, %xmm7
 
         # restore control and status words
-        fldcw   %fs:FCW
-        ldmxcsr %fs:MXCSR
+        fldcw   %fs:USER_CTX+FCW
+        ldmxcsr %fs:USER_CTX+MXCSR
 
         # exiting a trusted call
         movb $0, %fs:IN_SYSCALL
@@ -109,21 +126,6 @@ runtime_online_patch:
 .macro restore_context
         movq %fs:USER_CTX+0x38, %rsp
 .endm
-
-.macro spin_lock
-1:      
-        movb $1, %r11b
-        lock
-        xchgb %r11b, locked(%rip)
-        testb %r11b, %r11b
-        jnz 1b
-.endm
-
-.macro spin_unlock
-        movb $0, %r11b
-        lock
-        xchgb %r11b, locked(%rip)
-.endm        
 
 .macro runtime_function func
         .global runtime_\func

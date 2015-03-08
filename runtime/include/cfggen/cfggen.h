@@ -135,7 +135,7 @@ struct code_module_t {
   symbol   *funcsyms;  /* function symbols */
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
-  dict     *rad_orig;  /* original values of direct call sites */
+  dict     *ra_orig;   /* original values of call sites */
   int      cfggened;   /* the cfg has been generated for this module before */
   int      deleted;    /* whether this module has been deleted */
 };
@@ -1115,7 +1115,7 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
   } while (0)
   POPULATE_TARY(callids, m->funcsyms, _mark_func, FALSE, "Func: ");
   POPULATE_TARY(retids, m->rad, _mark_ra_dc, TRUE, "DC: ");
-  POPULATE_TARY(retids, m->rai, _mark_ra_ic, FALSE, "IC: ");
+  POPULATE_TARY(retids, m->rai, _mark_ra_ic, TRUE, "IC: ");
 #undef POPULATE_TARY
 }
 

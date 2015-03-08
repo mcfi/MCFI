@@ -592,8 +592,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   cm->fats = fats;
   cm->sz = sz;
 
-  unsigned int patch_direct_call_offset = -1;
-  const char *patch_direct_call = sp_intern_string(&stringpool, "__patch_direct_call");
+  unsigned int patch_call_offset = -1;
+  const char *patch_call = sp_intern_string(&stringpool, "__patch_call");
 
   for (cnt = 0; cnt < numsym; cnt++) {
     char *symname = strtab + sym[cnt].st_name;
@@ -604,14 +604,18 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       //dprintf(STDERR_FILENO, "%x, %s\n", dcjsym->offset, dcjsym->name);
       DL_APPEND(cm->rad, dcjsym);
       /* save the original code bytes */
-      dict_add(&(cm->rad_orig), (void*)dcjsym->offset,
+      dict_add(&(cm->ra_orig), (void*)dcjsym->offset,
                (void*)*((unsigned long*)(elf + dcjsym->offset - 8)));
     } else if (0 == strncmp(symname, "__mcfi_icj_", 11)) {
       symbol *icjsym = alloc_sym();
       icjsym->name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 11));
       icjsym->offset = sym[cnt].st_value - cm->base_addr;
-      //dprintf(STDERR_FILENO, "%s\n", icjsym->name);
+      //dprintf(STDERR_FILENO, "%s, %x\n", icjsym->name, icjsym->offset);
       DL_APPEND(cm->rai, icjsym);
+      /* save the original code bytes */
+      keyvalue *patch = dict_add(&(cm->ra_orig), (void*)icjsym->offset,
+                                 (void*)*((unsigned long*)(elf + icjsym->offset - 8)));
+      patch->key = _mark_ra_ic(patch->key);
     } else if (0 == strncmp(symname, "__mcfi_lp_", 10)) {
       symbol *lpsym = alloc_sym();
       /* no needs to record the name for a landing pad symbol */
@@ -637,8 +641,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       funcsym->offset = sym[cnt].st_value - cm->base_addr;
       //dprintf(STDERR_FILENO, "%lx, %s\n", funcsym->offset, funcsym->name);
       DL_APPEND(cm->funcsyms, funcsym);
-      if (funcsym->name == patch_direct_call)
-        patch_direct_call_offset = funcsym->offset;
+      if (funcsym->name == patch_call)
+        patch_call_offset = funcsym->offset;
     }
   }
 
@@ -651,17 +655,37 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     funcsym->offset = plt_offset + (cnt + 1) * PLT_ENT_SIZE;
     DL_APPEND(cm->funcsyms, funcsym);
     //dprintf(STDERR_FILENO, "%x, %x, %s\n", cnt + 1, funcsym->offset, funcsym->name);
-    if (funcsym->name == patch_direct_call)
-      patch_direct_call_offset = funcsym->offset;
+    if (funcsym->name == patch_call)
+      patch_call_offset = funcsym->offset;
   }
 
-  if (patch_direct_call_offset != -1) {
+  if (patch_call_offset != -1) {
     /* patch direct calls */
     keyvalue *kv, *tmp;
-    HASH_ITER(hh, cm->rad_orig, kv, tmp) {
-      unsigned int callsite_offset = (unsigned int)kv->key;
-      unsigned int patch = patch_direct_call_offset - callsite_offset;
-      memcpy(elf + callsite_offset - 4, &patch, 4);
+    unsigned int callsite_offset;
+    unsigned int patch;
+    HASH_ITER(hh, cm->ra_orig, kv, tmp) {
+      if (_is_marked_ra_ic(kv->key)) {
+        kv->key = _unmark_ptr(kv->key);
+        //dprintf(STDERR_FILENO, "RAIC: %lx\n", kv->key);
+        unsigned five_byte_nop_offset;
+        callsite_offset = (unsigned int)kv->key;
+        char *p = elf + callsite_offset - 8;
+        if (p[5] != 0) { /* call *%r8--*%r15 */
+          five_byte_nop_offset = 0;
+          callsite_offset -= 3;
+        } else {
+          five_byte_nop_offset = 1;
+          callsite_offset -= 2;
+        }
+        p[five_byte_nop_offset] = 0xe8;
+        patch = patch_call_offset - callsite_offset;
+        memcpy(p + five_byte_nop_offset + 1, &patch, 4);
+      } else {
+        callsite_offset = (unsigned int)kv->key;
+        patch = patch_call_offset - callsite_offset;
+        memcpy(elf + callsite_offset - 4, &patch, 4);
+      }
     }
   }
   return cm;

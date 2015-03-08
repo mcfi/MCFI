@@ -117,9 +117,16 @@ void rock_patch(unsigned long patchpoint) {
       break;
     }
   }
+  /*
   assert(found);
-  keyvalue *patch = dict_find(m->rad_orig, (const void*)(patchpoint - m->base_addr));
-  assert(patch);
+  assert(patchpoint % 8 == 0 ||
+         (patchpoint + 3) % 8 == 0||
+         (patchpoint + 2) % 8 == 0);
+  */
+  patchpoint = (patchpoint + 7) / 8 * 8;
+  //dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, patchpoint - m->base_addr);
+  keyvalue *patch = dict_find(m->ra_orig, (const void*)(patchpoint - m->base_addr));
+  //assert(patch);
   //++patch_count;
   //dprintf(STDERR_FILENO, "%x, %x, %lx, %x\n", m->base_addr, patch->key, patch->value, patch_count);
 

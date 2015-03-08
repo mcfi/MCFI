@@ -114,8 +114,8 @@ die:
         movq   %r11, %rsi
         jmp    __report_cfi_violation@PLT
 
-        // trigger the generation of a PLT entry for __patch_direct_call
-        jmp    __patch_direct_call@PLT
+        // trigger the generation of a PLT entry for __patch_call
+        jmp    __patch_call@PLT
 
 	.size _Ux86_64_setcontext, . - _Ux86_64_setcontext
 

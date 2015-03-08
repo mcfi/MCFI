@@ -23,7 +23,8 @@ try1:   movq %gs:0x1000, %r11
 __mcfi_bary___thread_start:
         cmpq %r11, %gs:(%r9)
         jne check1
-        .byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00
+        nop
+        .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
 	call *%r9
 __mcfi_icj_1___thread_start:
 	mov %eax,%edi
