@@ -17,6 +17,13 @@ static TCB *tcb_list = 0;
 /* tracks which thread escapes the untrusted space for how many times */
 dict *thread_escape_map = 0;
 
+static unsigned int patch_count = 0;
+
+static int cfggened = FALSE;
+
+extern code_module *modules;
+static dict *patch_compensate = 0;
+extern void *table; /* table region defined in main.c */
 extern struct Vmmap VM;
 
 void set_tcb(unsigned long sb_tcb) {
@@ -100,6 +107,31 @@ void free_tcb(void *user_tcb) {
 }
 
 void rock_patch(unsigned long patchpoint) {
+  //dprintf(STDERR_FILENO, "patched %lx\n", patchpoint);
+  code_module *m;
+  int found = FALSE;
+  DL_FOREACH(modules, m) {
+    if (patchpoint >= m->base_addr &&
+        patchpoint < m->base_addr + m->sz) {
+      found = TRUE;
+      break;
+    }
+  }
+  assert(found);
+  keyvalue *patch = dict_find(m->rad_orig, (const void*)(patchpoint - m->base_addr));
+  assert(patch);
+  //++patch_count;
+  //dprintf(STDERR_FILENO, "%x, %x, %lx, %x\n", m->base_addr, patch->key, patch->value, patch_count);
+
+  if (cfggened)
+    *((size_t*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
+  else {
+    dict_add(&patch_compensate, table + m->base_addr + (size_t)patch->key, 0);
+  }
+
+  /* the patch should be performed after the tary id is set valid */
+  memcpy((char*)(m->base_addr + (unsigned long)patch->key - 8),
+         &(patch->value), 8);
 }
 
 void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
@@ -229,8 +261,6 @@ void* rock_brk(void* newbrk) {
   return prog_brk;
 }
 
-extern code_module *modules;
-
 char *load_opened_elf_into_memory(int fd,
                                   /*out*/size_t *elf_size_rounded_to_page_boundary);
 code_module *load_mcfi_metadata(char *elf);
@@ -250,7 +280,6 @@ int load_native_code(int fd, void *load_addr, size_t seg_base) {
 }
 
 static unsigned long version = 0;
-extern void *table; /* table region defined in main.c */
 
 static void print_cfgcc(void *cc) {
   vertex *v, *tmp;
@@ -398,6 +427,18 @@ int gen_cfg(void) {
 
   dict_clear(&callids);
   dict_clear(&retids);
+
+  if (!cfggened) {
+    cfggened = TRUE;
+    keyvalue *kv, *tmp;
+    HASH_ITER(hh, patch_compensate, kv, tmp) {
+      size_t *tary_entry = (size_t*)kv->key;
+      //dprintf(STDERR_FILENO, "%p\n", addr);
+      *tary_entry |= 1;
+    }
+    dict_clear(&patch_compensate);
+  }
+
   return 0;
 }
 

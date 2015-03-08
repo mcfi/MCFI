@@ -123,6 +123,7 @@ static symbol *alloc_sym(void) {
 struct code_module_t {
   struct code_module_t *next, *prev;
   uintptr_t base_addr; /* base addr */
+  size_t    sz;        /* size of this module's executable program segment */
   icf      *icfs;      /* indirect call instructions */
   function *functions; /* functions */
   dict     *classes;   /* classes */  
@@ -134,6 +135,7 @@ struct code_module_t {
   symbol   *funcsyms;  /* function symbols */
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
+  dict     *rad_orig;  /* original values of direct call sites */
   int      cfggened;   /* the cfg has been generated for this module before */
   int      deleted;    /* whether this module has been deleted */
 };
@@ -1094,19 +1096,26 @@ static void gen_mcfi_id(node **lcg, node **lrt,
 /* generate and populate the tary table for module m */
 static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
   char *tary = table + m->base_addr;
-#define POPULATE_TARY(ids, syms, mark, prefix) do {                     \
+#define POPULATE_TARY(ids, syms, mark, activation_considered, prefix) do { \
     symbol *sym;                                                        \
     DL_FOREACH(syms, sym) {                                             \
       keyvalue *id = dict_find(ids, mark(sym->name));                   \
+      size_t mask = (size_t)-1;                                         \
       if (id) {                                                         \
-        *((unsigned long*)(tary + sym->offset)) = (unsigned long)id->value; \
+        size_t* p = (size_t*)(tary + sym->offset);                      \
+        if (activation_considered) {                                    \
+          /* if the target has not been activated, do activate it */    \
+          if (!(*p & 1))                                                \
+            mask = ((size_t)-2);                                        \
+        }                                                               \
+        *p = ((unsigned long)id->value & mask);                         \
         /*(dprintf(STDERR_FILENO, prefix"%s, %x, %lx\n", sym->name, sym->offset, id->value);*/ \
       }                                                                 \
     }                                                                   \
   } while (0)
-  POPULATE_TARY(callids, m->funcsyms, _mark_func, "Func: ");
-  POPULATE_TARY(retids, m->rad, _mark_ra_dc, "DC: ");
-  POPULATE_TARY(retids, m->rai, _mark_ra_ic, "IC: ");
+  POPULATE_TARY(callids, m->funcsyms, _mark_func, FALSE, "Func: ");
+  POPULATE_TARY(retids, m->rad, _mark_ra_dc, TRUE, "DC: ");
+  POPULATE_TARY(retids, m->rai, _mark_ra_ic, FALSE, "IC: ");
 #undef POPULATE_TARY
 }
 

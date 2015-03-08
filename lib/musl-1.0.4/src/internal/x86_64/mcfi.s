@@ -1,3 +1,15 @@
+        .text
+        .globl __patch_direct_call
+        .type __patch_direct_call,@function
+__patch_direct_call:
+        /* pop the return address */
+        popq %r11
+        /* set continuation */
+        movq %r11, %fs:0x20
+        /* subtract the length of the direct call instruction */
+        subl $0x5, %fs:0x20
+        jmpq *%gs:0x100c8 /* online_patch */
+
         .globl __report_cfi_violation_for_return
         .type __report_cfi_violation_for_return, @function
 __report_cfi_violation_for_return:

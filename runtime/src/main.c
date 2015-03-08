@@ -482,7 +482,7 @@ static unsigned int alloc_bid_slot(void) {
   return rbid_slot;
 }
 
-code_module *load_mcfi_metadata(char *elf) {
+code_module *load_mcfi_metadata(char *elf, size_t sz) {
   Elf64_Ehdr *ehdr = (Ehdr *)elf;
   Elf64_Shdr *shdr = (Elf64_Shdr *)(elf + ehdr->e_shoff);
   Elf64_Shdr *shstrtbl = &shdr[ehdr->e_shstrndx];
@@ -590,6 +590,10 @@ code_module *load_mcfi_metadata(char *elf) {
   cm->cha = cha;
   cm->aliases = aliases;
   cm->fats = fats;
+  cm->sz = sz;
+
+  unsigned int patch_direct_call_offset = -1;
+  const char *patch_direct_call = sp_intern_string(&stringpool, "__patch_direct_call");
 
   for (cnt = 0; cnt < numsym; cnt++) {
     char *symname = strtab + sym[cnt].st_name;
@@ -599,6 +603,9 @@ code_module *load_mcfi_metadata(char *elf) {
       dcjsym->offset = sym[cnt].st_value - cm->base_addr;
       //dprintf(STDERR_FILENO, "%x, %s\n", dcjsym->offset, dcjsym->name);
       DL_APPEND(cm->rad, dcjsym);
+      /* save the original code bytes */
+      dict_add(&(cm->rad_orig), (void*)dcjsym->offset,
+               (void*)*((unsigned long*)(elf + dcjsym->offset - 8)));
     } else if (0 == strncmp(symname, "__mcfi_icj_", 11)) {
       symbol *icjsym = alloc_sym();
       icjsym->name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 11));
@@ -630,6 +637,8 @@ code_module *load_mcfi_metadata(char *elf) {
       funcsym->offset = sym[cnt].st_value - cm->base_addr;
       //dprintf(STDERR_FILENO, "%lx, %s\n", funcsym->offset, funcsym->name);
       DL_APPEND(cm->funcsyms, funcsym);
+      if (funcsym->name == patch_direct_call)
+        patch_direct_call_offset = funcsym->offset;
     }
   }
 
@@ -642,8 +651,19 @@ code_module *load_mcfi_metadata(char *elf) {
     funcsym->offset = plt_offset + (cnt + 1) * PLT_ENT_SIZE;
     DL_APPEND(cm->funcsyms, funcsym);
     //dprintf(STDERR_FILENO, "%x, %x, %s\n", cnt + 1, funcsym->offset, funcsym->name);
+    if (funcsym->name == patch_direct_call)
+      patch_direct_call_offset = funcsym->offset;
   }
 
+  if (patch_direct_call_offset != -1) {
+    /* patch direct calls */
+    keyvalue *kv, *tmp;
+    HASH_ITER(hh, cm->rad_orig, kv, tmp) {
+      unsigned int callsite_offset = (unsigned int)kv->key;
+      unsigned int patch = patch_direct_call_offset - callsite_offset;
+      memcpy(elf + callsite_offset - 4, &patch, 4);
+    }
+  }
   return cm;
 }
 
@@ -717,7 +737,7 @@ static void load_libc(void) {
   char *libc_elf = load_elf_into_memory(libc_path, &libc_size_rounded_to_page_boundary);
 
   /* Load symbols and rewrite bary entries */
-  code_module *cm = load_mcfi_metadata(libc_elf);
+  code_module *cm = load_mcfi_metadata(libc_elf, libc_size_rounded_to_page_boundary);
   /* For trampolines in the libc module, remove their types */
   remove_trampoline_type(cm);
   
@@ -770,7 +790,7 @@ static void load_libc(void) {
       /* copy the content of the ELF */
       memcpy(content + (phdr->p_vaddr & (PAGE_SIZE-1)), libc_elf + phdr->p_offset, phdr->p_filesz);
       if (_prot(phdr->p_flags) & PROT_EXEC) {
-        if (mprotect(content, RoundToPage(phdr->p_memsz), PROT_EXEC | PROT_READ)) {
+        if (mprotect(content, RoundToPage(phdr->p_memsz), PROT_EXEC | PROT_WRITE)) {
           dprintf(STDERR_FILENO,
                   "[load_libc] writable permission of executable code memory cannot be dropped\n");
           quit(-1);
@@ -802,7 +822,7 @@ void replace_prog_seg(char *dest, char *src) {
         }
         memcpy(dest, src, phdr->p_memsz);
         //dprintf(STDERR_FILENO, "[replace_prog_seg] %p, %x\n", dest, phdr->p_memsz);
-        if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), prot)) {
+        if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), PROT_EXEC | PROT_WRITE/*prot*/)) {
           dprintf(STDERR_FILENO, "[replace_prog_seg] mprotect RE failed with %d\n", errn);
           quit(-1);
         }
@@ -820,7 +840,7 @@ void replace_prog_seg(char *dest, char *src) {
 static void load_bid_rewritten_exe(const char *exe_name) {
   size_t exe_size = 0;
   void *exe = load_elf_into_memory(exe_name, &exe_size);
-  code_module *cm = load_mcfi_metadata(exe);
+  code_module *cm = load_mcfi_metadata(exe, exe_size);
   DL_APPEND(modules, cm);
   cm->base_addr = X64ABIBASE;
 

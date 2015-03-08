@@ -21,7 +21,7 @@ locked:
         
 .macro switch_runtime_stack
         movq %fs:SELF, %rsp
-        addq $0xffc0, %rsp
+        addq $0xffc0, %rsp # %rsp should be 16-bit aligned
 .endm
 
 .macro atomic_incr_thread_escapes scratchreg=%rax
@@ -32,26 +32,43 @@ locked:
 
         .global runtime_online_patch
 runtime_online_patch:
-        # save the user context first
-        movq %rdi, %fs:USER_CTX+0x20
-        popq %rdi # pop the return address
-        movq (%rsp), %rdi
-        movq %rdi, %fs:CONTINUATION # save the called routine
+        # entering a trusted call
+        movb $1, %fs:IN_SYSCALL
+
+        # registers that might be clobbered during rock_patch should be saved
         movq %rax, %fs:USER_CTX
         movq %rcx, %fs:USER_CTX+0x10
         movq %rdx, %fs:USER_CTX+0x18
+        movq %rdi, %fs:USER_CTX+0x20
         movq %rsi, %fs:USER_CTX+0x28
         movq %rsp, %fs:USER_CTX+0x38
         movq %r8,  %fs:USER_CTX+0x40
         movq %r9,  %fs:USER_CTX+0x48
         movq %r10, %fs:USER_CTX+0x50
+
+        # XMMs
+        movq %xmm0, %fs:USER_CTX+0x90
+        movq %xmm1, %fs:USER_CTX+0x98
+        movq %xmm2, %fs:USER_CTX+0x100
+        movq %xmm3, %fs:USER_CTX+0x108
+        movq %xmm4, %fs:USER_CTX+0x110
+        movq %xmm5, %fs:USER_CTX+0x118
+        movq %xmm6, %fs:USER_CTX+0x120
+        movq %xmm7, %fs:USER_CTX+0x128
+
+        # st(0) and st(1) do not need to be saved, since
+        # rock_patch would not deal with long double
+
+        # control and status words
+        stmxcsr %fs:MXCSR
+        fnstcw  %fs:FCW
+
         # atomically increase the number of escapes
         atomic_incr_thread_escapes
         # load system stack pointer
         switch_runtime_stack
+        movq %r11, %rdi
         callq rock_patch
-        # patch might return 0 or 5
-        subq %rax, %fs:CONTINUATION
         # restore states
         movq %fs:USER_CTX, %rax
         movq %fs:USER_CTX+0x10, %rcx
@@ -63,20 +80,34 @@ runtime_online_patch:
         movq %fs:USER_CTX+0x48, %r9
         movq %fs:USER_CTX+0x50, %r10
         movq %fs:USER_CTX+0x58, %r11
+
+        # XMMs
+        movq %fs:USER_CTX+0x90,  %xmm0
+        movq %fs:USER_CTX+0x98,  %xmm1
+        movq %fs:USER_CTX+0x100, %xmm2
+        movq %fs:USER_CTX+0x108, %xmm3
+        movq %fs:USER_CTX+0x110, %xmm4
+        movq %fs:USER_CTX+0x118, %xmm5
+        movq %fs:USER_CTX+0x120, %xmm6
+        movq %fs:USER_CTX+0x128, %xmm7
+
+        # restore control and status words
+        fldcw   %fs:FCW
+        ldmxcsr %fs:MXCSR
+
+        # exiting a trusted call
+        movb $0, %fs:IN_SYSCALL
+
         # jump to the place
         jmpq *%fs:CONTINUATION
 
 # The ABI requires that fcw and mxcsr are both callee-saved, so
 # we do not need to save them.
 .macro save_context
-#        stmxcsr %fs:MXCSR
-#        fnstcw  %fs:FCW
         movq %rsp, %fs:USER_CTX+0x38
 .endm
 .macro restore_context
         movq %fs:USER_CTX+0x38, %rsp
-#        fldcw   %fs:FCW
-#        ldmxcsr %fs:MXCSR
 .endm
 
 .macro spin_lock
