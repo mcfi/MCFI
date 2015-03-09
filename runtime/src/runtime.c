@@ -449,6 +449,33 @@ int gen_cfg(void) {
   return 0;
 }
 
+void take_addr_and_gen_cfg(unsigned long func_addr) {
+  //dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
+  code_module *m;
+  int found = FALSE;
+  keyvalue *fnl, *fn, *tmp;
+  DL_FOREACH(modules, m) {
+    if (func_addr >= m->base_addr && func_addr < m->base_addr + m->sz) {
+      func_addr -= m->base_addr;
+      fnl = dict_find(m->dynfuncs, (void*)func_addr);
+      if (fnl) {
+        found = TRUE;
+        break;
+      }
+    }
+  }
+  if (!found) {
+    dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] cannot find the functions\n");
+    quit(-1);
+  }
+  /* add the functions' names to fats */
+  HASH_ITER(hh, ((dict*)(fnl->value)), fn, tmp) {
+    dict_add(&(m->fats), fn->key, 0);
+  }
+  /* generate the cfg */
+  gen_cfg();
+}
+
 void unload_native_code(const char* code_file_name) {
 }
 

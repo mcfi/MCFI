@@ -161,3 +161,4 @@ runtime_\func:
         runtime_function dyncode_modify
         runtime_function dyncode_delete
         runtime_function report_cfi_violation
+        runtime_function take_addr_and_gen_cfg

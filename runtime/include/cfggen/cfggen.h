@@ -136,6 +136,7 @@ struct code_module_t {
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses are taken */
   dict     *ra_orig;   /* original values of call sites */
+  graph    *dynfuncs;  /* map from position of to a couple of functions */
   int      cfggened;   /* the cfg has been generated for this module before */
   int      deleted;    /* whether this module has been deleted */
 };

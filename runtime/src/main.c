@@ -184,6 +184,7 @@ void install_trampolines(void) {
     void *dyncode_delete;
     void *report_cfi_violation;
     void *online_patch;
+    void *take_addr_and_gen_cfg;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -202,6 +203,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_dyncode_delete;
   extern unsigned long runtime_report_cfi_violation;
   extern unsigned long runtime_online_patch;
+  extern unsigned long runtime_take_addr_and_gen_cfg;
   tp->mmap = &runtime_rock_mmap;
   tp->mprotect = &runtime_rock_mprotect;
   tp->munmap = &runtime_rock_munmap;
@@ -219,7 +221,7 @@ void install_trampolines(void) {
   tp->dyncode_delete = &runtime_dyncode_delete;
   tp->report_cfi_violation = &runtime_report_cfi_violation;
   tp->online_patch = &runtime_online_patch;
-
+  tp->take_addr_and_gen_cfg = &runtime_take_addr_and_gen_cfg;
   if (0 != mprotect(table,  0x11000, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
   }
@@ -554,18 +556,6 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     }
   }
 
-  /* Function's whose names appear in .dynsym also have their addresses taken */
-  for (cnt = 0; cnt < numdynsym; ++cnt) {
-    if (ELF64_ST_BIND(dynsym[cnt].st_info) == STB_GLOBAL &&
-        ELF64_ST_TYPE(dynsym[cnt].st_info) == STT_FUNC &&
-        dynsym[cnt].st_shndx != STN_UNDEF) {
-      //dprintf(STDERR_FILENO, "%d, %s\n", numdynsym, dynstr+dynsym[cnt].st_name);
-      char *fname = sp_intern_string(&stringpool,
-                                     dynstr + dynsym[cnt].st_name);
-      g_add_vertex(&fats, fname);
-    }
-  }
-
   code_module *cm = alloc_code_module();
   if (ehdr->e_type == ET_EXEC) {
     cm->base_addr = X64ABIBASE;
@@ -643,6 +633,19 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       DL_APPEND(cm->funcsyms, funcsym);
       if (funcsym->name == patch_call)
         patch_call_offset = funcsym->offset;
+    }
+  }
+
+  /* Function's whose names appear in .dynsym also have their addresses taken */
+  for (cnt = 0; cnt < numdynsym; ++cnt) {
+    if (ELF64_ST_BIND(dynsym[cnt].st_info) == STB_GLOBAL &&
+        ELF64_ST_TYPE(dynsym[cnt].st_info) == STT_FUNC &&
+        dynsym[cnt].st_shndx != STN_UNDEF) {
+      char *fname = sp_intern_string(&stringpool,
+                                     dynstr + dynsym[cnt].st_name);
+      void *addr = (void*)(dynsym[cnt].st_value - cm->base_addr);
+      //dprintf(STDERR_FILENO, "%x, %s\n", addr, dynstr+dynsym[cnt].st_name);
+      g_add_directed_edge(&(cm->dynfuncs), addr, fname);
     }
   }
 
