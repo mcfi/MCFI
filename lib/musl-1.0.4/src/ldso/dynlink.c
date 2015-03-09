@@ -1306,6 +1306,7 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 	size_t i;
 	uint32_t h = 0, gh = 0;
 	Sym *sym;
+        void *v = 0;
 	if (p == head || p == RTLD_DEFAULT || p == RTLD_NEXT) {
 		if (p == RTLD_DEFAULT) {
 			p = head;
@@ -1316,9 +1317,12 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 		}
 		struct symdef def = find_sym(p, s, 0);
 		if (!def.sym) goto failed;
-		if ((def.sym->st_info&0xf) == STT_TLS)
-			return __tls_get_addr((size_t []){def.dso->tls_id, def.sym->st_value});
-		return def.dso->base + def.sym->st_value;
+		if ((def.sym->st_info&0xf) == STT_TLS) {
+                  v = __tls_get_addr((size_t []){def.dso->tls_id, def.sym->st_value});
+                  goto succeeded;
+                }
+		v = def.dso->base + def.sym->st_value;
+                goto succeeded;
 	}
 	if (p != RTLD_DEFAULT && p != RTLD_NEXT && invalid_dso_handle(p))
 		return 0;
@@ -1329,11 +1333,15 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 		h = sysv_hash(s);
 		sym = sysv_lookup(s, h, p);
 	}
-	if (sym && (sym->st_info&0xf) == STT_TLS)
-		return __tls_get_addr((size_t []){p->tls_id, sym->st_value});
-	if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES))
-		return p->base + sym->st_value;
-	if (p->deps) for (i=0; p->deps[i]; i++) {
+	if (sym && (sym->st_info&0xf) == STT_TLS) {
+          v = __tls_get_addr((size_t []){p->tls_id, sym->st_value});
+          goto succeeded;
+        }
+	if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES)) {
+          v = p->base + sym->st_value;
+          goto succeeded;
+	}
+        if (p->deps) for (i=0; p->deps[i]; i++) {
 		if (p->deps[i]->ghashtab) {
 			if (!gh) gh = gnu_hash(s);
 			sym = gnu_lookup(s, gh, p->deps[i]);
@@ -1341,15 +1349,23 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 			if (!h) h = sysv_hash(s);
 			sym = sysv_lookup(s, h, p->deps[i]);
 		}
-		if (sym && (sym->st_info&0xf) == STT_TLS)
-			return __tls_get_addr((size_t []){p->deps[i]->tls_id, sym->st_value});
-		if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES))
-			return p->deps[i]->base + sym->st_value;
+		if (sym && (sym->st_info&0xf) == STT_TLS) {
+                  v = __tls_get_addr((size_t []){p->deps[i]->tls_id, sym->st_value});
+                  goto succeeded;
+                }
+		if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES)) {
+                  v = p->deps[i]->base + sym->st_value;
+                  goto succeeded;
+                }
 	}
-failed:
+ failed:
 	errflag = 1;
 	snprintf(errbuf, sizeof errbuf, "Symbol not found: %s", s);
 	return 0;
+ succeeded:
+        /* explicitly make the function's address taken */
+        trampoline_take_addr_and_gen_cfg(v);
+        return v;
 }
 
 int __dladdr(const void *addr, Dl_info *info)
