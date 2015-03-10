@@ -137,7 +137,7 @@ void rock_patch(unsigned long patchpoint) {
   }
 
   /* the patch should be performed after the tary id is set valid */
-  memcpy((char*)(m->base_addr + (unsigned long)patch->key - 8),
+  memcpy((char*)(m->osb_base_addr + (unsigned long)patch->key - 8),
          &(patch->value), 8);
 }
 
@@ -268,13 +268,10 @@ void* rock_brk(void* newbrk) {
   return prog_brk;
 }
 
-char *load_opened_elf_into_memory(int fd,
-                                  /*out*/size_t *elf_size_rounded_to_page_boundary);
-code_module *load_mcfi_metadata(char *elf);
+char *load_elf(int fd, int is_exe, char **entry);
 
-void replace_prog_seg(char *dest, char *src);
-
-int load_native_code(int fd, void *load_addr, size_t seg_base) {
+void *load_native_code(int fd) {
+  /*
   //dprintf(STDERR_FILENO, "[load_native_code] %d, %p, %lx\n", fd, load_addr, seg_base);
   size_t elf_size = 0;
   void *elf = load_opened_elf_into_memory(fd, &elf_size);
@@ -283,7 +280,8 @@ int load_native_code(int fd, void *load_addr, size_t seg_base) {
   DL_APPEND(modules, cm);
   replace_prog_seg(load_addr, elf);
   munmap(elf, elf_size);
-  return 0;
+  */
+  return load_elf(fd, FALSE, 0);
 }
 
 static unsigned long version = 0;
@@ -450,11 +448,12 @@ int gen_cfg(void) {
 }
 
 void take_addr_and_gen_cfg(unsigned long func_addr) {
-  //dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
+  dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
   code_module *m;
   int found = FALSE;
   keyvalue *fnl, *fn, *tmp;
   DL_FOREACH(modules, m) {
+    dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, m->sz);
     if (func_addr >= m->base_addr && func_addr < m->base_addr + m->sz) {
       func_addr -= m->base_addr;
       fnl = dict_find(m->dynfuncs, (void*)func_addr);

@@ -22,7 +22,7 @@ void* table = 0;
 
 /* after we load libc, we set the following data */
 char* libc_base = 0;
-void* libc_entry = 0;
+char* libc_entry = 0;
 char* stack = 0;
 
 /* load-time data */
@@ -91,23 +91,6 @@ static void alloc_sandbox(void) {
   end = X64ABIBASE;
   VmmapAdd(&VM, start >> PAGESHIFT, (end-start) >> PAGESHIFT,
            PROT_NONE, PROT_NONE, VMMAP_ENTRY_ANONYMOUS);
-  
-  Phdr *phdr = (Phdr*)aux[AT_PHDR];
-  size_t cnt = aux[AT_PHNUM];
-  for (; cnt; cnt--, phdr = (void *)((char *)phdr + aux[AT_PHENT])) {
-    if (phdr->p_type == PT_LOAD) {
-      start = CurPage(phdr->p_vaddr);
-      end = RoundToPage(phdr->p_vaddr + phdr->p_memsz);
-      int prot = _prot(phdr->p_flags);
-
-      if ((prot & PROT_EXEC) && (prot & PROT_WRITE)) {
-        dprintf(STDERR_FILENO, "[alloc_sandbox] W + E segments are allowed in this app!\n");
-        quit(-1);
-      }
-      VmmapAdd(&VM, start >> PAGESHIFT, (end-start) >> PAGESHIFT,
-               prot, prot, VMMAP_ENTRY_ANONYMOUS);
-    }
-  }
 
   /* allocate the stack, default to 8MB */
   start = FourGB - SixtyFourKB * 128;
@@ -694,8 +677,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   return cm;
 }
 
-char *load_opened_elf_into_memory(int fd,
-                                  /*out*/size_t *elf_size_rounded_to_page_boundary) {
+char *load_elf_content(int fd, /*out*/size_t *elf_size_rounded_to_page_boundary) {
   struct stat st;
 
   if (0 != fstat(fd, &st)) {
@@ -717,38 +699,183 @@ char *load_opened_elf_into_memory(int fd,
   return elf;
 }
 
-static char *load_elf_into_memory(const char *path,
-                                  /*out*/size_t *elf_size_rounded_to_page_boundary) {
-  int fd = open(path, O_RDONLY, 0);
-  if (fd == -1) {
-    dprintf(STDERR_FILENO, "[load_elf_into_memory] %s open failed with %d\n",
-            path, errn);
-    quit(-1);
-  }
-  
-  char* elf = load_opened_elf_into_memory(fd, elf_size_rounded_to_page_boundary);
-  close(fd);
-  return elf;
-}
-
 static void remove_trampoline_type(code_module *m) {
   function *f;
-  dict *tramps = 0;
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mmap"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mremap"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mprotect"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_munmap"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_brk"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_set_tcb"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_allocset_tcb"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_free_tcb"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_load_native_code"));
-  g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_gen_cfg"));
-
+  static dict *tramps = 0;
+  if (!tramps) {
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mmap"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mremap"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_mprotect"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_munmap"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_brk"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_set_tcb"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_allocset_tcb"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_free_tcb"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_load_native_code"));
+    g_add_vertex(&tramps, sp_intern_string(&stringpool, "trampoline_gen_cfg"));
+  }
   DL_FOREACH(m->functions, f) {
     if (g_in(tramps, f->name))
       f->type = 0;
   }
+}
+
+
+/* create a parallel mapping for insandbox base, and return the mapped
+ * pages outside of the sandbox
+ */
+static void *create_parallel_mapping(void *base,
+                                     size_t size,
+                                     int prot) {
+  /* TODO: replace /dev/shm/mcfi with a random name */
+  const char *shmname = "/dev/shm/mcfi";
+  int fd = -1;
+  while (TRUE) {
+    fd = shm_open(shmname, O_RDWR | O_CREAT | O_EXCL, 0744);
+    if (fd >= 0)
+      break;
+    if (fd == -1 && errn == EEXIST)
+      continue;
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] shm_open failed with %d\n", errn);
+    quit(-1);
+  }
+
+  if (0 != ftruncate(fd, size)) {
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] ftruncate failed with %d\n", errn);
+    quit(-1);
+  }
+
+  assert(size % PAGE_SIZE == 0);
+  base = mmap(base, size, prot, MAP_SHARED | MAP_FIXED,
+              fd, 0);
+  if (base == (void*)-1) {
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] mmap base failed with %d\n", errn);
+    quit(-1);
+  }
+
+  void *osb_base = mmap(0, size, PROT_WRITE, MAP_SHARED, fd, 0);
+  if (osb_base == (void*)-1) {
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] mmap osb_base failed with %d\n", errn);
+    quit(-1);
+  }
+
+  close(fd);
+  shm_unlink(shmname);
+  return osb_base;
+}
+
+/* load elf from fd to base,
+ * if base == 0, allocate a place to load
+ * else, load at base.
+ * Return the loaded base address
+ */
+void *load_elf(int fd, int is_exe, char **entry) {
+  char *base = 0;
+  size_t elf_size = 0;
+  /* load elf in a separate position */
+  char *elf = load_elf_content(fd, &elf_size);
+  /* TODO:
+   *
+   * CHECK THE LOADED ELF FILE.
+   * CHECK THE LOADED ELF FILE.
+   */
+  /* elf will be rewritten */
+  code_module *cm = load_mcfi_metadata(elf, elf_size);
+  remove_trampoline_type(cm);
+  DL_APPEND(modules, cm);
+
+  /* compute how many consecutive memory pages we need */
+  size_t phdr_vaddr_end = 0;
+
+  Elf64_Phdr *phdr = (Phdr*)(elf + ((Elf64_Ehdr*)elf)->e_phoff);
+  size_t cnt = ((Ehdr*)elf)->e_phnum;
+
+  for (; cnt; cnt--, ++phdr) {
+    if (phdr->p_type == PT_LOAD) {
+      if (phdr->p_vaddr + phdr->p_memsz > phdr_vaddr_end)
+        phdr_vaddr_end = phdr->p_vaddr + phdr->p_memsz;
+    }
+  }
+
+  /* align the addresses */
+  phdr_vaddr_end = RoundToPage(phdr_vaddr_end);
+
+  if (!is_exe) {
+    /* find a consecutive region of memory */
+    uintptr_t pa =
+      VmmapFindSpace(&VM, phdr_vaddr_end >> PAGESHIFT);
+
+    if (pa == 0) {
+      dprintf(STDERR_FILENO, "[load_elf] VmmapFindSpace pa failed\n");
+      quit(-1);
+    }
+
+    pa <<= PAGESHIFT;
+    base = (char*)pa;
+  } else {
+    base = (char*)X64ABIBASE;
+  }
+
+  //dprintf(STDERR_FILENO, "base: %p\n", base);
+  /* load the actual program headers */
+  phdr = (Phdr*)(elf + ((Ehdr*)elf)->e_phoff);
+  cnt = ((Ehdr*)elf)->e_phnum;
+
+#define VADDR(vaddr, is_exe) (is_exe ? (vaddr - X64ABIBASE) : vaddr)
+  
+  for (; cnt; cnt--, ++phdr) {
+    if (phdr->p_type == PT_LOAD) {
+      uintptr_t curpage = CurPage(base + VADDR(phdr->p_vaddr, is_exe));
+      size_t sz = RoundToPage(base + VADDR(phdr->p_vaddr, is_exe) + phdr->p_memsz) - curpage;
+      char *content;
+      if (_prot(phdr->p_flags) & PROT_EXEC) {
+        content = create_parallel_mapping(base, sz, PROT_EXEC);
+        /* close fd, so we do not clobber the content of the file */
+        close(fd);
+        cm->osb_base_addr = (uintptr_t)content;
+        cm->sz = sz;
+      } else {
+        content = mmap((char*)curpage,
+                       sz,
+                       PROT_READ | PROT_WRITE,
+                       MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED,
+                       -1, 0);
+        if (content != (char*)curpage) {
+          dprintf(STDERR_FILENO, "[load_elf] mmap failed for alloc a program section\n");
+          quit(-1);
+        }
+      }
+      /* copy the content of the ELF */
+      memcpy(content + (phdr->p_vaddr & (PAGE_SIZE-1)),
+             elf + phdr->p_offset, phdr->p_filesz);
+      VmmapAdd(&VM, curpage >> PAGESHIFT,
+               sz >> PAGESHIFT,
+               _prot(phdr->p_flags), _prot(phdr->p_flags),
+               VMMAP_ENTRY_ANONYMOUS);
+    }
+  }
+#undef VADDR
+  if (entry) {
+    *entry = base + ((Ehdr*)elf)->e_entry;
+    //dprintf(STDERR_FILENO, "Entry: %x\n", *entry);
+  }
+  cm->base_addr = (unsigned long)base;
+  /* release the elf file */
+  munmap(elf, elf_size);
+  return base;
+}
+
+static void *load_elf_name(const char* name, int is_exe, char **entry) {
+  int fd = open(name, O_RDONLY, 0);
+  if (fd == -1) {
+    dprintf(STDERR_FILENO, "[load_elf_name] open %s failed with %d\n", name);
+    quit(-1);
+  }
+  return load_elf(fd, is_exe, entry);
 }
 
 static void load_libc(void) {
@@ -760,120 +887,7 @@ static void load_libc(void) {
     snprintf(libc_path, MAX_PATH-1, "%s/MCFI/toolchain/lib/libc.so", HOME);
   }
   /* dprintf(STDERR_FILENO, "%s\n", libc_path); */
-  size_t libc_size_rounded_to_page_boundary = 0;
-  char *libc_elf = load_elf_into_memory(libc_path, &libc_size_rounded_to_page_boundary);
-
-  /* Load symbols and rewrite bary entries */
-  code_module *cm = load_mcfi_metadata(libc_elf, libc_size_rounded_to_page_boundary);
-  /* For trampolines in the libc module, remove their types */
-  remove_trampoline_type(cm);
-  
-  DL_APPEND(modules, cm);
-
-  /* compute how many consecutive memory pages we need */
-  size_t phdr_vaddr_end = 0;
-  
-  Phdr *phdr = (Phdr*)(libc_elf + ((Ehdr*)libc_elf)->e_phoff);
-  size_t cnt = ((Ehdr*)libc_elf)->e_phnum;
-  
-  for (; cnt; cnt--, phdr = (void *)((char *)phdr + ((Ehdr*)libc_elf)->e_phentsize)) {
-    if (phdr->p_type == PT_LOAD) {
-      if (phdr->p_vaddr + phdr->p_memsz > phdr_vaddr_end)
-        phdr_vaddr_end = phdr->p_vaddr + phdr->p_memsz;
-    }
-  }
-  
-  /* find a consecutive region of memory */
-  uintptr_t libc = VmmapFindSpace(&VM, RoundToPage(phdr_vaddr_end) >> PAGESHIFT);
-
-  if (libc == 0) {
-    dprintf(STDERR_FILENO, "[load_libc] sandbox mem alloc failed\n");
-    quit(-1);
-  }
-
-  libc <<= PAGESHIFT;
-  libc_base = (void*)libc;
-  cm->base_addr = (uintptr_t)libc_base;
-
-  //dprintf(STDERR_FILENO, "libc: %p\n", libc_base);
-  /* load the actual program headers */
-  phdr = (Phdr*)(libc_elf + ((Ehdr*)libc_elf)->e_phoff);
-  cnt = ((Ehdr*)libc_elf)->e_phnum;
-
-  for (; cnt; cnt--, phdr = (void *)((char *)phdr + ((Ehdr*)libc_elf)->e_phentsize)) {
-    if (phdr->p_type == PT_LOAD) {
-      uintptr_t curpage = CurPage(libc + phdr->p_vaddr);
-      size_t sz = RoundToPage(libc + phdr->p_vaddr + phdr->p_memsz) - curpage;
-      char* content = mmap((char*)curpage,
-                           sz,
-                           PROT_READ | PROT_WRITE,
-                           MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED,
-                           -1, 0);
-      if (content != (char*)curpage) {
-        dprintf(STDERR_FILENO, "[load_libc] sandbox mem alloc failed for a program section\n");
-        quit(-1);
-      }
-
-      /* copy the content of the ELF */
-      memcpy(content + (phdr->p_vaddr & (PAGE_SIZE-1)), libc_elf + phdr->p_offset, phdr->p_filesz);
-      if (_prot(phdr->p_flags) & PROT_EXEC) {
-        if (mprotect(content, RoundToPage(phdr->p_memsz), PROT_EXEC | PROT_WRITE)) {
-          dprintf(STDERR_FILENO,
-                  "[load_libc] writable permission of executable code memory cannot be dropped\n");
-          quit(-1);
-        }
-        libc_entry = ((Ehdr*)libc_elf)->e_entry + content;
-      }
-      VmmapAdd(&VM, curpage >> PAGESHIFT,
-               sz >> PAGESHIFT,
-               _prot(phdr->p_flags), _prot(phdr->p_flags),
-               VMMAP_ENTRY_ANONYMOUS);
-    }
-  }
-  /* VmmapDebug(&VM, "After libc loaded\n"); */
-  munmap(libc_elf, libc_size_rounded_to_page_boundary);
-}
-
-/* replace the dest elf's executable segment with src elf's executable segment*/
-void replace_prog_seg(char *dest, char *src) {
-  Elf64_Ehdr *ehdr = (Elf64_Ehdr*)dest;
-  Elf64_Phdr *phdr = (Elf64_Phdr*)(dest + ehdr->e_phoff);
-  size_t cnt = ehdr->e_phnum;
-  for (; cnt; cnt--, ++phdr) {
-    if (phdr->p_type == PT_LOAD) {
-      int prot = _prot(phdr->p_flags);
-      if (prot & PROT_EXEC) {
-        if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), PROT_READ | PROT_WRITE)) {
-          dprintf(STDERR_FILENO, "[replace_prog_seg] mprotect W failed with %d\n", errn);
-          quit(-1);
-        }
-        memcpy(dest, src, phdr->p_memsz);
-        //dprintf(STDERR_FILENO, "[replace_prog_seg] %p, %x\n", dest, phdr->p_memsz);
-        if (0 != mprotect(dest, RoundToPage(phdr->p_memsz), PROT_EXEC | PROT_WRITE/*prot*/)) {
-          dprintf(STDERR_FILENO, "[replace_prog_seg] mprotect RE failed with %d\n", errn);
-          quit(-1);
-        }
-        /* compare whether the copied code has been changed by attackers */
-        if (memcmp(dest, src, phdr->p_memsz)) {
-          report_error("[replace_prog_seg]: concurrent code changes detected\n");
-          quit(-1);
-        }
-      }
-    }
-  }
-}
-
-/* load the bid rewritten exe */
-static void load_bid_rewritten_exe(const char *exe_name) {
-  size_t exe_size = 0;
-  void *exe = load_elf_into_memory(exe_name, &exe_size);
-  code_module *cm = load_mcfi_metadata(exe, exe_size);
-  DL_APPEND(modules, cm);
-  cm->base_addr = X64ABIBASE;
-
-  /* copy the modified code into the loaded region */
-  replace_prog_seg((void*)X64ABIBASE, exe);
-  munmap(exe, exe_size);
+  libc_base = load_elf_name(libc_path, FALSE, &libc_entry);
 }
 
 /* main function of the runtime */
@@ -886,7 +900,7 @@ void* runtime_init(int argc, char **argv) {
     dprintf(STDERR_FILENO, "[runtime_init] memory pager init failed\n");
     quit(-1);
   }
-  
+
   /* reserve the lowest 4GB by considering the loaded app. */
   alloc_sandbox();
   
@@ -905,11 +919,11 @@ void* runtime_init(int argc, char **argv) {
   /* load the libc */
   load_libc();
 
+  /* reload the application by creating a parallel mapping for it */
+  load_elf_name(argv[0], TRUE, 0);
+  
   /* copy data from kernel-allocated stack to sandbox-stack */
   stack_init();
-
-  /* load mcfi metadata for the exe */
-  load_bid_rewritten_exe(argv[0]);
 
   return stack;
 }

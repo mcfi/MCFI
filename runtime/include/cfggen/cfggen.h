@@ -123,6 +123,7 @@ static symbol *alloc_sym(void) {
 struct code_module_t {
   struct code_module_t *next, *prev;
   uintptr_t base_addr; /* base addr */
+  uintptr_t osb_base_addr; /* out of sandbox base addr */
   size_t    sz;        /* size of this module's executable program segment */
   icf      *icfs;      /* indirect call instructions */
   function *functions; /* functions */
