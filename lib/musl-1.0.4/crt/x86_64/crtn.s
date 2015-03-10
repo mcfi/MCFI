@@ -38,6 +38,9 @@ die2:
         leaq try2(%rip), %rdi
         jmp __report_cfi_violation_for_return@PLT
 
+        # trigger generation of a PLT entry for __patch_call
+        jmp __patch_call@PLT
+
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ _init\nY void!\nR _libc_init\n}"
         .byte 0

@@ -374,9 +374,10 @@ static void *map_library(int fd, struct dso *dso)
 	 * the length of the file. This is okay because we will not
 	 * use the invalid part; we just need to reserve the right
 	 * amount of virtual address space to map over later. */
-	map = mmap((void *)addr_min, map_len, prot, MAP_PRIVATE, fd, off_start);
+	//map = mmap((void *)addr_min, map_len, prot, MAP_PRIVATE, fd, off_start);
+        map = trampoline_load_native_code(fd);
         //dprintf(2, "Initial map: map = %lx, addr_min = %x, len = %x\n", map, addr_min, map_len);
-	if (map==MAP_FAILED) goto error;
+	if (map==0) goto error;
 	/* If the loaded file is not relocatable and the requested address is
 	 * not available, then the load operation must fail. */
 	if (eh->e_type != ET_DYN && addr_min && map!=(void *)addr_min) {
@@ -398,13 +399,6 @@ static void *map_library(int fd, struct dso *dso)
 		}
 		/* Reuse the existing mapping for the lowest-address LOAD */
 		if ((ph->p_vaddr & -PAGE_SIZE) == addr_min) {
-                  prot = (((ph->p_flags&PF_R) ? PROT_READ : 0) |
-                          ((ph->p_flags&PF_W) ? PROT_WRITE: 0) |
-                          ((ph->p_flags&PF_X) ? PROT_EXEC : 0));
-                  if (ph->p_type == PT_LOAD && prot & PROT_EXEC) {
-                    if (trampoline_load_native_code(fd, map, ph->p_vaddr))
-                      goto error;
-                  }
                   continue;
                 }
 		this_min = ph->p_vaddr & -PAGE_SIZE;
@@ -413,22 +407,26 @@ static void *map_library(int fd, struct dso *dso)
 		prot = (((ph->p_flags&PF_R) ? PROT_READ : 0) |
 			((ph->p_flags&PF_W) ? PROT_WRITE: 0) |
 			((ph->p_flags&PF_X) ? PROT_EXEC : 0));
+                /*
 		if (mmap(base+this_min, this_max-this_min, prot, MAP_PRIVATE|MAP_FIXED, fd, off_start) == MAP_FAILED)
-			goto error;
+                goto error;*/
 		if (ph->p_memsz > ph->p_filesz) {
 			size_t brk = (size_t)base+ph->p_vaddr+ph->p_filesz;
 			size_t pgbrk = brk+PAGE_SIZE-1 & -PAGE_SIZE;
 			memset((void *)brk, 0, pgbrk-brk & PAGE_SIZE-1);
+                        /*
 			if (pgbrk-(size_t)base < this_max && mmap((void *)pgbrk, (size_t)base+this_max-pgbrk, prot, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) == MAP_FAILED)
-				goto error;
+                        goto error;*/
 		}
 	}
+        /*
 	for (i=0; ((size_t *)(base+dyn))[i]; i+=2)
 		if (((size_t *)(base+dyn))[i]==DT_TEXTREL) {
 			if (mprotect(map, map_len, PROT_READ|PROT_WRITE|PROT_EXEC) < 0)
 				goto error;
 			break;
 		}
+        */
 	if (!runtime) reclaim_gaps(base, ph0, eh->e_phentsize, eh->e_phnum);
 	dso->map = map;
 	dso->map_len = map_len;
@@ -1306,6 +1304,7 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 	size_t i;
 	uint32_t h = 0, gh = 0;
 	Sym *sym;
+        void *v = 0;
 	if (p == head || p == RTLD_DEFAULT || p == RTLD_NEXT) {
 		if (p == RTLD_DEFAULT) {
 			p = head;
@@ -1316,9 +1315,12 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 		}
 		struct symdef def = find_sym(p, s, 0);
 		if (!def.sym) goto failed;
-		if ((def.sym->st_info&0xf) == STT_TLS)
-			return __tls_get_addr((size_t []){def.dso->tls_id, def.sym->st_value});
-		return def.dso->base + def.sym->st_value;
+		if ((def.sym->st_info&0xf) == STT_TLS) {
+                  v = __tls_get_addr((size_t []){def.dso->tls_id, def.sym->st_value});
+                  goto succeeded;
+                }
+		v = def.dso->base + def.sym->st_value;
+                goto succeeded;
 	}
 	if (p != RTLD_DEFAULT && p != RTLD_NEXT && invalid_dso_handle(p))
 		return 0;
@@ -1329,11 +1331,15 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 		h = sysv_hash(s);
 		sym = sysv_lookup(s, h, p);
 	}
-	if (sym && (sym->st_info&0xf) == STT_TLS)
-		return __tls_get_addr((size_t []){p->tls_id, sym->st_value});
-	if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES))
-		return p->base + sym->st_value;
-	if (p->deps) for (i=0; p->deps[i]; i++) {
+	if (sym && (sym->st_info&0xf) == STT_TLS) {
+          v = __tls_get_addr((size_t []){p->tls_id, sym->st_value});
+          goto succeeded;
+        }
+	if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES)) {
+          v = p->base + sym->st_value;
+          goto succeeded;
+	}
+        if (p->deps) for (i=0; p->deps[i]; i++) {
 		if (p->deps[i]->ghashtab) {
 			if (!gh) gh = gnu_hash(s);
 			sym = gnu_lookup(s, gh, p->deps[i]);
@@ -1341,15 +1347,23 @@ static void *do_dlsym(struct dso *p, const char *s, void *ra)
 			if (!h) h = sysv_hash(s);
 			sym = sysv_lookup(s, h, p->deps[i]);
 		}
-		if (sym && (sym->st_info&0xf) == STT_TLS)
-			return __tls_get_addr((size_t []){p->deps[i]->tls_id, sym->st_value});
-		if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES))
-			return p->deps[i]->base + sym->st_value;
+		if (sym && (sym->st_info&0xf) == STT_TLS) {
+                  v = __tls_get_addr((size_t []){p->deps[i]->tls_id, sym->st_value});
+                  goto succeeded;
+                }
+		if (sym && sym->st_value && (1<<(sym->st_info&0xf) & OK_TYPES)) {
+                  v = p->deps[i]->base + sym->st_value;
+                  goto succeeded;
+                }
 	}
-failed:
+ failed:
 	errflag = 1;
 	snprintf(errbuf, sizeof errbuf, "Symbol not found: %s", s);
 	return 0;
+ succeeded:
+        /* explicitly make the function's address taken */
+        trampoline_take_addr_and_gen_cfg(v);
+        return v;
 }
 
 int __dladdr(const void *addr, Dl_info *info)

@@ -28,6 +28,14 @@ struct Context {
   unsigned long r15;                 /* 0x78 */
   unsigned long fcw;                 /* 0x80 */
   unsigned long mxcsr;               /* 0x88 */
+  unsigned long xmm0;                /* 0x90 */
+  unsigned long xmm1;                /* 0x98 */
+  unsigned long xmm2;                /* 0x100 */
+  unsigned long xmm3;                /* 0x108 */
+  unsigned long xmm4;                /* 0x110 */
+  unsigned long xmm5;                /* 0x118 */
+  unsigned long xmm6;                /* 0x120 */
+  unsigned long xmm7;                /* 0x128 */
 };
 
 typedef struct TCB_t {

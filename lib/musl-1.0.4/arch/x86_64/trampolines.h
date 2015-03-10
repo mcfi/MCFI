@@ -19,6 +19,8 @@
 #define ROCK_FREE_TCB     0x80
 #define ROCK_LOAD_NATIVE_CODE 0x88
 #define ROCK_GEN_CFG      0x90
+#define ROCK_TAKE_ADDR_AND_GEN_CFG 0xD0
+#define ROCK_SET_GOTPLT   0xD8
 
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
@@ -116,12 +118,10 @@ void trampoline_free_tcb(unsigned long n1) {
 }
 
 static __attribute__((noinline))
-long trampoline_load_native_code(unsigned long n1,
-                                 unsigned long n2,
-                                 unsigned long n3) {
+long trampoline_load_native_code(unsigned long n1) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_LOAD_NATIVE_CODE)
-                       "D"(n1), "S"(n2), "d"(n3):
+                       "D"(n1):
                        "memory");
   return ret;
 }
@@ -130,6 +130,24 @@ static __attribute__((noinline))
 long trampoline_gen_cfg(void) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_GEN_CFG):"memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_take_addr_and_gen_cfg(unsigned long n1) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_TAKE_ADDR_AND_GEN_CFG)
+                       "D"(n1):
+                       "memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_set_gotplt(unsigned long n1, unsigned long n2) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_SET_GOTPLT)
+                       "D"(n1), "S"(n2):
+                       "memory");
   return ret;
 }
 #endif

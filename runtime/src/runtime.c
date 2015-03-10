@@ -17,6 +17,13 @@ static TCB *tcb_list = 0;
 /* tracks which thread escapes the untrusted space for how many times */
 dict *thread_escape_map = 0;
 
+static unsigned int patch_count = 0;
+
+static int cfggened = FALSE;
+
+extern code_module *modules;
+static dict *patch_compensate = 0;
+extern void *table; /* table region defined in main.c */
 extern struct Vmmap VM;
 
 void set_tcb(unsigned long sb_tcb) {
@@ -100,16 +107,71 @@ void free_tcb(void *user_tcb) {
 }
 
 void rock_patch(unsigned long patchpoint) {
+  //dprintf(STDERR_FILENO, "patched %lx\n", patchpoint);
+  code_module *m;
+  int found = FALSE;
+  DL_FOREACH(modules, m) {
+    if (patchpoint >= m->base_addr &&
+        patchpoint < m->base_addr + m->sz) {
+      found = TRUE;
+      break;
+    }
+  }
+  /*
+  assert(found);
+  assert(patchpoint % 8 == 0 ||
+         (patchpoint + 3) % 8 == 0||
+         (patchpoint + 2) % 8 == 0);
+  */
+  patchpoint = (patchpoint + 7) / 8 * 8;
+  //dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, patchpoint - m->base_addr);
+  keyvalue *patch = dict_find(m->ra_orig, (const void*)(patchpoint - m->base_addr));
+  //assert(patch);
+  //++patch_count;
+  //dprintf(STDERR_FILENO, "%x, %x, %lx, %x\n", m->base_addr, patch->key, patch->value, patch_count);
+
+  if (cfggened)
+    *((size_t*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
+  else {
+    dict_add(&patch_compensate, table + m->base_addr + (size_t)patch->key, 0);
+  }
+
+  /* the patch should be performed after the tary id is set valid */
+  memcpy((char*)(m->osb_base_addr + (unsigned long)patch->key - 8),
+         &(patch->value), 8);
+}
+
+static int range_overlap(uintptr_t r1, size_t len1,
+                         uintptr_t r2, size_t len2) {
+  if (r1 == r2)
+    return TRUE;
+  if (r1 < r2 && r1 + len1 > r2)
+    return TRUE;
+  if (r2 < r1 && r2 + len2 > r1)
+    return TRUE;
+  return FALSE;
+}
+
+static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
+  if (prot & PROT_WRITE) {
+    code_module *m;
+    DL_FOREACH(modules, m) {
+      if (range_overlap(start, len, m->base_addr, m->sz) ||
+          range_overlap(start, len, m->gotplt, m->gotpltsz))
+        return TRUE;
+    }
+  }
+  return FALSE;
 }
 
 void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
-  /* executable page mapping is not allowed
   if (prot & PROT_EXEC) {
     dprintf(STDERR_FILENO,
             "[rock_mmap] mmap(%p, %lx, %d, %d, %d, %ld) maps executable pages!\n",
-            addr, len, prot, flags, fd, off);
+            start, len, prot, flags, fd, off);
     quit(-1);
-    }*/
+  }
+
   /* return mmap(start, len, prot, flags | MAP_32BIT, fd, off); */
   void *result = MAP_FAILED;
   uintptr_t page = 0;
@@ -118,11 +180,14 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
   if ((unsigned long)start & ((1<<PAGESHIFT)-1)) {
     return (void*)-EINVAL;
   }
-  
+
   /* if the program tries to map a fixed out-sandbox address, return failure */
   if ((unsigned long)start > FourGB && (flags & MAP_FIXED)) {
     return (void*)-ENOMEM;
   }
+
+  if (len > FourGB)
+    return (void*)-ENOMEM;
 
   /* not fixed mapping */
   if (!(flags & MAP_FIXED)) {
@@ -141,6 +206,11 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
       return (void*)-ENOMEM;
     page = (uintptr_t)start >> PAGESHIFT;
   }
+  /* check whether the map would mess up the read-only text and .got.plt pages */
+  if (insecure_overlap_rdonly((uintptr_t)(page << PAGESHIFT), len, prot)) {
+    dprintf(STDERR_FILENO, "[rock_mmap] insecure_overlap_rdonly\n");
+    quit(-1);
+  }
   result = mmap((void*)(page << PAGESHIFT), len, prot, flags | MAP_FIXED, fd, off);
   if (result == (void*)(page << PAGESHIFT))
     VmmapAddWithOverwrite(&VM, page,
@@ -151,15 +221,15 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
   return result;
 }
 
-/**
- * Trusted mprotect that guarantees W xor X. The attackers may set executable
- * pages to be writable, but that drops the executable permissions and will
- * crash the program.
- */
 int rock_mprotect(void *addr, size_t len, int prot) {
-  if ((unsigned long) addr > FourGB || len > FourGB) {
-    dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%ld, %lx, %d) is insecure!\n",
+  if ((unsigned long) addr > FourGB || len > FourGB ||
+      (prot & PROT_EXEC)) {
+    dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) is insecure!\n",
             (size_t)addr, len, prot);
+    quit(-1);
+  }
+  if (insecure_overlap_rdonly((uintptr_t)addr, len, prot)) {
+    dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) overlapps rdonly\n");
     quit(-1);
   }
   return mprotect(addr, len, prot);
@@ -229,15 +299,10 @@ void* rock_brk(void* newbrk) {
   return prog_brk;
 }
 
-extern code_module *modules;
+char *load_elf(int fd, int is_exe, char **entry);
 
-char *load_opened_elf_into_memory(int fd,
-                                  /*out*/size_t *elf_size_rounded_to_page_boundary);
-code_module *load_mcfi_metadata(char *elf);
-
-void replace_prog_seg(char *dest, char *src);
-
-int load_native_code(int fd, void *load_addr, size_t seg_base) {
+void *load_native_code(int fd) {
+  /*
   //dprintf(STDERR_FILENO, "[load_native_code] %d, %p, %lx\n", fd, load_addr, seg_base);
   size_t elf_size = 0;
   void *elf = load_opened_elf_into_memory(fd, &elf_size);
@@ -246,11 +311,11 @@ int load_native_code(int fd, void *load_addr, size_t seg_base) {
   DL_APPEND(modules, cm);
   replace_prog_seg(load_addr, elf);
   munmap(elf, elf_size);
-  return 0;
+  */
+  return load_elf(fd, FALSE, 0);
 }
 
 static unsigned long version = 0;
-extern void *table; /* table region defined in main.c */
 
 static void print_cfgcc(void *cc) {
   vertex *v, *tmp;
@@ -398,7 +463,97 @@ int gen_cfg(void) {
 
   dict_clear(&callids);
   dict_clear(&retids);
+
+  if (!cfggened) {
+    cfggened = TRUE;
+    keyvalue *kv, *tmp;
+    HASH_ITER(hh, patch_compensate, kv, tmp) {
+      size_t *tary_entry = (size_t*)kv->key;
+      //dprintf(STDERR_FILENO, "%p\n", addr);
+      *tary_entry |= 1;
+    }
+    dict_clear(&patch_compensate);
+  }
+
   return 0;
+}
+
+void take_addr_and_gen_cfg(unsigned long func_addr) {
+  //dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
+  code_module *m;
+  int found = FALSE;
+  keyvalue *fnl, *fn, *tmp;
+  DL_FOREACH(modules, m) {
+    //dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, m->sz);
+    if (func_addr >= m->base_addr && func_addr < m->base_addr + m->sz) {
+      func_addr -= m->base_addr;
+      fnl = dict_find(m->dynfuncs, (void*)func_addr);
+      if (fnl) {
+        found = TRUE;
+        break;
+      }
+    }
+  }
+  if (!found) {
+    dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] cannot find the functions\n");
+    quit(-1);
+  }
+  /* add the functions' names to fats */
+  HASH_ITER(hh, ((dict*)(fnl->value)), fn, tmp) {
+    dict_add(&(m->fats), fn->key, 0);
+  }
+  /* generate the cfg */
+  gen_cfg();
+}
+
+void set_gotplt(unsigned long addr, unsigned long v) {
+  //dprintf(STDERR_FILENO, "[set_gotplt] (%x, %x)\n", addr, v);
+  code_module *m, *am;
+  int foundaddr = FALSE;
+  int foundv = FALSE;
+  unsigned long func_addr = v;
+  keyvalue *fnl, *fn;
+  int weak = FALSE;
+  DL_FOREACH(modules, m) {
+    //dprintf(STDERR_FILENO, "gotplt: %x, %x, %x\n", m->gotplt, m->gotpltsz, m->sz);
+    if (addr >= m->gotplt && addr < m->gotplt + m->gotpltsz) {
+      foundaddr = TRUE;
+      am = m;
+    }
+    if (func_addr >= m->base_addr && func_addr < m->base_addr + m->sz) {
+      func_addr -= m->base_addr;
+      //dprintf(STDERR_FILENO, "%x\n", func_addr);
+      fnl = dict_find(m->dynfuncs, (void*)func_addr);
+      if (fnl) {
+        foundv = TRUE;
+        continue;
+      }
+      /* let's try weak symbols */
+      fnl = dict_find(m->weakfuncs, (void*)func_addr);
+      if (fnl) {
+        foundv = TRUE;
+      }
+    }
+  }
+  if (!foundaddr) {
+    dprintf(STDERR_FILENO, "[set_gotplt] illegal address\n");
+    quit(-1);
+  }
+  if (!foundv) {
+    dprintf(STDERR_FILENO, "[set_gotplt] illegal value\n");
+    quit(-1);
+  }
+
+  keyvalue *gpf = dict_find(am->gpfuncs, (void*)(addr - am->gotplt));
+  if (!gpf) {
+    dprintf(STDERR_FILENO, "[set_gotplt] invalid addr\n");
+    quit(-1);
+  }
+  if (!dict_find((dict*)(fnl->value), gpf->value)) {
+    dprintf(STDERR_FILENO, "[set_gotplt] %s not found\n", gpf->value);
+    quit(-1);
+  }
+  memcpy((char*)(am->osb_gotplt) + addr - am->gotplt, &v, 8);
 }
 
 void unload_native_code(const char* code_file_name) {
