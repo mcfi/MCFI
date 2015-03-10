@@ -168,6 +168,7 @@ void install_trampolines(void) {
     void *report_cfi_violation;
     void *online_patch;
     void *take_addr_and_gen_cfg;
+    void *set_gotplt;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -187,6 +188,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_report_cfi_violation;
   extern unsigned long runtime_online_patch;
   extern unsigned long runtime_take_addr_and_gen_cfg;
+  extern unsigned long runtime_set_gotplt;
   tp->mmap = &runtime_rock_mmap;
   tp->mprotect = &runtime_rock_mprotect;
   tp->munmap = &runtime_rock_munmap;
@@ -205,6 +207,8 @@ void install_trampolines(void) {
   tp->report_cfi_violation = &runtime_report_cfi_violation;
   tp->online_patch = &runtime_online_patch;
   tp->take_addr_and_gen_cfg = &runtime_take_addr_and_gen_cfg;
+  tp->set_gotplt = &runtime_set_gotplt;
+  /* set the first 65KB read-only */
   if (0 != mprotect(table,  0x11000, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
   }
@@ -490,6 +494,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   dict *cha = 0;
   dict *aliases = 0;
   dict *fats = 0;
+  code_module *cm = alloc_code_module();
 
   for (cnt = 0; cnt < ehdr->e_shnum; cnt++) {
     if (cnt == ehdr->e_shstrndx)
@@ -536,10 +541,13 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       numdynsym = shdr[cnt].sh_size / sizeof(*dynsym);
     } else if (0 == strcmp(shname, ".dynstr")) {
       dynstr = elf + shdr[cnt].sh_offset;
+    } else if (0 == strcmp(shname, ".got.plt")) {
+      //dprintf(STDERR_FILENO, ".got.plt = %x\n", shdr[cnt].sh_addr);
+      cm->gotplt = shdr[cnt].sh_addr;
+      cm->gotpltsz = RoundToPage(shdr[cnt].sh_size);
     }
   }
 
-  code_module *cm = alloc_code_module();
   if (ehdr->e_type == ET_EXEC) {
     cm->base_addr = X64ABIBASE;
     /* add the entry point of the exe as a fake function */
@@ -564,6 +572,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   cm->aliases = aliases;
   cm->fats = fats;
   cm->sz = sz;
+  graph *aliases_tc = g_transitive_closure(&aliases);
 
   unsigned int patch_call_offset = -1;
   const char *patch_call = sp_intern_string(&stringpool, "__patch_call");
@@ -616,10 +625,16 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       DL_APPEND(cm->funcsyms, funcsym);
       if (funcsym->name == patch_call)
         patch_call_offset = funcsym->offset;
+
+      if (ELF64_ST_BIND(sym[cnt].st_info) == STB_WEAK) {
+        /* since we are traversing the symbol table, all aliases would be added */
+        g_add_directed_edge(&(cm->weakfuncs), (void*)funcsym->offset, funcsym->name);
+      }
     }
   }
 
-  /* Function's whose names appear in .dynsym also have their addresses taken */
+  /* Function's whose names appear in .dynsym may have their
+     addresses taken during runtime */
   for (cnt = 0; cnt < numdynsym; ++cnt) {
     if (ELF64_ST_BIND(dynsym[cnt].st_info) == STB_GLOBAL &&
         ELF64_ST_TYPE(dynsym[cnt].st_info) == STT_FUNC &&
@@ -628,9 +643,19 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
                                      dynstr + dynsym[cnt].st_name);
       void *addr = (void*)(dynsym[cnt].st_value - cm->base_addr);
       //dprintf(STDERR_FILENO, "%x, %s\n", addr, dynstr+dynsym[cnt].st_name);
-      g_add_directed_edge(&(cm->dynfuncs), addr, fname);
+      /* add all functions who are alised with fname*/
+      keyvalue *kv = dict_find(aliases_tc, fname);
+      if (!kv) {
+        g_add_directed_edge(&(cm->dynfuncs), addr, fname);
+      } else {
+        keyvalue *adrv, *tmp;
+        HASH_ITER(hh, (dict*)(kv->value), adrv, tmp) {
+          g_add_directed_edge(&(cm->dynfuncs), addr, adrv->key);
+        }
+      }
     }
   }
+  g_free_transitive_closure(&aliases_tc);
 
   /* PLT entries are essentially functions */
   for (cnt = 0; cnt < numrelaplt; cnt++) {
@@ -641,6 +666,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     funcsym->offset = plt_offset + (cnt + 1) * PLT_ENT_SIZE;
     DL_APPEND(cm->funcsyms, funcsym);
     //dprintf(STDERR_FILENO, "%x, %x, %s\n", cnt + 1, funcsym->offset, funcsym->name);
+    dict_add(&(cm->gpfuncs), (void*)relaplt[cnt].r_offset - cm->gotplt, funcsym->name);
+    //dprintf(STDERR_FILENO, "%x, %s\n", relaplt[cnt].r_offset - cm->gotplt, funcsym->name);
     if (funcsym->name == patch_call)
       patch_call_offset = funcsym->offset;
   }
@@ -778,6 +805,7 @@ void *load_elf(int fd, int is_exe, char **entry) {
   size_t elf_size = 0;
   /* load elf in a separate position */
   char *elf = load_elf_content(fd, &elf_size);
+  close(fd);
   /* TODO:
    *
    * CHECK THE LOADED ELF FILE.
@@ -786,6 +814,7 @@ void *load_elf(int fd, int is_exe, char **entry) {
   /* elf will be rewritten */
   code_module *cm = load_mcfi_metadata(elf, elf_size);
   remove_trampoline_type(cm);
+  cm->is_exe = is_exe;
   DL_APPEND(modules, cm);
 
   /* compute how many consecutive memory pages we need */
@@ -834,8 +863,6 @@ void *load_elf(int fd, int is_exe, char **entry) {
       char *content;
       if (_prot(phdr->p_flags) & PROT_EXEC) {
         content = create_parallel_mapping(base, sz, PROT_EXEC);
-        /* close fd, so we do not clobber the content of the file */
-        close(fd);
         cm->osb_base_addr = (uintptr_t)content;
         cm->sz = sz;
       } else {
@@ -858,6 +885,24 @@ void *load_elf(int fd, int is_exe, char **entry) {
                VMMAP_ENTRY_ANONYMOUS);
     }
   }
+  /* copy .got.plt out from the loaded segment */
+  void *gotplt = malloc(cm->gotpltsz);
+  if (!gotplt) {
+    dprintf(STDERR_FILENO, "[load_elf] gotplt malloc failed\n");
+    quit(-1);
+  }
+  memcpy(gotplt, base + VADDR(cm->gotplt, is_exe), cm->gotpltsz);
+  /* .got.plt should be remapped with a parallel mapping */
+  if (0 != munmap(base + VADDR(cm->gotplt, is_exe), cm->gotpltsz)) {
+    dprintf(STDERR_FILENO, "[load_elf] .got.plt unmap failed with %d\n", errn);
+    quit(-1);
+  }
+  void *osb_gp = create_parallel_mapping(base + VADDR(cm->gotplt, is_exe),
+                                         cm->gotpltsz, PROT_READ);/* readonly */
+  cm->gotplt = (size_t)(base + VADDR(cm->gotplt, is_exe));
+  cm->osb_gotplt = (uintptr_t)osb_gp;
+  memcpy(osb_gp, gotplt, cm->gotpltsz);
+  free(gotplt);
 #undef VADDR
   if (entry) {
     *entry = base + ((Ehdr*)elf)->e_entry;

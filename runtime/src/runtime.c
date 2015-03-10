@@ -157,7 +157,7 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
   if ((unsigned long)start & ((1<<PAGESHIFT)-1)) {
     return (void*)-EINVAL;
   }
-  
+
   /* if the program tries to map a fixed out-sandbox address, return failure */
   if ((unsigned long)start > FourGB && (flags & MAP_FIXED)) {
     return (void*)-ENOMEM;
@@ -448,12 +448,12 @@ int gen_cfg(void) {
 }
 
 void take_addr_and_gen_cfg(unsigned long func_addr) {
-  dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
+  //dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
   code_module *m;
   int found = FALSE;
   keyvalue *fnl, *fn, *tmp;
   DL_FOREACH(modules, m) {
-    dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, m->sz);
+    //dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, m->sz);
     if (func_addr >= m->base_addr && func_addr < m->base_addr + m->sz) {
       func_addr -= m->base_addr;
       fnl = dict_find(m->dynfuncs, (void*)func_addr);
@@ -473,6 +473,56 @@ void take_addr_and_gen_cfg(unsigned long func_addr) {
   }
   /* generate the cfg */
   gen_cfg();
+}
+
+void set_gotplt(unsigned long addr, unsigned long v) {
+  //dprintf(STDERR_FILENO, "[set_gotplt] (%x, %x)\n", addr, v);
+  code_module *m, *am;
+  int foundaddr = FALSE;
+  int foundv = FALSE;
+  unsigned long func_addr = v;
+  keyvalue *fnl, *fn;
+  int weak = FALSE;
+  DL_FOREACH(modules, m) {
+    //dprintf(STDERR_FILENO, "gotplt: %x, %x, %x\n", m->gotplt, m->gotpltsz, m->sz);
+    if (addr >= m->gotplt && addr < m->gotplt + m->gotpltsz) {
+      foundaddr = TRUE;
+      am = m;
+    }
+    if (func_addr >= m->base_addr && func_addr < m->base_addr + m->sz) {
+      func_addr -= m->base_addr;
+      //dprintf(STDERR_FILENO, "%x\n", func_addr);
+      fnl = dict_find(m->dynfuncs, (void*)func_addr);
+      if (fnl) {
+        foundv = TRUE;
+        continue;
+      }
+      /* let's try weak symbols */
+      fnl = dict_find(m->weakfuncs, (void*)func_addr);
+      if (fnl) {
+        foundv = TRUE;
+      }
+    }
+  }
+  if (!foundaddr) {
+    dprintf(STDERR_FILENO, "[set_gotplt] illegal address\n");
+    quit(-1);
+  }
+  if (!foundv) {
+    dprintf(STDERR_FILENO, "[set_gotplt] illegal value\n");
+    quit(-1);
+  }
+
+  keyvalue *gpf = dict_find(am->gpfuncs, (void*)(addr - am->gotplt));
+  if (!gpf) {
+    dprintf(STDERR_FILENO, "[set_gotplt] invalid addr\n");
+    quit(-1);
+  }
+  if (!dict_find((dict*)(fnl->value), gpf->value)) {
+    dprintf(STDERR_FILENO, "[set_gotplt] %s not found\n", gpf->value);
+    quit(-1);
+  }
+  memcpy((char*)(am->osb_gotplt) + addr - am->gotplt, &v, 8);
 }
 
 void unload_native_code(const char* code_file_name) {
