@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <elf.h>
-
+#include "trampolines.h"
 #define LDSO_ARCH "x86_64"
 
 #define IS_COPY(x) ((x)==R_X86_64_COPY)
@@ -14,8 +14,10 @@ static inline void do_single_reloc(
 	struct symdef def, size_t sym_val)
 {
 	switch(type) {
+        case R_X86_64_JUMP_SLOT: /* .got.plt */
+          trampoline_set_gotplt(reloc_addr, sym_val + addend);
+          break;
 	case R_X86_64_GLOB_DAT:
-	case R_X86_64_JUMP_SLOT:
 	case R_X86_64_64:
 		*reloc_addr = sym_val + addend;
 		break;
