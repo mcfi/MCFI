@@ -117,12 +117,10 @@ void trampoline_free_tcb(unsigned long n1) {
 }
 
 static __attribute__((noinline))
-long trampoline_load_native_code(unsigned long n1,
-                                 unsigned long n2,
-                                 unsigned long n3) {
+long trampoline_load_native_code(unsigned long n1) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_LOAD_NATIVE_CODE)
-                       "D"(n1), "S"(n2), "d"(n3):
+                       "D"(n1):
                        "memory");
   return ret;
 }
