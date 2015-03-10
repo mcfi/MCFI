@@ -141,14 +141,37 @@ void rock_patch(unsigned long patchpoint) {
          &(patch->value), 8);
 }
 
+static int range_overlap(uintptr_t r1, size_t len1,
+                         uintptr_t r2, size_t len2) {
+  if (r1 == r2)
+    return TRUE;
+  if (r1 < r2 && r1 + len1 > r2)
+    return TRUE;
+  if (r2 < r1 && r2 + len2 > r1)
+    return TRUE;
+  return FALSE;
+}
+
+static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
+  if (prot & PROT_WRITE) {
+    code_module *m;
+    DL_FOREACH(modules, m) {
+      if (range_overlap(start, len, m->base_addr, m->sz) ||
+          range_overlap(start, len, m->gotplt, m->gotpltsz))
+        return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
-  /* executable page mapping is not allowed
   if (prot & PROT_EXEC) {
     dprintf(STDERR_FILENO,
             "[rock_mmap] mmap(%p, %lx, %d, %d, %d, %ld) maps executable pages!\n",
-            addr, len, prot, flags, fd, off);
+            start, len, prot, flags, fd, off);
     quit(-1);
-    }*/
+  }
+
   /* return mmap(start, len, prot, flags | MAP_32BIT, fd, off); */
   void *result = MAP_FAILED;
   uintptr_t page = 0;
@@ -162,6 +185,9 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
   if ((unsigned long)start > FourGB && (flags & MAP_FIXED)) {
     return (void*)-ENOMEM;
   }
+
+  if (len > FourGB)
+    return (void*)-ENOMEM;
 
   /* not fixed mapping */
   if (!(flags & MAP_FIXED)) {
@@ -180,6 +206,11 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
       return (void*)-ENOMEM;
     page = (uintptr_t)start >> PAGESHIFT;
   }
+  /* check whether the map would mess up the read-only text and .got.plt pages */
+  if (insecure_overlap_rdonly((uintptr_t)(page << PAGESHIFT), len, prot)) {
+    dprintf(STDERR_FILENO, "[rock_mmap] insecure_overlap_rdonly\n");
+    quit(-1);
+  }
   result = mmap((void*)(page << PAGESHIFT), len, prot, flags | MAP_FIXED, fd, off);
   if (result == (void*)(page << PAGESHIFT))
     VmmapAddWithOverwrite(&VM, page,
@@ -190,15 +221,15 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
   return result;
 }
 
-/**
- * Trusted mprotect that guarantees W xor X. The attackers may set executable
- * pages to be writable, but that drops the executable permissions and will
- * crash the program.
- */
 int rock_mprotect(void *addr, size_t len, int prot) {
-  if ((unsigned long) addr > FourGB || len > FourGB) {
-    dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%ld, %lx, %d) is insecure!\n",
+  if ((unsigned long) addr > FourGB || len > FourGB ||
+      (prot & PROT_EXEC)) {
+    dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) is insecure!\n",
             (size_t)addr, len, prot);
+    quit(-1);
+  }
+  if (insecure_overlap_rdonly((uintptr_t)addr, len, prot)) {
+    dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) overlapps rdonly\n");
     quit(-1);
   }
   return mprotect(addr, len, prot);
