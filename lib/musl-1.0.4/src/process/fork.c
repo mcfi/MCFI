@@ -3,6 +3,7 @@
 #include "syscall.h"
 #include "libc.h"
 #include "pthread_impl.h"
+#include "trampolines.h"
 
 static void dummy(int x)
 {
@@ -16,7 +17,13 @@ pid_t fork(void)
 	sigset_t set;
 	__fork_handler(-1);
 	__block_all_sigs(&set);
-	ret = syscall(SYS_fork);
+        
+	//ret = syscall(SYS_fork);
+        ret = trampoline_fork();
+        if (ret < 0) {
+          errno = -ret;
+          ret = -1;
+        }
 	if (libc.main_thread && !ret) {
 		pthread_t self = __pthread_self();
 		self->tid = self->pid = syscall(SYS_getpid);
