@@ -361,6 +361,12 @@ static char *number(char *buf, char *end, unsigned long long num,
     } while (num);
   } else { /* base 10 */
     i = put_dec(tmp, num) - tmp;
+    /* TODO: figure out why put_dec malfunctions when we try to output
+             decimals that are at least 6 digits. The following hack
+             seems to work, so I doubt there might be some register
+             clobber issues introduced by optimizations.
+    */
+    write(-1, "", 0);
   }
 
   /* printing 100 using %2d gives "100", not "00" */
