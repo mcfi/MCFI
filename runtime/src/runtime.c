@@ -17,7 +17,12 @@ static TCB *tcb_list = 0;
 /* tracks which thread escapes the untrusted space for how many times */
 dict *thread_escape_map = 0;
 
-static unsigned int patch_count = 0;
+#ifdef COLLECT_STAT
+static unsigned int radc_patch_count = 0;
+static unsigned int raic_patch_count = 0;
+static unsigned int eqc_callgraph_count = 0;
+static unsigned int eqc_retgraph_count = 0;
+#endif
 
 static int cfggened = FALSE;
 
@@ -107,6 +112,7 @@ void free_tcb(void *user_tcb) {
 }
 
 void rock_patch(unsigned long patchpoint) {
+#ifndef NO_ONLINE_PATCHING
   //dprintf(STDERR_FILENO, "patched %lx\n", patchpoint);
   code_module *m;
   int found = FALSE;
@@ -123,11 +129,16 @@ void rock_patch(unsigned long patchpoint) {
          (patchpoint + 3) % 8 == 0||
          (patchpoint + 2) % 8 == 0);
   */
+#ifdef COLLECT_STAT
+  if (patchpoint % 8 == 0)
+    ++radc_patch_count;
+  else
+    ++raic_patch_count;
+#endif
   patchpoint = (patchpoint + 7) / 8 * 8;
   //dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, patchpoint - m->base_addr);
   keyvalue *patch = dict_find(m->ra_orig, (const void*)(patchpoint - m->base_addr));
   //assert(patch);
-  //++patch_count;
   //dprintf(STDERR_FILENO, "%x, %x, %lx, %x\n", m->base_addr, patch->key, patch->value, patch_count);
 
   if (cfggened)
@@ -139,6 +150,7 @@ void rock_patch(unsigned long patchpoint) {
   /* the patch should be performed after the tary id is set valid */
   memcpy((char*)(m->osb_base_addr + (unsigned long)patch->key - 8),
          &(patch->value), 8);
+#endif
 }
 
 static int range_overlap(uintptr_t r1, size_t len1,
@@ -390,12 +402,13 @@ int gen_cfg(void) {
 
   node *lcg = g_get_lcc(&callgraph);
 
-  int count;
+#ifdef COLLECT_STAT
+  unsigned int count;
   node *n;
   DL_COUNT(lcg, n, count);
+  eqc_callgraph_count = count;
+#endif
 
-  dprintf(STDERR_FILENO, "Callgraph EQCs: %d\n", count);
-  //quit(0);
   /* based on the callgraph, let's build the return graph on top of it */
   build_retgraph(&callgraph, all_funcs_grouped_by_name, modules);
 
@@ -406,9 +419,11 @@ int gen_cfg(void) {
   //l_print(lrt, print_cfgcc);
   g_dtor(&callgraph);
 
+#ifdef COLLECT_STAT
   DL_COUNT(lrt, n, count);
-  dprintf(STDERR_FILENO, "Retgraph EQCs: %d\n", count);
-  //quit(0);
+  eqc_retgraph_count = count;
+#endif
+
   unsigned long id_for_others;
   dict *callids = 0, *retids = 0;
   gen_mcfi_id(&lcg, &lrt, &version, &id_for_others, &callids, &retids);
@@ -438,6 +453,14 @@ int gen_cfg(void) {
    * 5. mark all modules' cfggened field to be one.
    */
   code_module *m = 0;
+
+#ifdef COLLECT_STAT
+  ibt_funcs = 0;
+  ibt_radcs = 0;
+  ibt_raics = 0;
+  ict_count = 0;
+  rt_count = 0;
+#endif
 
   DL_FOREACH(modules, m) {
     if (!m->cfggened) {
@@ -677,4 +700,52 @@ int rock_fork(void) {
   restore_content();
 #endif
   return rv;
+}
+
+void collect_stat(void) {
+#ifdef COLLECT_STAT
+  unsigned int lp_count = 0;
+  unsigned int eqclp = 0;
+  code_module *m;
+  symbol *s;
+  DL_FOREACH(modules, m) {
+    unsigned int lpn = 0;
+    DL_COUNT(m->lp, s, lpn);
+    lp_count += lpn;
+  }
+  if (lp_count > 0)
+    ++eqclp;
+
+  dprintf(STDERR_FILENO, "\n============MCFI Statistics============\n");
+  dprintf(STDERR_FILENO, "Total Equivalence Classes: %u\n",
+          eqc_callgraph_count + eqc_retgraph_count + eqclp);
+  dprintf(STDERR_FILENO, "Forward-Edge Equivalence Classes: %u\n",
+          eqc_callgraph_count);
+  dprintf(STDERR_FILENO, "Back-Edge Equivalence Classes: %u\n",
+          eqc_retgraph_count + eqclp);
+
+  dprintf(STDERR_FILENO, "Total Indirect Branches: %u\n",
+          ict_count + rt_count);
+  dprintf(STDERR_FILENO, "Forward-Edges: %u\n", ict_count);
+  dprintf(STDERR_FILENO, "Back-Edges: %u\n", rt_count);
+
+  dprintf(STDERR_FILENO, "Total Indirect Branch Targets: %u\n",
+          ibt_funcs + ibt_radcs + ibt_raics + lp_count);
+  dprintf(STDERR_FILENO, "Functions Reachable by Indirect Branches: %u\n",
+          ibt_funcs);
+  dprintf(STDERR_FILENO, "Return Addresses of Direct Calls: %u\n",
+          ibt_radcs);
+  dprintf(STDERR_FILENO, "Return Addresses of Indirect Calls: %u\n",
+          ibt_raics);
+  dprintf(STDERR_FILENO, "Landing Pads: %u\n", lp_count);
+#ifndef NO_ONLINE_PATCHING
+  dprintf(STDERR_FILENO, "Total Patches (or Activated Return Addrs): %u\n",
+          radc_patch_count + raic_patch_count);
+  dprintf(STDERR_FILENO, "Activated Return Addrs of Direct Calls: %u\n",
+          radc_patch_count);
+  dprintf(STDERR_FILENO, "Activated Return Addrs of InDirect Calls: %u\n",
+          raic_patch_count);
+#endif
+  dprintf(STDERR_FILENO, "\n");
+#endif
 }

@@ -1103,10 +1103,25 @@ static void gen_mcfi_id(node **lcg, node **lrt,
                         mcfi_version | 1);
 }
 
+#ifdef COLLECT_STAT
+static unsigned int ibt_funcs = 0; /* functions that are indirect branch targets */
+static unsigned int ibt_radcs = 0; /* return addresses of direct calls */
+static unsigned int ibt_raics = 0; /* return addresses of indirect calls */
+static unsigned int ict_count = 0; /* indirect calls */
+static unsigned int rt_count = 0;  /* returns */
+#endif
+
 /* generate and populate the tary table for module m */
 static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
   char *tary = table + m->base_addr;
-#define POPULATE_TARY(ids, syms, mark, activation_considered, prefix) do { \
+
+#ifdef COLLECT_STAT
+#define incr_count(count) ++count
+#else
+#define incr_count(count)
+#endif
+
+#define POPULATE_TARY(ids, syms, mark, activation_considered, count) do { \
     symbol *sym;                                                        \
     DL_FOREACH(syms, sym) {                                             \
       keyvalue *id = dict_find(ids, mark(sym->name));                   \
@@ -1119,18 +1134,19 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
             mask = ((size_t)-2);                                        \
         }                                                               \
         *p = ((unsigned long)id->value & mask);                         \
-        /*(dprintf(STDERR_FILENO, prefix"%s, %x, %lx\n", sym->name, sym->offset, id->value);*/ \
+        incr_count(count);                                              \
       }                                                                 \
     }                                                                   \
   } while (0)
-  POPULATE_TARY(callids, m->funcsyms, _mark_func, FALSE, "Func: ");
+  POPULATE_TARY(callids, m->funcsyms, _mark_func, FALSE, ibt_funcs);
 #ifndef NO_ONLINE_PATCHING
-  POPULATE_TARY(retids, m->rad, _mark_ra_dc, TRUE, "DC: ");
-  POPULATE_TARY(retids, m->rai, _mark_ra_ic, TRUE, "IC: ");
+  POPULATE_TARY(retids, m->rad, _mark_ra_dc, TRUE, ibt_radcs);
+  POPULATE_TARY(retids, m->rai, _mark_ra_ic, TRUE, ibt_raics);
 #else
-  POPULATE_TARY(retids, m->rad, _mark_ra_dc, FALSE, "DC: ");
-  POPULATE_TARY(retids, m->rai, _mark_ra_ic, FALSE, "IC: ");
+  POPULATE_TARY(retids, m->rad, _mark_ra_dc, FALSE, ibt_radcs);
+  POPULATE_TARY(retids, m->rai, _mark_ra_ic, FALSE, ibt_raics);
 #endif
+#undef incr_count
 #undef POPULATE_TARY
 }
 
@@ -1140,8 +1156,16 @@ static void gen_bary(code_module *m, dict *callids, dict *retids, char *table,
   symbol *icfsym;
   DL_FOREACH(m->icfsyms, icfsym) {
     keyvalue *i = dict_find(callids, _mark_icj(icfsym->name));
+
+#ifdef COLLECT_STAT
+    if (i) ++ict_count;
+#endif
+
     if (!i) {
       i = dict_find(retids, _mark_ret(icfsym->name));
+#ifdef COLLECT_STAT
+      if (i) ++rt_count;
+#endif
     }
 
     if (i) {

@@ -164,3 +164,4 @@ runtime_\func:
         runtime_function take_addr_and_gen_cfg
         runtime_function set_gotplt
         runtime_function rock_fork
+        runtime_function collect_stat

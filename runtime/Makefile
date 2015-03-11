@@ -1,6 +1,6 @@
 # Makefile for the runtime
-# Add -DNO_ONLINE_PATCHING for pure MCFI
-
+# Add -DNO_ONLINE_PATCHING to CFLAGS for pure MCFI
+# Add -DCOLLECT_STAT to CFLAGS to get MCFI statistics
 CC = clang
 
 CFLAGS = -O3 -g -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
