@@ -140,12 +140,14 @@ struct code_module_t {
   dict     *ra_orig;   /* original values of call sites */
   graph    *dynfuncs;  /* map from position of to a couple of functions */
   graph    *weakfuncs; /* weak functions symbols */
-  size_t   gotplt;     /* offset of .got.plt */
+  uintptr_t gotplt;    /* offset of .got.plt */
   uintptr_t osb_gotplt;/* out of sandbox base addr for .got.plt */
   size_t   gotpltsz;   /* .got.plt size */
   dict     *gpfuncs;   /* map from .got.plt entry to the function */
   int      cfggened;   /* the cfg has been generated for this module before */
   int      deleted;    /* whether this module has been deleted */
+  void     *code;      /* contents of the code during fork */
+  void     *gotpltcontent; /* contents of the gotplt during fork */
 };
 
 static code_module *alloc_code_module(void) {

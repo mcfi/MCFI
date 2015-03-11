@@ -169,6 +169,7 @@ void install_trampolines(void) {
     void *online_patch;
     void *take_addr_and_gen_cfg;
     void *set_gotplt;
+    void *fork;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -189,6 +190,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_online_patch;
   extern unsigned long runtime_take_addr_and_gen_cfg;
   extern unsigned long runtime_set_gotplt;
+  extern unsigned long runtime_rock_fork;
   tp->mmap = &runtime_rock_mmap;
   tp->mprotect = &runtime_rock_mprotect;
   tp->munmap = &runtime_rock_munmap;
@@ -208,6 +210,7 @@ void install_trampolines(void) {
   tp->online_patch = &runtime_online_patch;
   tp->take_addr_and_gen_cfg = &runtime_take_addr_and_gen_cfg;
   tp->set_gotplt = &runtime_set_gotplt;
+  tp->fork = &runtime_rock_fork;
   /* set the first 65KB read-only */
   if (0 != mprotect(table,  0x11000, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);

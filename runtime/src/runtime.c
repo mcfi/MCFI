@@ -479,7 +479,7 @@ int gen_cfg(void) {
 }
 
 void take_addr_and_gen_cfg(unsigned long func_addr) {
-  //dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
+  dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
   code_module *m;
   int found = FALSE;
   keyvalue *fnl, *fn, *tmp;
@@ -569,4 +569,108 @@ void rock_shmat(void) {
 }
 
 void rock_shmdt(void) {
+}
+
+/* fork of rock, pretty tricky, now we do not support fork in a multi-threading
+   case, which should be better supported by the OS kernel.
+ */
+static void restore_parallel_mapping(void *base, void *osb_base,
+                                     size_t size, int prot) {
+  const char *shmname = "/dev/shm/mcfi";
+  int fd = -1;
+  while (TRUE) {
+    fd = shm_open(shmname, O_RDWR | O_CREAT | O_EXCL, 0744);
+    if (fd >= 0)
+      break;
+    if (fd == -1 && errn == EEXIST)
+      continue;
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] shm_open failed with %d\n", errn);
+    quit(-1);
+  }
+
+  if (0 != ftruncate(fd, size)) {
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] ftruncate failed with %d\n", errn);
+    quit(-1);
+  }
+
+  assert(size % PAGE_SIZE == 0);
+  void *new_base = mmap(base, size, prot, MAP_SHARED | MAP_FIXED,
+                        fd, 0);
+  if (base != new_base) {
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] mmap base failed with %d\n", errn);
+    quit(-1);
+  }
+
+  void *new_osb_base = mmap(osb_base, size, PROT_WRITE, MAP_SHARED | MAP_FIXED,
+                            fd, 0);
+  if (osb_base != new_osb_base) {
+    dprintf(STDERR_FILENO,
+            "[create_parallel_mapping] mmap osb_base failed with %d\n", errn);
+    quit(-1);
+  }
+
+  close(fd);
+  shm_unlink(shmname);
+}
+
+static void save_content(void) {
+  code_module *m;
+  DL_FOREACH(modules, m) {
+    /* copy the contents of the code and .got.plt */
+    //dprintf(STDERR_FILENO, "%x, %lx, %x\n", m->base_addr, m->osb_base_addr, m->sz);
+    m->code = mmap(0, m->sz, PROT_WRITE | PROT_READ,
+                   MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (m->code == (void*)-1) {
+      dprintf(STDERR_FILENO, "[rock_fork] code allocation failed\n");
+      quit(-1);
+    }
+    memcpy(m->code, (void*)m->base_addr, m->sz);
+    if (m->gotpltsz > 0) {
+      m->gotpltcontent = mmap(0, m->gotpltsz, PROT_WRITE | PROT_READ,
+                              MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+      if (m->gotpltcontent == (void*)-1) {
+        dprintf(STDERR_FILENO, "[rock_fork] gotplt allocation failed\n");
+        quit(-1);
+      }
+      memcpy(m->gotpltcontent, (void*)m->gotplt, m->gotpltsz);
+    }
+  }
+
+  /* note that we should finish all allocation and then start unmapping
+   * the pages, otherwise, strange behaviors appear. */
+  DL_FOREACH(modules, m) {
+    munmap((void*)m->base_addr, m->sz);
+    munmap((void*)m->osb_base_addr, m->sz);
+    if (m->gotpltsz > 0) {
+      munmap((void*)m->gotplt, m->gotpltsz);
+      munmap((void*)m->osb_gotplt, m->gotpltsz);
+    }
+  }
+}
+
+static void restore_content(void) {
+  code_module *m;
+  DL_FOREACH(modules, m) {
+    restore_parallel_mapping((void*)m->base_addr, (void*)m->osb_base_addr, m->sz, PROT_EXEC);
+    memcpy((void*)m->osb_base_addr, m->code, m->sz);
+    munmap(m->code, m->sz);
+    m->code = 0;
+    if (m->gotpltsz > 0) {
+      restore_parallel_mapping((void*)m->gotplt, (void*)m->osb_gotplt, m->gotpltsz, PROT_READ);
+      memcpy((void*)m->osb_gotplt, m->gotpltcontent, m->gotpltsz);
+      munmap(m->gotpltcontent, m->gotpltsz);
+      m->gotpltcontent = 0;
+    }
+  }
+}
+
+int rock_fork(void) {
+  //dprintf(STDERR_FILENO, "[rock_fork]\n");
+  save_content();
+  int rv = __syscall0(SYS_fork);
+  restore_content();
+  return rv;
 }

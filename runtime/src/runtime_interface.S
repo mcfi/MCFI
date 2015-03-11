@@ -163,3 +163,4 @@ runtime_\func:
         runtime_function report_cfi_violation
         runtime_function take_addr_and_gen_cfg
         runtime_function set_gotplt
+        runtime_function rock_fork

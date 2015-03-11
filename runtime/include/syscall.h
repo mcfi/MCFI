@@ -14,6 +14,7 @@
 #define SYS_brk         12
 #define SYS_mremap      25
 #define SYS_madvise     28
+#define SYS_fork        57
 #define SYS_ftruncate   77
 #define SYS_unlink      87
 #define SYS_arch_prctl  158
