@@ -38,12 +38,12 @@ void report_error(const char* fmt, ...) {
 
 void report_cfi_violation(unsigned long icf,
                           unsigned long target) {
+  unsigned int pid = __syscall0(SYS_getpid);
   dprintf(STDERR_FILENO,
-          "\n==========!!!  You are under attack  !!!=========\n"
-          "CFI violation detected: "
-          "0x%lx ==> 0x%lx\n"
-          "=================================================\n\n",
-          icf, target);
-  report_error("CFI violation detected: "
-               "0x%lx ==> 0x%lx\n", icf, target);
+          "\n[%u] CFI violated: "
+          "indirect branch at 0x%lx illegally targeted 0x%lx\n\n",
+          pid, icf, target);
+  report_error("[%u] CFI violated: "
+               "indirect branch at 0x%lx illegally targeted 0x%lx\n",
+               pid, icf, target);
 }

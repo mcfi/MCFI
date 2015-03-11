@@ -502,7 +502,7 @@ int gen_cfg(void) {
 }
 
 void take_addr_and_gen_cfg(unsigned long func_addr) {
-  dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
+  //dprintf(STDERR_FILENO, "[take_addr_and_gen_cfg] %x\n", func_addr);
   code_module *m;
   int found = FALSE;
   keyvalue *fnl, *fn, *tmp;
