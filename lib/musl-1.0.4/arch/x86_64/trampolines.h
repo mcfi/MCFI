@@ -22,6 +22,7 @@
 #define ROCK_TAKE_ADDR_AND_GEN_CFG 0xD0
 #define ROCK_SET_GOTPLT   0xD8
 #define ROCK_FORK         0xE0
+#define ROCK_COLLECT_STAT 0xE8
 
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
@@ -156,6 +157,13 @@ static __attribute__((noinline))
 long trampoline_fork(void) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_FORK):"memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_collect_stat(void) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_COLLECT_STAT):"memory");
   return ret;
 }
 #endif
