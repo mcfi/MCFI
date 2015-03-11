@@ -675,6 +675,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       patch_call_offset = funcsym->offset;
   }
 
+  /* if not explicitly shutdown, just enable online patching */
+#ifndef NO_ONLINE_PATCHING
   if (patch_call_offset != -1) {
     /* patch direct calls */
     keyvalue *kv, *tmp;
@@ -704,6 +706,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       }
     }
   }
+#endif
   return cm;
 }
 

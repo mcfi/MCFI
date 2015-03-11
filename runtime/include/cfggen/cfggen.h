@@ -1124,8 +1124,13 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
     }                                                                   \
   } while (0)
   POPULATE_TARY(callids, m->funcsyms, _mark_func, FALSE, "Func: ");
+#ifndef NO_ONLINE_PATCHING
   POPULATE_TARY(retids, m->rad, _mark_ra_dc, TRUE, "DC: ");
   POPULATE_TARY(retids, m->rai, _mark_ra_ic, TRUE, "IC: ");
+#else
+  POPULATE_TARY(retids, m->rad, _mark_ra_dc, FALSE, "DC: ");
+  POPULATE_TARY(retids, m->rai, _mark_ra_ic, FALSE, "IC: ");
+#endif
 #undef POPULATE_TARY
 }
 

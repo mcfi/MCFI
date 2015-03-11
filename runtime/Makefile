@@ -1,9 +1,8 @@
 # Makefile for the runtime
+# Add -DNO_ONLINE_PATCHING for pure MCFI
 
 CC = clang
 
-# during context switch, we do not to save/restore xmm registers, therefore,
-# we shutdown all XMM register features such as SSE.
 CFLAGS = -O3 -g -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
 
 SRCS = $(sort $(wildcard src/*.c src/*/*.c))
@@ -15,7 +14,7 @@ INCLUDES = $(sort $(wildcard include/*.h include/*/*.h))
 RTIME = rock
 
 LD = /usr/bin/ld
-LDFLAGS = -nostdlib -pie -e _start -Bsymbolic -Bsymbolic-functions
+LDFLAGS = -nostdlib -pie -e _start -Bsymbolic -Bsymbolic-functions -dynamic-linker=
 
 HOMEDIR = $(shell eval echo ~)
 SDK = $(shell eval echo ${MCFI_SDK})

@@ -669,8 +669,12 @@ static void restore_content(void) {
 
 int rock_fork(void) {
   //dprintf(STDERR_FILENO, "[rock_fork]\n");
+#ifndef NO_ONLINE_PATCHING
   save_content();
+#endif
   int rv = __syscall0(SYS_fork);
+#ifndef NO_ONLINE_PATCHING
   restore_content();
+#endif
   return rv;
 }
