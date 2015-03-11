@@ -715,36 +715,37 @@ void collect_stat(void) {
   }
   if (lp_count > 0)
     ++eqclp;
+  unsigned int pid = __syscall0(SYS_getpid);
 
-  dprintf(STDERR_FILENO, "\n============MCFI Statistics============\n");
-  dprintf(STDERR_FILENO, "Total Equivalence Classes: %u\n",
+  dprintf(STDERR_FILENO, "\n[%u] MCFI Statistics\n", pid);
+  dprintf(STDERR_FILENO, "[%u] Total Equivalence Classes: %u\n", pid,
           eqc_callgraph_count + eqc_retgraph_count + eqclp);
-  dprintf(STDERR_FILENO, "Forward-Edge Equivalence Classes: %u\n",
+  dprintf(STDERR_FILENO, "[%u] Forward-Edge Equivalence Classes: %u\n", pid,
           eqc_callgraph_count);
-  dprintf(STDERR_FILENO, "Back-Edge Equivalence Classes: %u\n",
+  dprintf(STDERR_FILENO, "[%u] Back-Edge Equivalence Classes: %u\n", pid,
           eqc_retgraph_count + eqclp);
 
-  dprintf(STDERR_FILENO, "Total Indirect Branches: %u\n",
+  dprintf(STDERR_FILENO, "[%u] Total Indirect Branches: %u\n", pid,
           ict_count + rt_count);
-  dprintf(STDERR_FILENO, "Forward-Edges: %u\n", ict_count);
-  dprintf(STDERR_FILENO, "Back-Edges: %u\n", rt_count);
+  dprintf(STDERR_FILENO, "[%u] Forward-Edges: %u\n", pid, ict_count);
+  dprintf(STDERR_FILENO, "[%u] Back-Edges: %u\n", pid, rt_count);
 
-  dprintf(STDERR_FILENO, "Total Indirect Branch Targets: %u\n",
+  dprintf(STDERR_FILENO, "[%u] Total Indirect Branch Targets: %u\n", pid,
           ibt_funcs + ibt_radcs + ibt_raics + lp_count);
-  dprintf(STDERR_FILENO, "Functions Reachable by Indirect Branches: %u\n",
-          ibt_funcs);
-  dprintf(STDERR_FILENO, "Return Addresses of Direct Calls: %u\n",
-          ibt_radcs);
-  dprintf(STDERR_FILENO, "Return Addresses of Indirect Calls: %u\n",
-          ibt_raics);
-  dprintf(STDERR_FILENO, "Landing Pads: %u\n", lp_count);
+  dprintf(STDERR_FILENO, "[%u] Functions Reachable by Indirect Branches: %u\n",
+          pid, ibt_funcs);
+  dprintf(STDERR_FILENO, "[%u] Return Addresses of Direct Calls: %u\n",
+          pid, ibt_radcs);
+  dprintf(STDERR_FILENO, "[%u] Return Addresses of Indirect Calls: %u\n",
+          pid, ibt_raics);
+  dprintf(STDERR_FILENO, "[%u] Landing Pads: %u\n", pid, lp_count);
 #ifndef NO_ONLINE_PATCHING
-  dprintf(STDERR_FILENO, "Total Patches (or Activated Return Addrs): %u\n",
-          radc_patch_count + raic_patch_count);
-  dprintf(STDERR_FILENO, "Activated Return Addrs of Direct Calls: %u\n",
-          radc_patch_count);
-  dprintf(STDERR_FILENO, "Activated Return Addrs of InDirect Calls: %u\n",
-          raic_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Total Patches (or Activated Return Addrs): %u\n",
+          pid, radc_patch_count + raic_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of Direct Calls: %u\n",
+          pid, radc_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of InDirect Calls: %u\n",
+          pid, raic_patch_count);
 #endif
   dprintf(STDERR_FILENO, "\n");
 #endif
