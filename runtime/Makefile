@@ -1,10 +1,12 @@
 # Makefile for the runtime
-# Add -DNO_ONLINE_PATCHING to CFLAGS for pure MCFI
-# Add -DCOLLECT_STAT to CFLAGS to get MCFI statistics
+# add STAT=1 at command line to enable execution statistics data collection
+# add MCFI=1 at command line to disable online code patching
+
 CC = clang
 
-CFLAGS = -O3 -g -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
-
+STAT ?= 0
+MCFI ?= 0
+CFLAGS = -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
 SRCS = $(sort $(wildcard src/*.c src/*/*.c))
 OBJS = $(SRCS:.c=.o)
 OBJS += src/start.o
@@ -23,9 +25,25 @@ ifeq ($(SDK), )
   SDK = $(HOMEDIR)/MCFI/toolchain
 endif
 
-.PHONY: all $(RTIME) clean
+.PHONY: $(RTIME) all release debug build clean
 
-all: $(RTIME)
+all: release
+
+release: CFLAGS+=-O3
+release: build
+
+debug: CFLAGS+=-O0 -g
+debug: build
+
+build:
+ifeq ($(STAT), 1)
+CFLAGS+=-DCOLLECT_STAT
+endif
+ifeq ($(MCFI), 1)
+CFLAGS+=-DNO_ONLINE_PATCHING
+endif
+
+build: $(RTIME)
 	mkdir -p $(SDK)/bin
 	cp  $(RTIME) $(SDK)/bin/
 
