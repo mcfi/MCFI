@@ -141,15 +141,16 @@ void rock_patch(unsigned long patchpoint) {
   //assert(patch);
   //dprintf(STDERR_FILENO, "%x, %x, %lx, %x\n", m->base_addr, patch->key, patch->value, patch_count);
 
-  if (cfggened)
-    *((size_t*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
-  else {
-    dict_add(&patch_compensate, table + m->base_addr + (size_t)patch->key, 0);
+  if (cfggened) {
+    *((unsigned long*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
+  } else {
+    dict_add(&patch_compensate, table + m->base_addr + (unsigned long)patch->key, 0);
   }
 
   /* the patch should be performed after the tary id is set valid */
-  memcpy((char*)(m->osb_base_addr + (unsigned long)patch->key - 8),
-         &(patch->value), 8);
+  unsigned long *p =
+    (unsigned long*)(m->osb_base_addr + (unsigned long)patch->key - 8);
+  *p = (unsigned long)patch->value;
 #endif
 }
 
@@ -314,16 +315,6 @@ void* rock_brk(void* newbrk) {
 char *load_elf(int fd, int is_exe, char **entry);
 
 void *load_native_code(int fd) {
-  /*
-  //dprintf(STDERR_FILENO, "[load_native_code] %d, %p, %lx\n", fd, load_addr, seg_base);
-  size_t elf_size = 0;
-  void *elf = load_opened_elf_into_memory(fd, &elf_size);
-  code_module *cm = load_mcfi_metadata(elf);
-  cm->base_addr = (uintptr_t)load_addr;
-  DL_APPEND(modules, cm);
-  replace_prog_seg(load_addr, elf);
-  munmap(elf, elf_size);
-  */
   return load_elf(fd, FALSE, 0);
 }
 
@@ -576,7 +567,11 @@ void set_gotplt(unsigned long addr, unsigned long v) {
     dprintf(STDERR_FILENO, "[set_gotplt] %s not found\n", gpf->value);
     quit(-1);
   }
-  memcpy((char*)(am->osb_gotplt) + addr - am->gotplt, &v, 8);
+
+  /* change the .got.plt entry atomically */
+  unsigned long *p =
+    (unsigned long*)(am->osb_gotplt + addr - am->gotplt);
+  *p = v;
 }
 
 void unload_native_code(const char* code_file_name) {
