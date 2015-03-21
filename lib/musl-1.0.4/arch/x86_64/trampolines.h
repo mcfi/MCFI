@@ -19,10 +19,12 @@
 #define ROCK_FREE_TCB     0x80
 #define ROCK_LOAD_NATIVE_CODE 0x88
 #define ROCK_GEN_CFG      0x90
+#define ROCK_CREATE_CODE_HEAP 0xA0
 #define ROCK_TAKE_ADDR_AND_GEN_CFG 0xD0
 #define ROCK_SET_GOTPLT   0xD8
 #define ROCK_FORK         0xE0
 #define ROCK_COLLECT_STAT 0xE8
+#define ROCK_REG_CFG_METADATA 0xF0
 
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
@@ -164,6 +166,25 @@ static __attribute__((noinline))
 long trampoline_collect_stat(void) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_COLLECT_STAT):"memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_create_code_heap(unsigned long n1, unsigned long n2) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_CREATE_CODE_HEAP)
+                       "D"(n1), "S"(n2):
+                       "memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_reg_cfg_metadata(unsigned long n1, unsigned long n2,
+                                 unsigned long n3, unsigned long n4) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_REG_CFG_METADATA)
+                       "D"(n1), "S"(n2), "d"(n3), "c"(n4):
+                       "memory");
   return ret;
 }
 #endif
