@@ -171,6 +171,8 @@ void install_trampolines(void) {
     void *set_gotplt;
     void *fork;
     void *collect_stat;
+    void *reg_cfg_metadata;
+    void *add_cfg_edge_combo;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -193,6 +195,9 @@ void install_trampolines(void) {
   extern unsigned long runtime_set_gotplt;
   extern unsigned long runtime_rock_fork;
   extern unsigned long runtime_collect_stat;
+  extern unsigned long runtime_create_code_heap;
+  extern unsigned long runtime_reg_cfg_metadata;
+  extern unsigned long runtime_add_cfg_edge_combo;
   tp->mmap = &runtime_rock_mmap;
   tp->mprotect = &runtime_rock_mprotect;
   tp->munmap = &runtime_rock_munmap;
@@ -214,6 +219,9 @@ void install_trampolines(void) {
   tp->set_gotplt = &runtime_set_gotplt;
   tp->fork = &runtime_rock_fork;
   tp->collect_stat = &runtime_collect_stat;
+  tp->create_code_heap = &runtime_create_code_heap;
+  tp->reg_cfg_metadata = &runtime_reg_cfg_metadata;
+  tp->add_cfg_edge_combo = &runtime_add_cfg_edge_combo;
   /* set the first 65KB read-only */
   if (0 != mprotect(table,  0x11000, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
@@ -465,7 +473,7 @@ static char *eat_hex_and_udscore(char *c) {
   return c;
 }
 
-static unsigned int alloc_bid_slot(void) {
+unsigned int alloc_bid_slot(void) {
   /* the first page after the first 64KB pointed to by %gs is used for trampolines,
    * so the bid slots start from the second page.
    * Later we should extend this function to be an ID allocation routine.

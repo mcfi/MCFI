@@ -148,6 +148,9 @@ struct code_module_t {
   int      deleted;    /* whether this module has been deleted */
   void     *code;      /* contents of the code during fork */
   void     *gotpltcontent; /* contents of the gotplt during fork */
+  int      activated;     /* whether indirect branch targets are activated by default */
+  dict     *icf_id_cache; /* cached icf ids */
+  dict     *ra_id_cache; /* cached return address ids */
 };
 
 static code_module *alloc_code_module(void) {
@@ -1114,7 +1117,6 @@ static unsigned int rt_count = 0;  /* returns */
 /* generate and populate the tary table for module m */
 static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
   char *tary = table + m->base_addr;
-
 #ifdef COLLECT_STAT
 #define incr_count(count) ++count
 #else
@@ -1128,12 +1130,16 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
       size_t mask = (size_t)-1;                                         \
       if (id) {                                                         \
         size_t* p = (size_t*)(tary + sym->offset);                      \
-        if (activation_considered) {                                    \
+        if (!m->activated && activation_considered) {                   \
           /* if the target has not been activated, do activate it */    \
           if (!(*p & 1))                                                \
             mask = ((size_t)-2);                                        \
         }                                                               \
         *p = ((unsigned long)id->value & mask);                         \
+        id = dict_find(m->ra_id_cache, mark(sym->name));                \
+        if (id) {                                                       \
+          id->value = (void*)*p;                                        \
+        }                                                               \
         incr_count(count);                                              \
       }                                                                 \
     }                                                                   \
@@ -1167,16 +1173,24 @@ static void gen_bary(code_module *m, dict *callids, dict *retids, char *table,
       if (i) ++rt_count;
 #endif
     }
-
+    keyvalue *icf_id = dict_find(m->icf_id_cache, icfsym->name);
     if (i) {
       //dprintf(STDERR_FILENO, "bary: %s, %x, %lx\n", icfsym->name, icfsym->offset, i->value);
       *((unsigned long*)(table + icfsym->offset)) = (unsigned long)i->value;
+      /* add the id value to the cache */
+      if (icf_id) {
+        icf_id->value = i->value;
+      }
     } else {
       //dprintf(STDERR_FILENO, "non-bary: %s, %x, %lx\n", icfsym->name, icfsym->offset,
       //        id_for_other_icfs);
       /* for all indirect calls whose target set is empty, populate their bid slots
          with id_for_other_icfs */
       *((unsigned long*)(table + icfsym->offset)) = id_for_other_icfs;
+      keyvalue *icf_id = dict_find(m->icf_id_cache, icfsym->name);
+      if (icf_id) {
+        icf_id->value = (void*)id_for_other_icfs;
+      }
     }
   }
 }

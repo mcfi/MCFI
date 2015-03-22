@@ -27,9 +27,12 @@ static unsigned int eqc_retgraph_count = 0;
 static int cfggened = FALSE;
 
 extern code_module *modules;
+extern str *stringpool;
 static dict *patch_compensate = 0;
 extern void *table; /* table region defined in main.c */
 extern struct Vmmap VM;
+
+extern unsigned int alloc_bid_slot(void);
 
 void set_tcb(unsigned long sb_tcb) {
   if (sb_tcb > FourGB) {
@@ -166,6 +169,7 @@ static int range_overlap(uintptr_t r1, size_t len1,
 }
 
 static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
+  return FALSE;
   if (prot & PROT_WRITE) {
     code_module *m;
     DL_FOREACH(modules, m) {
@@ -178,13 +182,14 @@ static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
 }
 
 void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
+  /*
   if (prot & PROT_EXEC) {
     dprintf(STDERR_FILENO,
             "[rock_mmap] mmap(%p, %lx, %d, %d, %d, %ld) maps executable pages!\n",
             start, len, prot, flags, fd, off);
     quit(-1);
   }
-
+  */
   /* return mmap(start, len, prot, flags | MAP_32BIT, fd, off); */
   void *result = MAP_FAILED;
   uintptr_t page = 0;
@@ -235,8 +240,8 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 }
 
 int rock_mprotect(void *addr, size_t len, int prot) {
-  if ((unsigned long) addr > FourGB || len > FourGB ||
-      (prot & PROT_EXEC)) {
+  if ((unsigned long) addr > FourGB || len > FourGB) {// ||
+      /*(prot & PROT_EXEC)) {*/
     dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) is insecure!\n",
             (size_t)addr, len, prot);
     quit(-1);
@@ -369,6 +374,10 @@ static unsigned int version_space = 0;
 
 /* generate the cfg */
 int gen_cfg(void) {
+#ifdef NOCFI
+  /* don't generate the cfg at all */
+  return 0;
+#endif
   //dprintf(STDERR_FILENO, "[gen_cfg] called\n");
   icf *icfs = 0;
   function *functions = 0;
@@ -587,6 +596,212 @@ void rock_shmat(void) {
 }
 
 void rock_shmdt(void) {
+}
+
+void *create_code_heap(void **ph, size_t size) {
+  dprintf(STDERR_FILENO, "[create_code_heap]\n");
+  code_module* m = alloc_code_module();
+  if (!ph || (size_t)ph > FourGB) {
+    dprintf(STDERR_FILENO,
+            "[rock_create_code_heap] illegal pointer to shadow code heap\n");
+    quit(-1);
+  }
+  m->base_addr = 0xde800000UL;
+  m->osb_base_addr = 0xbe800000UL;
+  m->sz = 0x20000000;
+  m->activated = TRUE;
+  //memset((void*)m->osb_base_addr, 0xf4, m->sz);
+  *ph = m;
+  DL_APPEND(modules, m);
+  return 0;
+}
+
+#define ROCK_FUNCTION      0
+#define ROCK_FUNCTION_SYM  1
+#define ROCK_ICJ           2
+#define ROCK_ICJ_SYM       3
+#define ROCK_RAI           4
+#define ROCK_ICJ_UNREG     5
+#define ROCK_ICJ_SYM_UNREG 6
+#define ROCK_RAI_UNREG     7
+
+void reg_cfg_metadata(void *h,    /* code heap handle */
+                      int type,   /* type of the metadata */
+                      void *md,   /* metadata, whose semantics depends on the type */
+                      void *extra /* extra info, optional */
+                      ) {
+  code_module *m = (code_module*)h;
+  switch(type) {
+  case ROCK_FUNCTION:
+    {
+      size_t mdsz = strlen(md);
+      char *mdcpy = malloc(mdsz + 1);
+      memcpy(mdcpy, md, mdsz);
+      mdcpy[mdsz] = '\0';
+      parse_functions(mdcpy, mdcpy + mdsz, &(m->functions), &stringpool);
+      free(mdcpy);
+      dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] %s\n", md);
+    }
+    break;
+  case ROCK_FUNCTION_SYM:
+    {
+      symbol *funcsym = alloc_sym();
+      funcsym->name = sp_intern_string(&stringpool, md);
+      uintptr_t addr = (uintptr_t)extra;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz ||
+          (addr % 8) != 0) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata] illegal function sym %lx registered\n",
+                addr);
+        quit(-1);
+      }
+      funcsym->offset = addr - m->base_addr;
+      DL_APPEND(m->funcsyms, funcsym);
+      if (!dict_in(m->fats, funcsym->name))
+        dict_add(&(m->fats), funcsym->name, 0);
+      dprintf(STDERR_FILENO, "[reg_cfg_metadata] %s, %lx\n", funcsym->name, extra);
+    }
+    break;
+  case ROCK_ICJ:
+    {
+      size_t mdsz = strlen(md);
+      char *mdcpy = malloc(mdsz + 1);
+      memcpy(mdcpy, md, mdsz);
+      mdcpy[mdsz] = '\0';
+      parse_icfs(mdcpy, mdcpy + mdsz, &(m->icfs), &stringpool);
+      dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] icf %s\n", md);      
+      free(mdcpy);
+    }
+    break;
+  case ROCK_ICJ_SYM:
+    {
+      symbol *icfsym = alloc_sym();
+      icfsym->name = sp_intern_string(&stringpool, md);
+      unsigned int bid_slot = alloc_bid_slot();
+      uintptr_t addr = (uintptr_t)extra;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata] illegal icj sym %lx registered\n",
+                addr);
+        quit(-1);
+      }
+      *(unsigned int*)(m->osb_base_addr + (addr - m->base_addr - 4)) = bid_slot;
+      icfsym->offset = bid_slot;
+      DL_APPEND(m->icfsyms, icfsym);
+      dprintf(STDERR_FILENO,
+              "[rock_reg_cfg_metadata] icfsym %s, %x, %p\n", icfsym->name, icfsym->offset, extra);
+    }
+    break;
+  case ROCK_RAI:
+    {
+      symbol *rai = alloc_sym();
+      rai->name = sp_intern_string(&stringpool, md);
+      size_t addr = (size_t)extra;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz ||
+          addr % 8 != 0) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata] illegal rai %lx registered\n",
+                addr);
+        quit(-1);
+      }
+      rai->offset = addr - m->base_addr;
+      DL_APPEND(m->rai, rai);
+      dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] rai %s, %x, %p\n",
+              rai->name, rai->offset, extra);
+    }
+    break;
+  case ROCK_ICJ_SYM_UNREG:
+    {
+      char *name = sp_intern_string(&stringpool, md);
+      symbol *s, *tmp;
+      DL_FOREACH_SAFE(m->icfsyms, s, tmp) {
+        if (name == s->name) {
+          DL_DELETE(m->icfsyms, s);
+          dprintf(STDERR_FILENO,
+                  "[rock_reg_cfg_metadata] icj sym %s, %x unregistered\n",
+                  s->name, s->offset);
+          free(s);
+        }
+      }
+    }
+    break;
+  case ROCK_RAI_UNREG:
+    {
+      uintptr_t addr = (uintptr_t)extra;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz ||
+          addr % 8 != 0) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata] illegal rai %lx registered\n",
+                addr);
+        quit(-1);
+      }
+      addr -= m->base_addr;
+      symbol *s, *tmp;
+      DL_FOREACH_SAFE(m->rai, s, tmp) {
+        if (s->offset == addr) {
+          DL_DELETE(m->rai, s);
+          dprintf(STDERR_FILENO,
+                  "[rock_reg_cfg_metadata] rai %s, %x unregistered\n",
+                  s->name, s->offset);
+          free(s);
+        }
+      }
+    }
+    break;
+  default:
+    dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] unrecognized type %d\n", type);
+    quit(-1);
+    break;
+  }
+  //dprintf(STDERR_FILENO, "[reg_cfg_metadata] exited\n");
+}
+
+void add_cfg_edge_combo(void *h, /* handle */
+                        char *name, /* name of the indirect call*/
+                        unsigned long bary_offset,
+                        unsigned long rai) {
+  //dprintf(STDERR_FILENO, "[add_cfg_edge_combo] %s, %x, %x\n", name, bary_offset, rai);
+  code_module *m = (code_module*)h;
+  char* icname = sp_intern_string(&stringpool, name);
+  if (bary_offset <  m->base_addr || bary_offset > FourGB) {
+    dprintf(STDERR_FILENO, "[add_cfg_edge_combo] bary_offset %lx out of sandbox\n", bary_offset);
+    quit(-1);
+  }
+  bary_offset -= m->base_addr;
+
+  unsigned int bid_slot = alloc_bid_slot();
+  *(unsigned int*)(m->osb_base_addr + (bary_offset - 4)) = bid_slot;
+
+  symbol *s = alloc_sym();
+  s->name = icname;
+  s->offset = bid_slot;
+  DL_APPEND(m->icfsyms, s);
+
+  if (rai < m->base_addr || rai > FourGB || rai % 8 != 0) {
+    dprintf(STDERR_FILENO, "[add_cfg_edge_combo] rai %lx illegal\n", rai);
+    quit(-1);
+  }
+  rai -= m->base_addr;
+
+  s = alloc_sym();
+  s->name = icname;
+  s->offset = rai;
+  DL_APPEND(m->rai, s);
+
+  /* check if such a combo has been added */
+  keyvalue *kv = dict_find(m->ra_id_cache, _mark_ra_ic(icname));
+  if (!kv) {
+    dict_add(&(m->ra_id_cache), _mark_ra_ic(icname), 0);
+    dict_add(&(m->icf_id_cache), icname, 0);
+    gen_cfg();
+  } else {
+    unsigned long *p = (unsigned long*)(table + m->base_addr + rai);
+    *p = (unsigned long)kv->value;
+    kv = dict_find(m->icf_id_cache, icname);
+    assert(kv);
+    p = (unsigned long*)(table + bid_slot);
+    *p = (unsigned long)kv->value;
+  }
 }
 
 /* fork of rock, pretty tricky, now we do not support fork in a multi-threading

@@ -17,10 +17,6 @@ struct code_region_t {
 
 char* code_heap = 0;
 
-int create_code_heap(size_t sz) {
-  return 0;
-}
-
 /* code installation
 */
 int dyncode_install(const char *content, /* mixture of code + data */

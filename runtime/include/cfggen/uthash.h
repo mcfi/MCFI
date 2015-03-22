@@ -74,7 +74,8 @@ do {                                                                            
 #define uthash_free(ptr,sz) free(ptr)     /* free fcn                        */
 #endif
 
-#define oom() quit(-OOM)
+#define oom() {dprintf(STDERR_FILENO, "Out of memory: %s, %d\n", __FILE__, __LINE__);quit(-OOM);}
+
 #ifndef uthash_noexpand_fyi
 #define uthash_noexpand_fyi(tbl)          /* can be defined to log noexpand  */
 #endif
