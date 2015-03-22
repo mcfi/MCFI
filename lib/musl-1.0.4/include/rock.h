@@ -15,6 +15,8 @@ extern "C" {
 #endif
   void rock_reg_cfg_metadata(const void *h, int type, const void *md, const void *extra);
   void *rock_create_code_heap(void **ph, unsigned long size);
+  void rock_add_cfg_edge_combo(const void *h, const char *name,
+                               const void *bary, const void *rai);
   void rock_gen_cfg(void);
 #ifdef __cplusplus
 }

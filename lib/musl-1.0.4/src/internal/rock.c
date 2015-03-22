@@ -9,6 +9,11 @@ void rock_reg_cfg_metadata(const void *h, int type, const void *md, const void *
   trampoline_reg_cfg_metadata(h, type, md, extra);
 }
 
+void rock_add_cfg_edge_combo(const void *h, const char *name,
+                             const void *bary, const void *rai) {
+  trampoline_add_cfg_edge_combo(h, name, bary, rai);
+}
+
 void rock_gen_cfg(void) {
   trampoline_gen_cfg();
 }
