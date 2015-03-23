@@ -101,6 +101,16 @@ static void g_dtor(graph **g) {
   dict_dtor(g, 0, g_free_adj);
 }
 
+static void g_dtor_l2(graph **g) {
+  graph *v, *tmp;
+  HASH_ITER(hh, *g, v, tmp) {
+    /* clear a subgraph */
+    g_dtor((graph**)(&(v->value)));
+    /* free the current vertex */
+    free(v);
+  }
+}
+
 static unsigned int g_size(graph *g) {
   vertex *v, *tmp;
   unsigned num_vertices = 0;
@@ -166,14 +176,10 @@ static node *g_get_lcc(vertex **g) {
     if (!g_in(explored, v->key)) {
       cc = new_node(g_bfs(g, v->key, &explored));
       DL_APPEND(lcc, cc);
-      /* add all nodes in cc to expored */
-      /*
-      HASH_ITER(hh, (vertex*)(cc->val), vi, tmpi) {
-        g_add_vertex(&explored, vi->key);
-        }*/
     }
   }
-  HASH_CLEAR(hh, explored);
+  /* clear explored */
+  dict_clear(&explored);
   return lcc;
 }
 

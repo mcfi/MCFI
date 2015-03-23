@@ -692,9 +692,11 @@ static void _build_cha_relations(/*out*/graph **callgraph,
     }
     /* clean the node in cha_lcc*/
     DL_DELETE(cha_lcc, n);
-    dict_clear((dict**)(&(n->val)));
+    g_dtor((graph**)(&(n->val)));
     free(n);
   }
+  /* clear explored */
+  dict_clear(&explored);
 }
 
 static void merge_icfs(/*out*/icf **icfs, icf *mic) {
@@ -984,7 +986,7 @@ static graph *build_callgraph(icf *icfs, function *functions,
     }
   }
   /* free the following graphs */
-  g_dtor(&all_virtual_funcs_grouped_by_cls_mtd_name);
+  g_dtor_l2(&all_virtual_funcs_grouped_by_cls_mtd_name);
   g_dtor(&global_funcs_grouped_by_types);
   g_dtor(&instance_funcs_grouped_by_types);
   g_dtor(&instance_funcs_grouped_by_const_types);
@@ -1096,6 +1098,7 @@ static void gen_mcfi_id(node **lcg, node **lrt,
         dict_add(ids, v->key, (void*)id);                               \
       }                                                                 \
       DL_DELETE(*lcc, n);                                               \
+      g_dtor((vertex**)(&(n->val)));                                    \
       free(n);                                                          \
     }                                                                   \
   } while (0)
