@@ -167,3 +167,4 @@ runtime_\func:
         runtime_function collect_stat
         runtime_function reg_cfg_metadata
         runtime_function delete_code
+        runtime_function move_code

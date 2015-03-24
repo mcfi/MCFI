@@ -378,7 +378,7 @@ int gen_cfg(void) {
   /* don't generate the cfg at all */
   return 0;
 #endif
-  dprintf(STDERR_FILENO, "[gen_cfg] called, %p\n", table);
+  //dprintf(STDERR_FILENO, "[gen_cfg] called, %p\n", table);
   icf *icfs = 0;
   function *functions = 0;
   dict *classes = 0;
@@ -598,7 +598,7 @@ void rock_shmdt(void) {
 }
 
 void *create_code_heap(void **ph, size_t size) {
-  dprintf(STDERR_FILENO, "[create_code_heap]\n");
+  //dprintf(STDERR_FILENO, "[create_code_heap]\n");
   code_module* m = alloc_code_module();
   if (!ph || (size_t)ph > FourGB) {
     dprintf(STDERR_FILENO,
@@ -877,6 +877,34 @@ void delete_code(void *h, /* handle */
   unsigned i;
   for (i = 0; i < length; i++)
     p[i] = 0;
+}
+
+void move_code(void *h,
+               uintptr_t target,
+               uintptr_t source,
+               size_t length) {
+  code_module *m = (code_module*)h;
+  target = target & (-8);
+  source = source & (-8);
+  length = length & (-8);
+  if (target < m->base_addr || target + length >= m->base_addr + m->sz) {
+    dprintf(STDERR_FILENO, "[rock_move_code] illegal target %x\n", target);
+    quit(-1);
+  }
+  if (source < m->base_addr || source + length >= m->base_addr + m->sz) {
+    dprintf(STDERR_FILENO, "[rock_move_code] illegal source %x\n", source);
+    quit(-1);
+  }
+  //dprintf(STDERR_FILENO, "[rock_move_code] %x, %x, %x\n", target, source, length);
+  unsigned long *p = (unsigned long*)(table+target);
+  unsigned long *q = (unsigned long*)(table+source);
+  length /= 8;
+  unsigned i;
+  for (i = 0; i < length; i++) {
+    unsigned tmp = q[i];
+    q[i] = 0;
+    p[i] = tmp;
+  }
 }
 
 /* fork of rock, pretty tricky, now we do not support fork in a multi-threading
