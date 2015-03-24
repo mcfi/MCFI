@@ -378,7 +378,7 @@ int gen_cfg(void) {
   /* don't generate the cfg at all */
   return 0;
 #endif
-  //dprintf(STDERR_FILENO, "[gen_cfg] called\n");
+  dprintf(STDERR_FILENO, "[gen_cfg] called, %p\n", table);
   icf *icfs = 0;
   function *functions = 0;
   dict *classes = 0;
@@ -497,7 +497,6 @@ int gen_cfg(void) {
     }
     dict_clear(&patch_compensate);
   }
-
   return 0;
 }
 
@@ -616,14 +615,70 @@ void *create_code_heap(void **ph, size_t size) {
   return 0;
 }
 
-#define ROCK_FUNCTION      0
-#define ROCK_FUNCTION_SYM  1
-#define ROCK_ICJ           2
-#define ROCK_ICJ_SYM       3
-#define ROCK_RAI           4
-#define ROCK_ICJ_UNREG     5
-#define ROCK_ICJ_SYM_UNREG 6
-#define ROCK_RAI_UNREG     7
+#define ROCK_FUNC_SYM       0
+#define ROCK_ICJ            1
+#define ROCK_ICJ_SYM        2
+#define ROCK_RAI            3
+#define ROCK_ICJ_UNREG      4
+#define ROCK_ICJ_SYM_UNREG  5
+#define ROCK_RAI_UNREG      6
+#define ROCK_FUNC_SYM_UNREG 7
+ 
+static char *query_function_name(uintptr_t addr) {
+  code_module *m;
+  int found = FALSE;
+  DL_FOREACH(modules, m) {
+    if (addr >= m->base_addr && addr < m->base_addr + m->sz) {
+      found = TRUE;
+      break;
+    }
+  }
+  if (found) {
+    symbol *s;
+    addr -= m->base_addr;
+    DL_FOREACH(m->funcsyms, s) {
+      if (s->offset == addr)
+        return s->name;
+    }
+  }
+  return 0;
+}
+
+static void* query_rad(const char* name) {
+  code_module *m;
+  int found = FALSE;
+  DL_FOREACH(modules, m) {
+    symbol *r;
+    DL_FOREACH(m->rad, r) {
+      if (name == r->name) {
+        found = TRUE;
+        return (void*)(r->offset + m->base_addr);
+      }
+    }
+  }
+  dprintf(STDERR_FILENO, "%s\n", name);
+  assert(found);
+  return 0;
+}
+
+static function *query_function(const char* name) {
+  code_module *m;
+  int found = FALSE;
+  DL_FOREACH(modules, m) {
+    function *f;
+    DL_FOREACH(m->functions, f) {
+      if (name == f->name) {
+        found = TRUE;
+        return f;
+      }
+    }
+  }
+  assert(found);
+  return 0;
+}
+
+static dict *icj_target = 0;
+static dict *icj_target_ret = 0;
 
 void reg_cfg_metadata(void *h,    /* code heap handle */
                       int type,   /* type of the metadata */
@@ -631,46 +686,57 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
                       void *extra /* extra info, optional */
                       ) {
   code_module *m = (code_module*)h;
+
   switch(type) {
-  case ROCK_FUNCTION:
+  case ROCK_FUNC_SYM:
     {
-      size_t mdsz = strlen(md);
-      char *mdcpy = malloc(mdsz + 1);
-      memcpy(mdcpy, md, mdsz);
-      mdcpy[mdsz] = '\0';
-      parse_functions(mdcpy, mdcpy + mdsz, &(m->functions), &stringpool);
-      free(mdcpy);
-      dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] %s\n", md);
-    }
-    break;
-  case ROCK_FUNCTION_SYM:
-    {
-      symbol *funcsym = alloc_sym();
-      funcsym->name = sp_intern_string(&stringpool, md);
+      uintptr_t new_addr = (uintptr_t)md;
       uintptr_t addr = (uintptr_t)extra;
-      if (addr < m->base_addr || addr >= m->base_addr + m->sz ||
-          (addr % 8) != 0) {
+      if (new_addr < m->base_addr || new_addr >= m->base_addr + m->sz ||
+          new_addr % 8 != 0) {
         dprintf(STDERR_FILENO,
-                "[rock_reg_cfg_metadata] illegal function sym %lx registered\n",
+                "[rock_reg_cfg_metadata ROCK_FUNC_SYM ] illegal new function sym %lx registered\n",
+                new_addr);
+        quit(-1);
+      }
+      if (addr >= FourGB || addr % 8 != 0) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata ROCK_FUNC_SYM ] illegal function sym %lx registered\n",
                 addr);
         quit(-1);
       }
-      funcsym->offset = addr - m->base_addr;
+      char *name = query_function_name(addr);
+      assert(name);
+      unsigned long *p = (unsigned long*)(table + new_addr);
+      unsigned long *q = (unsigned long*)(table + addr);
+      *p = *q;
+      //dprintf(STDERR_FILENO,
+      //        "[rock_reg_cfg_metadata ROCK_FUNC_SYM] %x, %x, %lx\n", new_addr, addr, *q);
+      symbol *funcsym = alloc_sym();
+      funcsym->name = name;
+      funcsym->offset = new_addr - m->base_addr;
       DL_APPEND(m->funcsyms, funcsym);
-      if (!dict_in(m->fats, funcsym->name))
-        dict_add(&(m->fats), funcsym->name, 0);
-      dprintf(STDERR_FILENO, "[reg_cfg_metadata] %s, %lx\n", funcsym->name, extra);
     }
     break;
   case ROCK_ICJ:
     {
-      size_t mdsz = strlen(md);
-      char *mdcpy = malloc(mdsz + 1);
-      memcpy(mdcpy, md, mdsz);
-      mdcpy[mdsz] = '\0';
-      parse_icfs(mdcpy, mdcpy + mdsz, &(m->icfs), &stringpool);
-      dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] icf %s\n", md);      
-      free(mdcpy);
+      char *id = sp_intern_string(&stringpool, md);
+      icf *ic;
+      HASH_FIND_PTR(m->icfs, &id, ic);
+      if (!ic) {
+        //dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] icf %s, %x\n", md, extra);
+        ic = alloc_icf();
+        ic->id = sp_intern_string(&stringpool, md);
+        ic->ity = NormalCall;
+        char *name = query_function_name((uintptr_t)extra);
+        assert(name);
+        function *f = query_function(name);
+        ic->type = f->type;
+        HASH_ADD_PTR(m->icfs, id, ic);
+        dict_add(&icj_target, id, extra);
+        void *ra = query_rad(name);
+        dict_add(&icj_target_ret, id, ra);
+      }
     }
     break;
   case ROCK_ICJ_SYM:
@@ -688,8 +754,13 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       *(unsigned int*)(m->osb_base_addr + (addr - m->base_addr - 4)) = bid_slot;
       icfsym->offset = bid_slot;
       DL_APPEND(m->icfsyms, icfsym);
-      dprintf(STDERR_FILENO,
-              "[rock_reg_cfg_metadata] icfsym %s, %x, %p\n", icfsym->name, icfsym->offset, extra);
+      //dprintf(STDERR_FILENO,
+      //        "[rock_reg_cfg_metadata] icfsym %s, %x, %p\n", icfsym->name, icfsym->offset, extra);
+      keyvalue *icj = dict_find(icj_target, icfsym->name);
+      assert(icj);
+      unsigned long *p = (unsigned long*)(table + bid_slot);
+      unsigned long *q = (unsigned long*)(table + (uintptr_t)icj->value);
+      *p = *q;
     }
     break;
   case ROCK_RAI:
@@ -706,8 +777,16 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       }
       rai->offset = addr - m->base_addr;
       DL_APPEND(m->rai, rai);
-      dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] rai %s, %x, %p\n",
-              rai->name, rai->offset, extra);
+      //dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata] rai %s, %x, %p\n",
+      //        rai->name, rai->offset, extra);
+      keyvalue *ra = dict_find(icj_target_ret, rai->name);
+      assert(ra);
+      unsigned long *p = (unsigned long*)(table + addr);
+      unsigned long *q = (unsigned long*)(table + (uintptr_t)ra->value);
+#ifndef NOCFI
+      *q |= 1;
+#endif
+      *p = *q;
     }
     break;
   case ROCK_ICJ_SYM_UNREG:
@@ -725,16 +804,42 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       }
     }
     break;
-  case ROCK_RAI_UNREG:
+  case ROCK_FUNC_SYM_UNREG:
     {
-      uintptr_t addr = (uintptr_t)extra;
+      uintptr_t addr = (uintptr_t)md;
       if (addr < m->base_addr || addr >= m->base_addr + m->sz ||
           addr % 8 != 0) {
         dprintf(STDERR_FILENO,
-                "[rock_reg_cfg_metadata] illegal rai %lx registered\n",
+                "[rock_reg_cfg_metadata ROCK_FUNC_SYM_UNREG] illegal func %lx unreg\n",
                 addr);
         quit(-1);
       }
+      unsigned long *p = (unsigned long*)(table + addr);
+      *p = 0; // invalidate this rai target
+      addr -= m->base_addr;
+      symbol *s, *tmp;
+      DL_FOREACH_SAFE(m->funcsyms, s, tmp) {
+        if (s->offset == addr) {
+          DL_DELETE(m->funcsyms, s);
+          dprintf(STDERR_FILENO,
+                  "[rock_reg_cfg_metadata] func sym %s, %x unregistered\n",
+                  s->name, s->offset);
+          free(s);
+        }
+      }
+    }
+  case ROCK_RAI_UNREG:
+    {
+      uintptr_t addr = (uintptr_t)md;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz ||
+          addr % 8 != 0) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata] illegal rai %lx unreg\n",
+                addr);
+        quit(-1);
+      }
+      unsigned long *p = (unsigned long*)(table + addr);
+      *p = 0; // invalidate this rai target
       addr -= m->base_addr;
       symbol *s, *tmp;
       DL_FOREACH_SAFE(m->rai, s, tmp) {
@@ -756,52 +861,22 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
   //dprintf(STDERR_FILENO, "[reg_cfg_metadata] exited\n");
 }
 
-void add_cfg_edge_combo(void *h, /* handle */
-                        char *name, /* name of the indirect call*/
-                        unsigned long bary_offset,
-                        unsigned long rai) {
-  //dprintf(STDERR_FILENO, "[add_cfg_edge_combo] %s, %x, %x\n", name, bary_offset, rai);
+void delete_code(void *h, /* handle */
+                 uintptr_t addr,
+                 size_t length) {
   code_module *m = (code_module*)h;
-  char* icname = sp_intern_string(&stringpool, name);
-  if (bary_offset <  m->base_addr || bary_offset > FourGB) {
-    dprintf(STDERR_FILENO, "[add_cfg_edge_combo] bary_offset %lx out of sandbox\n", bary_offset);
+  addr = addr & (-8);
+  length = length & (-8);
+  if (addr < m->base_addr || addr + length >= m->base_addr + m->sz) {
+    dprintf(STDERR_FILENO, "[rock_delete_code] illegal %x, %x\n", addr, length);
     quit(-1);
   }
-  bary_offset -= m->base_addr;
-
-  unsigned int bid_slot = alloc_bid_slot();
-  *(unsigned int*)(m->osb_base_addr + (bary_offset - 4)) = bid_slot;
-
-  symbol *s = alloc_sym();
-  s->name = icname;
-  s->offset = bid_slot;
-  DL_APPEND(m->icfsyms, s);
-
-  if (rai < m->base_addr || rai > FourGB || rai % 8 != 0) {
-    dprintf(STDERR_FILENO, "[add_cfg_edge_combo] rai %lx illegal\n", rai);
-    quit(-1);
-  }
-  rai -= m->base_addr;
-
-  s = alloc_sym();
-  s->name = icname;
-  s->offset = rai;
-  DL_APPEND(m->rai, s);
-
-  /* check if such a combo has been added */
-  keyvalue *kv = dict_find(m->ra_id_cache, _mark_ra_ic(icname));
-  if (!kv) {
-    dict_add(&(m->ra_id_cache), _mark_ra_ic(icname), 0);
-    dict_add(&(m->icf_id_cache), icname, 0);
-    gen_cfg();
-  } else {
-    unsigned long *p = (unsigned long*)(table + m->base_addr + rai);
-    *p = (unsigned long)kv->value;
-    kv = dict_find(m->icf_id_cache, icname);
-    assert(kv);
-    p = (unsigned long*)(table + bid_slot);
-    *p = (unsigned long)kv->value;
-  }
+  //dprintf(STDERR_FILENO, "[rock_delete_code] %x, %x\n", addr, length);
+  unsigned long *p = (unsigned long*)(table+addr);
+  length /= 8;
+  unsigned i;
+  for (i = 0; i < length; i++)
+    p[i] = 0;
 }
 
 /* fork of rock, pretty tricky, now we do not support fork in a multi-threading

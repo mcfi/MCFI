@@ -166,4 +166,4 @@ runtime_\func:
         runtime_function rock_fork
         runtime_function collect_stat
         runtime_function reg_cfg_metadata
-        runtime_function add_cfg_edge_combo
+        runtime_function delete_code

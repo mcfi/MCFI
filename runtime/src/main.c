@@ -172,7 +172,7 @@ void install_trampolines(void) {
     void *fork;
     void *collect_stat;
     void *reg_cfg_metadata;
-    void *add_cfg_edge_combo;
+    void *delete_code;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -197,7 +197,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_collect_stat;
   extern unsigned long runtime_create_code_heap;
   extern unsigned long runtime_reg_cfg_metadata;
-  extern unsigned long runtime_add_cfg_edge_combo;
+  extern unsigned long runtime_delete_code;
   tp->mmap = &runtime_rock_mmap;
   tp->mprotect = &runtime_rock_mprotect;
   tp->munmap = &runtime_rock_munmap;
@@ -221,8 +221,8 @@ void install_trampolines(void) {
   tp->collect_stat = &runtime_collect_stat;
   tp->create_code_heap = &runtime_create_code_heap;
   tp->reg_cfg_metadata = &runtime_reg_cfg_metadata;
-  tp->add_cfg_edge_combo = &runtime_add_cfg_edge_combo;
-  /* set the first 65KB read-only */
+  tp->delete_code = &runtime_delete_code;
+  /* set the first 68KB read-only */
   if (0 != mprotect(table,  0x11000, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
   }

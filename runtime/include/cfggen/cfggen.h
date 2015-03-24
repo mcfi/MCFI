@@ -39,7 +39,6 @@ struct icf_t {
   unsigned char attrs; /* constant / volatile */
   char *class_name;
   char *method_name;
-  size_t offset;
 };
 
 static icf *alloc_icf(void) {
@@ -149,8 +148,6 @@ struct code_module_t {
   void     *code;      /* contents of the code during fork */
   void     *gotpltcontent; /* contents of the gotplt during fork */
   int      activated;     /* whether indirect branch targets are activated by default */
-  dict     *icf_id_cache; /* cached icf ids */
-  dict     *ra_id_cache; /* cached return address ids */
 };
 
 static code_module *alloc_code_module(void) {
@@ -335,8 +332,6 @@ static void parse_icfs(char *content, const char *end, /*out*/icf **icfs,
     icf *ic = alloc_icf();
 
     ic->id = id;
-
-    ic->offset = 0;
 
     HASH_ADD_PTR(*icfs, id, ic);
 
@@ -1139,10 +1134,6 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
             mask = ((size_t)-2);                                        \
         }                                                               \
         *p = ((unsigned long)id->value & mask);                         \
-        id = dict_find(m->ra_id_cache, mark(sym->name));                \
-        if (id) {                                                       \
-          id->value = (void*)*p;                                        \
-        }                                                               \
         incr_count(count);                                              \
       }                                                                 \
     }                                                                   \
@@ -1176,24 +1167,15 @@ static void gen_bary(code_module *m, dict *callids, dict *retids, char *table,
       if (i) ++rt_count;
 #endif
     }
-    keyvalue *icf_id = dict_find(m->icf_id_cache, icfsym->name);
     if (i) {
       //dprintf(STDERR_FILENO, "bary: %s, %x, %lx\n", icfsym->name, icfsym->offset, i->value);
       *((unsigned long*)(table + icfsym->offset)) = (unsigned long)i->value;
-      /* add the id value to the cache */
-      if (icf_id) {
-        icf_id->value = i->value;
-      }
     } else {
       //dprintf(STDERR_FILENO, "non-bary: %s, %x, %lx\n", icfsym->name, icfsym->offset,
       //        id_for_other_icfs);
       /* for all indirect calls whose target set is empty, populate their bid slots
          with id_for_other_icfs */
       *((unsigned long*)(table + icfsym->offset)) = id_for_other_icfs;
-      keyvalue *icf_id = dict_find(m->icf_id_cache, icfsym->name);
-      if (icf_id) {
-        icf_id->value = (void*)id_for_other_icfs;
-      }
     }
   }
 }
