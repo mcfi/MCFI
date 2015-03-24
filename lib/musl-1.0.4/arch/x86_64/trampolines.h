@@ -25,7 +25,7 @@
 #define ROCK_FORK         0xE0
 #define ROCK_COLLECT_STAT 0xE8
 #define ROCK_REG_CFG_METADATA 0xF0
-#define ROCK_ADD_CFG_EDGE_COMBO 0xF8
+#define ROCK_DELETE_CODE 0xF8
 
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
@@ -190,11 +190,11 @@ long trampoline_reg_cfg_metadata(unsigned long n1, unsigned long n2,
 }
 
 static __attribute__((noinline))
-long trampoline_add_cfg_edge_combo(unsigned long n1, unsigned long n2,
-                                   unsigned long n3, unsigned long n4) {
+long trampoline_delete_code(unsigned long n1, unsigned long n2,
+                            unsigned long n3) {
   long ret;
-  __asm__ __volatile__(TRAMP_CALL(ROCK_ADD_CFG_EDGE_COMBO)
-                       "D"(n1), "S"(n2), "d"(n3), "c"(n4):
+  __asm__ __volatile__(TRAMP_CALL(ROCK_DELETE_CODE)
+                       "D"(n1), "S"(n2), "d"(n3):
                        "memory");
   return ret;
 }
