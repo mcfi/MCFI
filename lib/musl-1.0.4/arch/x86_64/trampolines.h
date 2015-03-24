@@ -26,7 +26,7 @@
 #define ROCK_COLLECT_STAT 0xE8
 #define ROCK_REG_CFG_METADATA 0xF0
 #define ROCK_DELETE_CODE 0xF8
-
+#define ROCK_MOVE_CODE   0x100
 #define STRING(x) #x
 #define XSTR(x) STRING(x)
 
@@ -195,6 +195,16 @@ long trampoline_delete_code(unsigned long n1, unsigned long n2,
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_DELETE_CODE)
                        "D"(n1), "S"(n2), "d"(n3):
+                       "memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_move_code(unsigned long n1, unsigned long n2,
+                          unsigned long n3, unsigned long n4) {
+  long ret;
+  __asm__ __volatile__(TRAMP_CALL(ROCK_MOVE_CODE)
+                       "D"(n1), "S"(n2), "d"(n3), "c"(n4):
                        "memory");
   return ret;
 }

@@ -13,3 +13,7 @@ void rock_delete_code(const void *h,
                       const void *addr, unsigned long length) {
   trampoline_delete_code(h, addr, length);
 }
+
+void rock_move_code(const void *h, const void *target, const void *source, unsigned long length) {
+  trampoline_move_code(h, target, source, length);
+}
