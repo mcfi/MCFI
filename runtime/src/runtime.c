@@ -901,9 +901,15 @@ void move_code(void *h,
   length /= 8;
   unsigned i;
   for (i = 0; i < length; i++) {
-    unsigned tmp = q[i];
-    q[i] = 0;
-    p[i] = tmp;
+    unsigned long tmp = q[i];
+    if (tmp) {
+      q[i] = 0;
+      p[i] = tmp;
+      //dprintf(STDERR_FILENO, "[rock_move_code] %x, %x, %lx\n",
+      //        (uintptr_t)target-(uintptr_t)table,
+      //        (uintptr_t)source-(uintptr_t)table,
+      //        p[i]);
+    }
   }
 }
 
