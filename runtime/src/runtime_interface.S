@@ -157,7 +157,7 @@ runtime_\func:
         runtime_function gen_cfg
         runtime_function unload_native_code
         runtime_function create_code_heap
-        runtime_function dyncode_install
+        runtime_function code_heap_fill
         runtime_function dyncode_modify
         runtime_function dyncode_delete
         runtime_function report_cfi_violation

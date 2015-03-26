@@ -1069,3 +1069,39 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "\n");
 #endif
 }
+
+/* use [src, len) to fill [dst, len) */
+void code_heap_fill(void *h, /* code heap handle */
+                    void *dst,
+                    void *src,
+                    size_t len,
+                    void *extra) {
+  code_module* m = (code_module*)h;
+  //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %x\n", h, dst, src, len);
+  if ((uintptr_t)dst < m->base_addr || (uintptr_t)dst >= m->base_addr + m->sz) {
+    dprintf(STDERR_FILENO, "[code_heap_fill] illegal dst %p, %p, %p, %x, %x\n",
+            h, dst, src, len, extra);
+    quit(-1);
+  }
+  void *p = dst - (void*)m->base_addr + (void*)m->osb_base_addr;
+  if (0 == extra) {
+    /* pure data */
+    switch (len) {
+    case 1:
+      *((char*)p) = *((char*)src);
+      break;
+    case 4:
+      *((int*)p) = *((int*)src);
+      break;
+    case 8:
+      *((long*)p) = *((long*)src);
+      break;
+    default:
+      memcpy(p, src, len);
+      break;
+    }
+  } else {
+    /* pure code */
+    memcpy(p, src, len);
+  }
+}

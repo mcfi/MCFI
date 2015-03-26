@@ -162,7 +162,7 @@ void install_trampolines(void) {
     void *gen_cfg;
     void *unload_native_code;
     void *create_code_heap;
-    void *dyncode_install;
+    void *code_heap_fill;
     void *dyncode_modify;
     void *dyncode_delete;
     void *report_cfi_violation;
@@ -187,7 +187,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_gen_cfg;
   extern unsigned long runtime_unload_native_code;
   extern unsigned long runtime_create_code_heap;
-  extern unsigned long runtime_dyncode_install;
+  extern unsigned long runtime_code_heap_fill;
   extern unsigned long runtime_dyncode_modify;
   extern unsigned long runtime_dyncode_delete;
   extern unsigned long runtime_report_cfi_violation;
@@ -212,7 +212,7 @@ void install_trampolines(void) {
   tp->gen_cfg = &runtime_gen_cfg;
   tp->unload_native_code = &runtime_unload_native_code;
   tp->create_code_heap = &runtime_create_code_heap;
-  tp->dyncode_install = &runtime_dyncode_install;
+  tp->code_heap_fill = &runtime_code_heap_fill;
   tp->dyncode_modify = &runtime_dyncode_modify;
   tp->dyncode_delete = &runtime_dyncode_delete;
   tp->report_cfi_violation = &runtime_report_cfi_violation;
