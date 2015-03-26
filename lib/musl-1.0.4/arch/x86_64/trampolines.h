@@ -20,6 +20,7 @@
 #define ROCK_LOAD_NATIVE_CODE 0x88
 #define ROCK_GEN_CFG      0x90
 #define ROCK_CREATE_CODE_HEAP 0xA0
+#define ROCK_CODE_HEAP_FILL 0xA8
 #define ROCK_TAKE_ADDR_AND_GEN_CFG 0xD0
 #define ROCK_SET_GOTPLT   0xD8
 #define ROCK_FORK         0xE0
@@ -175,6 +176,20 @@ long trampoline_create_code_heap(unsigned long n1, unsigned long n2) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_CREATE_CODE_HEAP)
                        "D"(n1), "S"(n2):
+                       "memory");
+  return ret;
+}
+
+static __attribute__((noinline))
+long trampoline_code_heap_fill(unsigned long n1, unsigned long n2, unsigned long n3,
+                               unsigned long n4, unsigned long n5)
+{
+  long ret;
+  register unsigned long r8 __asm__("r8") = n5;
+
+  __asm__ __volatile__(TRAMP_CALL(ROCK_CODE_HEAP_FILL)
+                       "D"(n1), "S"(n2), "d"(n3),
+                       "c"(n4), "r"(r8):
                        "memory");
   return ret;
 }

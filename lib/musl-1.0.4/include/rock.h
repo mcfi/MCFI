@@ -17,6 +17,8 @@ extern "C" {
   void *rock_create_code_heap(void **ph, unsigned long size);
   void rock_delete_code(const void *h, const void *addr, unsigned long length);
   void rock_move_code(const void *h, const void *target, const void *source, unsigned long length);
+  void rock_code_heap_fill(void *h, void *dst, const void *src,
+                           unsigned long len, const void *extra);
 #ifdef __cplusplus
 }
 #endif
