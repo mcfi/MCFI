@@ -771,9 +771,9 @@ static void remove_trampoline_type(code_module *m) {
 /* create a parallel mapping for insandbox base, and return the mapped
  * pages outside of the sandbox
  */
-static void *create_parallel_mapping(void *base,
-                                     size_t size,
-                                     int prot) {
+void *create_parallel_mapping(void *base,
+                              size_t size,
+                              int prot) {
   /* TODO: replace /dev/shm/mcfi with a random name */
   const char *shmname = "/dev/shm/mcfi";
   int fd = -1;

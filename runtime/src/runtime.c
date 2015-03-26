@@ -169,27 +169,27 @@ static int range_overlap(uintptr_t r1, size_t len1,
 }
 
 static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
-  return FALSE;
   if (prot & PROT_WRITE) {
     code_module *m;
     DL_FOREACH(modules, m) {
       if (range_overlap(start, len, m->base_addr, m->sz) ||
-          range_overlap(start, len, m->gotplt, m->gotpltsz))
+          range_overlap(start, len, m->gotplt, m->gotpltsz)) {
+        dprintf(STDERR_FILENO, "[insecure_overlap_rdonly] 0x%x, 0x%x, %d, 0x%lx\n",
+                start, len, prot, thread_self()->continuation);
         return TRUE;
+      }
     }
   }
   return FALSE;
 }
 
 void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
-  /*
   if (prot & PROT_EXEC) {
     dprintf(STDERR_FILENO,
             "[rock_mmap] mmap(%p, %lx, %d, %d, %d, %ld) maps executable pages!\n",
             start, len, prot, flags, fd, off);
     quit(-1);
   }
-  */
   /* return mmap(start, len, prot, flags | MAP_32BIT, fd, off); */
   void *result = MAP_FAILED;
   uintptr_t page = 0;
@@ -240,8 +240,8 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 }
 
 int rock_mprotect(void *addr, size_t len, int prot) {
-  if ((unsigned long) addr > FourGB || len > FourGB) {// ||
-      /*(prot & PROT_EXEC)) {*/
+  if ((unsigned long) addr > FourGB || len > FourGB ||
+      (prot & PROT_EXEC)) {
     dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) is insecure!\n",
             (size_t)addr, len, prot);
     quit(-1);
@@ -597,22 +597,40 @@ void rock_shmat(void) {
 void rock_shmdt(void) {
 }
 
+extern void *create_parallel_mapping(void *base,
+                                     size_t size,
+                                     int prot);
+
 void *create_code_heap(void **ph, size_t size) {
-  //dprintf(STDERR_FILENO, "[create_code_heap]\n");
   code_module* m = alloc_code_module();
   if (!ph || (size_t)ph > FourGB) {
     dprintf(STDERR_FILENO,
             "[rock_create_code_heap] illegal pointer to shadow code heap\n");
     quit(-1);
   }
-  m->base_addr = 0xde800000UL;
-  m->osb_base_addr = 0xbe800000UL;
-  m->sz = 0x20000000;
+  uintptr_t base_addr = VmmapFindSpace(&VM, size >> PAGESHIFT);
+  if (base_addr == 0) {
+    dprintf(STDERR_FILENO, "[create_code_heap] VmmapFindSpace failed\n");
+    quit(-1);
+  }
+  VmmapAdd(&VM, base_addr,
+           size >> PAGESHIFT,
+           PROT_READ | PROT_EXEC, PROT_READ | PROT_EXEC,
+           VMMAP_ENTRY_ANONYMOUS);
+
+  base_addr <<= PAGESHIFT;
+
+  m->osb_base_addr = (uintptr_t)create_parallel_mapping((void*)base_addr,
+                                                        size, PROT_EXEC | PROT_WRITE);
+  m->base_addr = base_addr;
+  m->sz = size;
   m->activated = TRUE;
-  //memset((void*)m->osb_base_addr, 0xf4, m->sz);
   *ph = m;
+
   DL_APPEND(modules, m);
-  return 0;
+  //dprintf(STDERR_FILENO, "[create_code_heap] %p, %p, 0x%lx\n",
+  //        (void*)m->base_addr, (void*)m->osb_base_addr, size);
+  return (void*)m->base_addr;
 }
 
 #define ROCK_FUNC_SYM       0
