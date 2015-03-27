@@ -172,8 +172,8 @@ static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
   if (prot & PROT_WRITE) {
     code_module *m;
     DL_FOREACH(modules, m) {
-      if (range_overlap(start, len, m->base_addr, m->sz) ||
-          range_overlap(start, len, m->gotplt, m->gotpltsz)) {
+      if (!m->code_heap && (range_overlap(start, len, m->base_addr, m->sz) ||
+                            range_overlap(start, len, m->gotplt, m->gotpltsz))) {
         dprintf(STDERR_FILENO, "[insecure_overlap_rdonly] 0x%x, 0x%x, %d, 0x%lx\n",
                 start, len, prot, thread_self()->continuation);
         return TRUE;
@@ -183,14 +183,16 @@ static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
   return FALSE;
 }
 
-void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
-  if (prot & PROT_EXEC) {
-    dprintf(STDERR_FILENO,
-            "[rock_mmap] mmap(%p, %lx, %d, %d, %d, %ld) maps executable pages!\n",
-            start, len, prot, flags, fd, off);
-    quit(-1);
+code_module* in_code_heap(uintptr_t start, size_t len) {
+  code_module* m;
+  DL_FOREACH(modules, m) {
+    if (m->code_heap && start >= m->base_addr && len <= m->sz)
+      return m;
   }
-  /* return mmap(start, len, prot, flags | MAP_32BIT, fd, off); */
+  return 0;
+}
+
+void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off) {
   void *result = MAP_FAILED;
   uintptr_t page = 0;
   size_t pages = RoundToPage(len) >> PAGESHIFT;
@@ -207,6 +209,35 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
   if (len > FourGB)
     return (void*)-ENOMEM;
 
+  /* see if we are handling fixed mapping in the code_heap */
+  if (0 != start && (flags & MAP_FIXED)) {
+    /* TODO: handle the case when [start, len) overlaps a code heap */
+    code_module *m = in_code_heap((uintptr_t)start, len);
+    if (m) {
+      if ((prot & PROT_WRITE) && (prot & PROT_EXEC)) {
+        dprintf(STDERR_FILENO, "[rock_map] mapping WX code heap %p, %x\n", start, len);
+      }
+
+      if (prot & PROT_EXEC) {
+        /* TODO: verify */
+      } else if (prot & PROT_WRITE) {
+        /* TODO: use a more efficient way to check whether there is code in this region */
+        memset(table + (uintptr_t)start, 0, len);
+      }
+      int rs = mprotect(start, len, prot);
+      if (rs == 0)
+        return start;
+      else
+        return (void*)-ENOMEM;
+    }
+  }
+
+  if (prot & PROT_EXEC) {
+    dprintf(STDERR_FILENO,
+            "[rock_mmap] mmap(%p, %lx, %d, %d, %d, %ld) maps executable pages!\n",
+            start, len, prot, flags, fd, off);
+    quit(-1);
+  }
   /* not fixed mapping */
   if (!(flags & MAP_FIXED)) {
     if ((unsigned long)start > FourGB || start == 0)
@@ -240,8 +271,7 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 }
 
 int rock_mprotect(void *addr, size_t len, int prot) {
-  if ((unsigned long) addr > FourGB || len > FourGB ||
-      (prot & PROT_EXEC)) {
+  if ((unsigned long) addr > FourGB || len > FourGB || (prot & PROT_EXEC)) {
     dprintf(STDERR_FILENO, "[rock_mprotect] mprotect(%lx, %lx, %d) is insecure!\n",
             (size_t)addr, len, prot);
     quit(-1);
@@ -621,10 +651,11 @@ void *create_code_heap(void **ph, size_t size) {
   base_addr <<= PAGESHIFT;
 
   m->osb_base_addr = (uintptr_t)create_parallel_mapping((void*)base_addr,
-                                                        size, PROT_EXEC | PROT_WRITE);
+                                                        size, PROT_NONE);
   m->base_addr = base_addr;
   m->sz = size;
   m->activated = TRUE;
+  m->code_heap = TRUE;
   *ph = m;
 
   DL_APPEND(modules, m);

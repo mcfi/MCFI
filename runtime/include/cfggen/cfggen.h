@@ -148,6 +148,7 @@ struct code_module_t {
   void     *code;      /* contents of the code during fork */
   void     *gotpltcontent; /* contents of the gotplt during fork */
   int      activated;     /* whether indirect branch targets are activated by default */
+  int      code_heap;  /* whether this code module is a code_heap created for allowing changing */
 };
 
 static code_module *alloc_code_module(void) {
