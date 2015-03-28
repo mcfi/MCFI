@@ -1,0 +1,479 @@
+diff --git a/libcxx-3.5.0.src/cmake/config-ix.cmake b/libcxx-3.5.0.src/cmake/config-ix.cmake
+index e8adafd..2c1d78a 100644
+--- a/libcxx-3.5.0.src/cmake/config-ix.cmake
++++ b/libcxx-3.5.0.src/cmake/config-ix.cmake
+@@ -28,5 +28,5 @@ check_library_exists(pthread pthread_create "" LIBCXX_HAS_PTHREAD_LIB)
+ check_library_exists(c printf "" LIBCXX_HAS_C_LIB)
+ check_library_exists(m ccos "" LIBCXX_HAS_M_LIB)
+ check_library_exists(rt clock_gettime "" LIBCXX_HAS_RT_LIB)
+-check_library_exists(gcc_s __gcc_personality_v0 "" LIBCXX_HAS_GCC_S_LIB)
++#check_library_exists(gcc_s __gcc_personality_v0 "" LIBCXX_HAS_GCC_S_LIB)
+ 
+diff --git a/libcxx-3.5.0.src/include/__config b/libcxx-3.5.0.src/include/__config
+index ce235af..9ac8090 100644
+--- a/libcxx-3.5.0.src/include/__config
++++ b/libcxx-3.5.0.src/include/__config
+@@ -325,12 +325,12 @@ typedef __char32_t char32_t;
+ #define _LIBCPP_HAS_QUICK_EXIT
+ #elif defined(__linux__)
+ #include <features.h>
+-#if __GLIBC_PREREQ(2, 15)
++//#if __GLIBC_PREREQ(2, 15)
+ #define _LIBCPP_HAS_QUICK_EXIT
+-#endif
+-#if __GLIBC_PREREQ(2, 17)
++//#endif
++//#if __GLIBC_PREREQ(2, 17)
+ #define _LIBCPP_HAS_C11_FEATURES
+-#endif
++//#endif
+ #endif
+ #endif
+ 
+diff --git a/libcxx-3.5.0.src/include/locale b/libcxx-3.5.0.src/include/locale
+index fcff402..de02c24 100644
+--- a/libcxx-3.5.0.src/include/locale
++++ b/libcxx-3.5.0.src/include/locale
+@@ -864,7 +864,8 @@ __num_get_signed_integral(const char* __a, const char* __a_end,
+         typename remove_reference<decltype(errno)>::type __save_errno = errno;
+         errno = 0;
+         char *__p2;
+-        long long __ll = strtoll_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
++        //long long __ll = strtoll_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
++        long long __ll = strtoll(__a, &__p2, __base);
+         typename remove_reference<decltype(errno)>::type __current_errno = errno;
+         if (__current_errno == 0)
+             errno = __save_errno;
+@@ -904,7 +905,8 @@ __num_get_unsigned_integral(const char* __a, const char* __a_end,
+         typename remove_reference<decltype(errno)>::type __save_errno = errno;
+         errno = 0;
+         char *__p2;
+-        unsigned long long __ll = strtoull_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
++        //unsigned long long __ll = strtoull_l(__a, &__p2, __base, _LIBCPP_GET_C_LOCALE);
++        unsigned long long __ll = strtoull(__a, &__p2, __base);
+         typename remove_reference<decltype(errno)>::type __current_errno = errno;
+         if (__current_errno == 0)
+             errno = __save_errno;
+@@ -1290,13 +1292,15 @@ __num_put<_CharT>::__widen_and_group_float(char* __nb, char* __np, char* __ne,
+         *__oe++ = __ct.widen(*__nf++);
+         *__oe++ = __ct.widen(*__nf++);
+         for (__ns = __nf; __ns < __ne; ++__ns)
+-            if (!isxdigit_l(*__ns, _LIBCPP_GET_C_LOCALE))
++            //if (!isxdigit_l(*__ns, _LIBCPP_GET_C_LOCALE))
++            if (!isxdigit(*__ns))
+                 break;
+     }
+     else
+     {
+         for (__ns = __nf; __ns < __ne; ++__ns)
+-            if (!isdigit_l(*__ns, _LIBCPP_GET_C_LOCALE))
++            //if (!isdigit_l(*__ns, _LIBCPP_GET_C_LOCALE))
++            if (!isdigit(*__ns))
+                 break;
+     }
+     if (__grouping.empty())
+diff --git a/libcxx-3.5.0.src/src/locale.cpp b/libcxx-3.5.0.src/src/locale.cpp
+index fc314ca..111c926 100644
+--- a/libcxx-3.5.0.src/src/locale.cpp
++++ b/libcxx-3.5.0.src/src/locale.cpp
+@@ -1012,6 +1012,12 @@ ctype<char>::do_narrow(const char_type* low, const char_type* high, char dfault,
+     return low;
+ }
+ 
++#ifdef __MUSL__
++extern "C" const unsigned short ** __ctype_b_loc();
++extern "C" const int ** __ctype_tolower_loc();
++extern "C" const int ** __ctype_toupper_loc();
++#endif
++
+ #ifdef __EMSCRIPTEN__
+ extern "C" const unsigned short ** __ctype_b_loc();
+ extern "C" const int ** __ctype_tolower_loc();
+@@ -1037,6 +1043,8 @@ ctype<char>::classic_table()  _NOEXCEPT
+     return *__ctype_b_loc();
+ #elif defined(_AIX)
+     return (const unsigned int *)__lc_ctype_ptr->obj->mask;
++#elif defined(__MUSL__)
++    return (const unsigned long *)*__ctype_b_loc();
+ #elif defined(__ANDROID__)
+     return _ctype_;
+ #else
+diff --git a/libcxxabi-3.5.0.src/lib/buildit b/libcxxabi-3.5.0.src/lib/buildit
+index 5a4a710..c4fa284 100755
+--- a/libcxxabi-3.5.0.src/lib/buildit
++++ b/libcxxabi-3.5.0.src/lib/buildit
+@@ -4,6 +4,11 @@
+ # running this script.  If you set $CXX, that will be used to compile
+ # the library.  Otherwise we'll use clang++.
+ 
++if [ -z "$NATIVE_SDK" ]
++then
++    NATIVE_SDK=$HOME/native/toolchain
++fi
++
+ set -e
+ 
+ if [ `basename $(pwd)` != "lib" ]
+@@ -14,12 +19,12 @@ fi
+ 
+ if [ -z "$CXX" ]
+ then
+-	CXX=clang++
++	CXX=$NATIVE_SDK/bin/clang++
+ fi
+ 
+ if [ -z "$CC" ]
+ then
+-    CC=clang
++    CC=$NATIVE_SDK/bin/clang
+ fi
+ 
+ if [ -z $RC_ProjectSourceVersion ]
+@@ -27,12 +32,12 @@ then
+   RC_ProjectSourceVersion=1
+ fi
+ 
+-EXTRA_FLAGS="-std=c++11 -stdlib=libc++ -fstrict-aliasing -Wstrict-aliasing=2 \
++EXTRA_FLAGS="-nostdinc -std=c++11 -stdlib=libc++ -fstrict-aliasing -Wstrict-aliasing=2 \
+              -Wsign-conversion -Wshadow -Wconversion -Wunused-variable \
+              -Wmissing-field-initializers -Wchar-subscripts -Wmismatched-tags \
+              -Wmissing-braces -Wshorten-64-to-32 -Wsign-compare \
+              -Wstrict-aliasing=2 -Wstrict-overflow=4 -Wunused-parameter \
+-             -Wnewline-eof"
++             -Wnewline-eof -I$NATIVE_SDK/include"
+ 
+ case $TRIPLE in
+   *-apple-*)
+@@ -70,7 +75,7 @@ case $TRIPLE in
+     SOEXT=so
+     LDSHARED_FLAGS="-o libc++abi.so.1.0 \
+         -shared -nodefaultlibs -Wl,-soname,libc++abi.so.1 \
+-        -lpthread -lrt -lc -lstdc++"
++        -lpthread -lc -lc++ -lunwind"
+     ;;
+ esac
+ 
+@@ -82,12 +87,12 @@ fi
+ set -x
+ 
+ for FILE in ../src/*.cpp; do
+-	$CXX -c -g -O3 $RC_CFLAGS $EXTRA_FLAGS -I../include $OPTIONS $FILE
++	$CXX -c -O3 $RC_CFLAGS $EXTRA_FLAGS -I../include $OPTIONS $FILE
+ done
+ case $TRIPLE in
+   *-*-mingw*)
+   for FILE in ../src/support/win32/*.cpp; do
+-    $CXX -c -g -Os $RC_CFLAGS $EXTRA_FLAGS -I../include $OPTIONS $FILE
++    $CXX -c -Os $RC_CFLAGS $EXTRA_FLAGS -I../include $OPTIONS $FILE
+   done
+   ;;
+ esac
+@@ -97,3 +102,9 @@ if [ -z $RC_XBS ]
+ then
+     rm *.o
+ fi
++
++cp libc++abi.so.1.0 $NATIVE_SDK/lib/
++cp ../include/cxxabi.h $NATIVE_SDK/include
++rm -f $NATIVE_SDK/lib/libc++abi.so.1 $NATIVE_SDK/lib/libc++abi.so
++ln -s $NATIVE_SDK/lib/libc++abi.so.1.0 $NATIVE_SDK/lib/libc++abi.so.1
++ln -s $NATIVE_SDK/lib/libc++abi.so.1 $NATIVE_SDK/lib/libc++abi.so
+diff --git a/libunwind-1.1/Makefile.am b/libunwind-1.1/Makefile.am
+index d7278df..5beb409 100644
+--- a/libunwind-1.1/Makefile.am
++++ b/libunwind-1.1/Makefile.am
+@@ -36,7 +36,7 @@ endif
+ 
+ nodist_include_HEADERS = include/libunwind-common.h
+ 
+-SUBDIRS = src tests doc
++SUBDIRS = src
+ 
+ noinst_HEADERS = include/dwarf.h include/dwarf_i.h include/dwarf-eh.h	\
+ 	include/compiler.h include/libunwind_i.h include/mempool.h	\
+diff --git a/libunwind-1.1/configure.ac b/libunwind-1.1/configure.ac
+index cffe19b..acfd986 100644
+--- a/libunwind-1.1/configure.ac
++++ b/libunwind-1.1/configure.ac
+@@ -258,7 +258,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[#ifndef __INTEL_COMPILER
+ 
+ if test x$GCC = xyes -a x$intel_compiler != xyes; then
+   CFLAGS="${CFLAGS} -fexceptions -Wall -Wsign-compare"
+-  LIBCRTS="-lgcc"
+ fi
+ AC_MSG_RESULT([$intel_compiler])
+ 
+diff --git a/libunwind-1.1/src/x86_64/setcontext.S b/libunwind-1.1/src/x86_64/setcontext.S
+index 1af8b67..4404e49 100644
+--- a/libunwind-1.1/src/x86_64/setcontext.S
++++ b/libunwind-1.1/src/x86_64/setcontext.S
+@@ -26,7 +26,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #include "ucontext_i.h"
+ #if defined __linux__
+-#include <asm/unistd.h>
++//#include <asm/unistd.h>
++#define __NR_rt_sigprocmask 14
+ #define	SIG_SETMASK   2
+ #define	SIGSET_BYTE_SIZE   (64/8)
+ #elif defined __FreeBSD__
+diff --git a/llvm-3.5.0.src/.gitignore b/llvm-3.5.0.src/.gitignore
+index eeebe0d..2d15ec2 100644
+--- a/llvm-3.5.0.src/.gitignore
++++ b/llvm-3.5.0.src/.gitignore
+@@ -40,7 +40,7 @@ projects/*
+ !projects/CMakeLists.txt
+ !projects/Makefile
+ # Clang, which is tracked independently.
+-tools/clang
++#tools/clang
+ # LLDB, which is tracked independently.
+ tools/lldb
+ # lld, which is tracked independently.
+diff --git a/llvm-3.5.0.src/tools/clang/include/clang/Driver/ToolChain.h b/llvm-3.5.0.src/tools/clang/include/clang/Driver/ToolChain.h
+index 550e4df..6c57f92 100644
+--- a/llvm-3.5.0.src/tools/clang/include/clang/Driver/ToolChain.h
++++ b/llvm-3.5.0.src/tools/clang/include/clang/Driver/ToolChain.h
+@@ -50,7 +50,8 @@ public:
+ 
+   enum RuntimeLibType {
+     RLT_CompilerRT,
+-    RLT_Libgcc
++    RLT_Libgcc,
++    RLT_LibMUSL
+   };
+ 
+ private:
+@@ -213,7 +214,8 @@ public:
+ 
+   /// GetDefaultRuntimeLibType - Get the default runtime library variant to use.
+   virtual RuntimeLibType GetDefaultRuntimeLibType() const {
+-    return ToolChain::RLT_Libgcc;
++    //return ToolChain::RLT_Libgcc;
++    return ToolChain::RLT_LibMUSL;
+   }
+ 
+   /// IsUnwindTablesDefault - Does this tool chain use -funwind-tables
+diff --git a/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChain.cpp b/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChain.cpp
+index 4f90d08..b492dfe 100644
+--- a/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChain.cpp
++++ b/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChain.cpp
+@@ -317,7 +317,8 @@ ToolChain::CXXStdlibType ToolChain::GetCXXStdlibType(const ArgList &Args) const{
+       << A->getAsString(Args);
+   }
+ 
+-  return ToolChain::CST_Libstdcxx;
++  //return ToolChain::CST_Libstdcxx;
++  return ToolChain::CST_Libcxx;
+ }
+ 
+ /// \brief Utility function to add a system include directory to CC1 arguments.
+diff --git a/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.cpp b/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.cpp
+index b46f69d..c23721d 100644
+--- a/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.cpp
++++ b/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.cpp
+@@ -3242,6 +3242,12 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
+   const Driver &D = getDriver();
+   std::string SysRoot = computeSysRoot();
+ 
++  if (D.CCCIsCXX())
++    addSystemInclude(DriverArgs, CC1Args, NATIVE_SDK() + "/include/c++/v1");
++  addSystemInclude(DriverArgs, CC1Args, NATIVE_SDK() + "/include");
++
++  return;
++
+   if (DriverArgs.hasArg(options::OPT_nostdinc))
+     return;
+ 
+diff --git a/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.h b/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.h
+index b5df866..7867a14 100644
+--- a/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.h
++++ b/llvm-3.5.0.src/tools/clang/lib/Driver/ToolChains.h
+@@ -776,7 +776,14 @@ public:
+ };
+ 
+ } // end namespace toolchains
++static std::string NATIVE_SDK(void) {
++  const char *mcfi_sdk = getenv("NATIVE_SDK");
++  if (!mcfi_sdk) {
++    const char *home = getenv("HOME");
++    return std::string(home) + "/native/toolchain";
++  }
++  return mcfi_sdk;
++}
+ } // end namespace driver
+ } // end namespace clang
+-
+ #endif
+diff --git a/llvm-3.5.0.src/tools/clang/lib/Driver/Tools.cpp b/llvm-3.5.0.src/tools/clang/lib/Driver/Tools.cpp
+index 198e82e..41cfce4 100644
+--- a/llvm-3.5.0.src/tools/clang/lib/Driver/Tools.cpp
++++ b/llvm-3.5.0.src/tools/clang/lib/Driver/Tools.cpp
+@@ -7175,6 +7175,14 @@ static void AddLibgcc(const llvm::Triple &Triple, const Driver &D,
+     CmdArgs.push_back("-ldl");
+ }
+ 
++static void AddLibMUSL(const llvm::Triple &Triple, const Driver &D,
++                       ArgStringList &CmdArgs, const ArgList &Args) {
++  if (D.CCCIsCXX()) {
++    CmdArgs.push_back("-lc++abi");
++    CmdArgs.push_back("-lunwind");
++  }
++}
++
+ static StringRef getLinuxDynamicLinker(const ArgList &Args,
+                                        const toolchains::Linux &ToolChain) {
+   if (ToolChain.getTriple().getEnvironment() == llvm::Triple::Android) {
+@@ -7228,7 +7236,8 @@ static StringRef getLinuxDynamicLinker(const ArgList &Args,
+            ToolChain.getTriple().getEnvironment() == llvm::Triple::GNUX32)
+     return "/libx32/ld-linux-x32.so.2";
+   else
+-    return "/lib64/ld-linux-x86-64.so.2";
++    //return "/lib64/ld-linux-x86-64.so.2";
++    return NATIVE_SDK() + "/lib/libc.so";
+ }
+ 
+ static void AddRunTimeLibs(const ToolChain &TC, const Driver &D,
+@@ -7243,6 +7252,9 @@ static void AddRunTimeLibs(const ToolChain &TC, const Driver &D,
+   case ToolChain::RLT_Libgcc:
+     AddLibgcc(TC.getTriple(), D, CmdArgs, Args);
+     break;
++  case ToolChain::RLT_LibMUSL:
++    AddLibMUSL(TC.getTriple(), D, CmdArgs, Args);
++    break;
+   }
+ }
+ 
+@@ -7366,6 +7378,8 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
+         D.DyldPrefix + getLinuxDynamicLinker(Args, ToolChain)));
+   }
+ 
++  CmdArgs.push_back("-rpath");
++  CmdArgs.push_back(Args.MakeArgString(NATIVE_SDK() + "/lib"));
+   CmdArgs.push_back("-o");
+   CmdArgs.push_back(Output.getFilename());
+ 
+@@ -7382,9 +7396,13 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
+           crt1 = "crt1.o";
+       }
+       if (crt1)
+-        CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
++        //CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
++        CmdArgs.push_back(
++          Args.MakeArgString(NATIVE_SDK() + "/lib/" + crt1));
+ 
+-      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
++      //CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
++      CmdArgs.push_back(
++        Args.MakeArgString(NATIVE_SDK() + "/lib/crti.o"));
+     }
+ 
+     const char *crtbegin;
+@@ -7407,8 +7425,9 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
+ 
+   const ToolChain::path_list Paths = ToolChain.getFilePaths();
+ 
+-  for (const auto &Path : Paths)
+-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
++  //for (const auto &Path : Paths)
++  // CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
++  CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + NATIVE_SDK() + "/lib"));
+ 
+   if (D.IsUsingLTO(Args))
+     AddGoldPlugin(ToolChain, Args, CmdArgs);
+@@ -7492,7 +7511,9 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
+ 
+       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crtend)));
+       if (!isAndroid)
+-        CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
++        //CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
++        CmdArgs.push_back(
++          Args.MakeArgString(NATIVE_SDK() + "/lib/crtn.o"));
+     }
+   }
+ 
+diff --git a/musl-1.0.4/configure b/musl-1.0.4/configure
+index fa5613e..a4c4132 100755
+--- a/musl-1.0.4/configure
++++ b/musl-1.0.4/configure
+@@ -263,8 +263,8 @@ tryflag CFLAGS_C99FSE -std=c99
+ tryflag CFLAGS_C99FSE -nostdinc
+ tryflag CFLAGS_C99FSE -ffreestanding \
+ || tryflag CFLAGS_C99FSE -fno-builtin
+-tryflag CFLAGS_C99FSE -fexcess-precision=standard \
+-|| { test "$ARCH" = i386 && tryflag CFLAGS_C99FSE -ffloat-store ; }
++#tryflag CFLAGS_C99FSE -fexcess-precision=standard \
++#|| { test "$ARCH" = i386 && tryflag CFLAGS_C99FSE -ffloat-store ; }
+ tryflag CFLAGS_C99FSE -frounding-math
+ 
+ #
+@@ -295,7 +295,7 @@ fi
+ # option is sufficient, and if not, add a macro to cripple these
+ # functions with volatile...
+ #
+-tryflag CFLAGS_MEMOPS -fno-tree-loop-distribute-patterns
++#tryflag CFLAGS_MEMOPS -fno-tree-loop-distribute-patterns
+ 
+ #
+ # If debugging is explicitly enabled, don't auto-enable optimizations
+@@ -420,11 +420,11 @@ shared=no
+ }
+ 
+ # Find compiler runtime library
+-test -z "$LIBCC" && tryldflag LIBCC -lgcc && tryldflag LIBCC -lgcc_eh
+-test -z "$LIBCC" && tryldflag LIBCC -lcompiler_rt
+-test -z "$LIBCC" && try_libcc=`$CC -print-file-name=libpcc.a 2>/dev/null` \
+-                 && tryldflag LIBCC "$try_libcc"
+-printf "using compiler runtime libraries: %s\n" "$LIBCC"
++#test -z "$LIBCC" && tryldflag LIBCC -lgcc && tryldflag LIBCC -lgcc_eh
++#test -z "$LIBCC" && tryldflag LIBCC -lcompiler_rt
++#test -z "$LIBCC" && try_libcc=`$CC -print-file-name=libpcc.a 2>/dev/null` \
++#                 && tryldflag LIBCC "$try_libcc"
++#printf "using compiler runtime libraries: %s\n" "$LIBCC"
+ 
+ # Figure out arch variants for archs with variants
+ SUBARCH=
+diff --git a/musl-1.0.4/include/endian.h b/musl-1.0.4/include/endian.h
+index 1bd4445..690dd93 100644
+--- a/musl-1.0.4/include/endian.h
++++ b/musl-1.0.4/include/endian.h
+@@ -29,12 +29,14 @@ static __inline uint16_t __bswap16(uint16_t __x)
+ 
+ static __inline uint32_t __bswap32(uint32_t __x)
+ {
+-	return __x>>24 | __x>>8&0xff00 | __x<<8&0xff0000 | __x<<24;
++        //return __x>>24 | __x>>8&0xff00 | __x<<8&0xff0000 | __x<<24;
++        return __x>>24 | ((__x>>8)&0xff00) | ((__x<<8)&0xff0000) | __x<<24;
+ }
+ 
+ static __inline uint64_t __bswap64(uint64_t __x)
+ {
+-	return __bswap32(__x)+0ULL<<32 | __bswap32(__x>>32);
++        //return __bswap32(__x)+0ULL<<32 | __bswap32(__x>>32);
++        return (__bswap32(__x)+0ULL)<<32 | __bswap32(__x>>32);
+ }
+ 
+ #if __BYTE_ORDER == __LITTLE_ENDIAN
+diff --git a/musl-1.0.4/include/linux/limits.h b/musl-1.0.4/include/linux/limits.h
+new file mode 100644
+index 0000000..e4ae469
+--- /dev/null
++++ b/musl-1.0.4/include/linux/limits.h
+@@ -0,0 +1,4 @@
++#ifndef _LINUX_LIMITS_H
++#define _LINUX_LIMITS_H
++#define PATH_MAX 256
++#endif
+diff --git a/musl-1.0.4/src/ldso/dynlink.c b/musl-1.0.4/src/ldso/dynlink.c
+index 6d265b3..93f6966 100644
+--- a/musl-1.0.4/src/ldso/dynlink.c
++++ b/musl-1.0.4/src/ldso/dynlink.c
+@@ -517,6 +517,8 @@ static void decode_dyn(struct dso *p)
+ 		p->hashtab = (void *)(p->base + dyn[DT_HASH]);
+ 	if (dyn[0]&(1<<DT_RPATH))
+ 		p->rpath_orig = (void *)(p->strings + dyn[DT_RPATH]);
++        if (dyn[0]&(1<<DT_RUNPATH))
++		p->rpath_orig = (void *)(p->strings + dyn[DT_RUNPATH]);
+ 	if (search_vec(p->dynv, dyn, DT_GNU_HASH))
+ 		p->ghashtab = (void *)(p->base + *dyn);
+ 	if (search_vec(p->dynv, dyn, DT_VERSYM))
