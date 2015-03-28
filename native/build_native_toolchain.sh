@@ -3,11 +3,13 @@
 if [ -z "$NATIVE" ]
 then
     export NATIVE=$HOME/native
+    mkdir -p $NATIVE
 fi
 
 if [ -z "$NATIVE_SDK" ]
 then
     export NATIVE_SDK=$NATIVE/toolchain
+    mkdir -p $NATIVE_SDK
 fi
 
 if [ -z "$LLVM_HOME" ]
