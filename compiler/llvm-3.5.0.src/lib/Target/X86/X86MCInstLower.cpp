@@ -1156,8 +1156,10 @@ void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *Lo
   // to developers
   StringRef TrimedStr = Str.trim();
   if (TrimedStr.startswith_lower("cld; rep;") ||
+      TrimedStr.startswith_lower("cld;rep ;") ||
       TrimedStr.startswith_lower("rep;") ||
       TrimedStr.startswith_lower("cld; repne;") ||
+      TrimedStr.startswith_lower("cld;repne ;") ||
       TrimedStr.startswith_lower("repne;")){
     // sandboxing
     if (SmallSandbox && !DisableDS) {
