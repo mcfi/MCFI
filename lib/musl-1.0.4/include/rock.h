@@ -9,7 +9,8 @@
 #define ROCK_ICJ_SYM_UNREG  5
 #define ROCK_RAI_UNREG      6
 #define ROCK_FUNC_SYM_UNREG 7
- 
+#define ROCK_RET            8
+
 #ifdef __cplusplus
 extern "C" {
 #endif
