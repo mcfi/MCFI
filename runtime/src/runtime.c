@@ -672,7 +672,8 @@ void *create_code_heap(void **ph, size_t size) {
 #define ROCK_ICJ_SYM_UNREG  5
 #define ROCK_RAI_UNREG      6
 #define ROCK_FUNC_SYM_UNREG 7
- 
+#define ROCK_RET            8
+
 static char *query_function_name(uintptr_t addr) {
   code_module *m;
   int found = FALSE;
@@ -726,8 +727,26 @@ static function *query_function(const char* name) {
   return 0;
 }
 
+static symbol *query_icfsym(const char *name) {
+  code_module *m;
+  int found = FALSE;
+  DL_FOREACH(modules, m) {
+    symbol *s;
+    DL_FOREACH(m->icfsyms, s) {
+      if (name == s->name) {
+        found = TRUE;
+        return s;
+      }
+    }
+  }
+  assert(found);
+  return 0;
+}
+
 static dict *icj_target = 0;
 static dict *icj_target_ret = 0;
+static dict *ret_name = 0;
+static dict *ret_offset = 0;
 
 void reg_cfg_metadata(void *h,    /* code heap handle */
                       int type,   /* type of the metadata */
@@ -765,6 +784,49 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       funcsym->name = name;
       funcsym->offset = new_addr - m->base_addr;
       DL_APPEND(m->funcsyms, funcsym);
+    }
+    break;
+  case ROCK_RET:
+    {
+      //dprintf(STDERR_FILENO, "[rock_reg_cfg_metadata ROCK_RET] %p, %p\n", md, extra);
+      char *name;
+      unsigned int bid_slot;
+      uintptr_t addr;
+      keyvalue *r = dict_find(ret_name, extra);
+      if (!r) {
+        name = query_function_name((uintptr_t)extra);
+        assert(name);
+        function *func = query_function(name);
+        assert(func->returns);
+        name = func->returns->val;
+        dict_add(&ret_name, extra, func->returns->val);
+
+        // Let's reuse a bid_slot
+        symbol *sym = query_icfsym(name);
+        bid_slot = sym->offset;
+        dict_add(&ret_offset, extra, (void*)(size_t)bid_slot);
+      } else {
+        name = r->value;
+        r = dict_find(ret_offset, extra);
+        assert(r);
+        bid_slot = (unsigned int)r->value;
+      }
+
+      addr = (uintptr_t)md;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata ROCK_RET] illegal ret bary offset %lx registered\n",
+                addr);
+        quit(-1);
+      }
+
+      symbol *icfsym = alloc_sym();
+      icfsym->name = name;
+      icfsym->offset = bid_slot;
+
+      *(unsigned int*)(m->osb_base_addr + (addr - m->base_addr - 4)) = bid_slot;
+
+      DL_APPEND(m->icfsyms, icfsym);
     }
     break;
   case ROCK_ICJ:
