@@ -58,7 +58,7 @@ die1:
 exp2l:
 	fldt 8(%rsp)
 1:	fld %st(0)
-	sub $16,%rsp
+	sub $16,%esp
 	fstpt (%rsp)
 	mov 8(%rsp),%ax
 	and $0x7fff,%ax
@@ -91,7 +91,7 @@ exp2l:
 	faddp             # 2^(x-rint(x))
 1:	fscale
 	fstp %st(1)
-	add $16,%rsp
+	add $16,%esp
 	jmp 5f
 3:	xor %eax,%eax
 4:	cmp $0x3fff-64,%ax
@@ -107,7 +107,7 @@ exp2l:
 	faddp             # 2^(x-rint(x))
 	fldt (%rsp)       # 2^rint(x)
 	fmulp
-	add $16,%rsp
+	add $16,%esp
 5:      #ret
         popq %rcx
         movl %ecx, %ecx
