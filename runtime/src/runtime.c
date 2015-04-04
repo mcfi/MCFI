@@ -994,8 +994,29 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
 static int which_area(const char* cdbmp, unsigned long base, size_t len) {
   unsigned long byte;
   size_t bitsum = 0;
-  for (byte = base; byte < base + len; byte++) {
-    bitsum += ((cdbmp[byte / 8] & (1 << (byte % 8))) != 0) ? 1 : 0;
+
+  if (len < 16) {
+    for (byte = base; byte < base + len; byte++) {
+      bitsum += ((cdbmp[byte / 8] & (1 << (byte % 8))) != 0) ? 1 : 0;
+    }
+  } else {
+    if ((base & 7) != 0) {
+      unsigned long base_align = base & (~7);
+      bitsum += (cdbmp[base_align] & ((0xff >> (base - base_align)) << (base - base_align)));
+      len -= (8 - (base - base_align));
+      base = base_align + 8;
+    }
+    if ((len & 7) != 0) {
+      size_t trail_len = (len & 7);
+      unsigned long trail_base = base + (len - trail_len);
+      bitsum += (cdbmp[trail_base/8] & ((1 << trail_len) - 1));
+    }
+    size_t i;
+    len /= 8;
+    base /= 8;
+    for (i = 0; i < len; i++) {
+      bitsum += cdbmp[base + i];
+    }
   }
   if (bitsum == len)
     return ROCK_CODE;
@@ -1006,16 +1027,56 @@ static int which_area(const char* cdbmp, unsigned long base, size_t len) {
 }
 
 static void set_code(char *cdbmp, unsigned long base, size_t len) {
-  unsigned long byte;
-  for (byte = base; byte < base + len; byte++) {
-    cdbmp[byte / 8] |= (1 << (byte % 8));
+  if (len < 16) {
+    unsigned long byte;
+    for (byte = base; byte < base + len; byte++) {
+      cdbmp[byte / 8] |= (1 << (byte % 8));
+    }
+  } else {
+    if ((base & 7) != 0) {
+      unsigned long base_align = base & (~7);
+      cdbmp[base_align] |= ((0xff >> (base - base_align)) << (base - base_align));
+      len -= (8 - (base - base_align));
+      base = base_align + 8;
+    }
+    if ((len & 7) != 0) {
+      size_t trail_len = (len & 7);
+      unsigned long trail_base = base + (len - trail_len);
+      cdbmp[trail_base/8] |= ((1 << trail_len) - 1);
+    }
+    size_t i;
+    len /= 8;
+    base /= 8;
+    for (i = 0; i < len; i++) {
+      cdbmp[base + i] = 0xff;
+    }
   }
 }
 
 static void set_data(char *cdbmp, unsigned long base, size_t len) {
-  unsigned long byte;
-  for (byte = base; byte < base + len; byte++) {
-    cdbmp[byte / 8] &= (~(1 << (byte % 8)));
+  if (len < 16) {
+    unsigned long byte;
+    for (byte = base; byte < base + len; byte++) {
+      cdbmp[byte / 8] &= (~(1 << (byte % 8)));
+    }
+  } else {
+    if ((base & 7) != 0) {
+      unsigned long base_align = base & (~7);
+      cdbmp[base_align] &= (0xff >> (8 - (base - base_align)));
+      len -= (8 - (base - base_align));
+      base = base_align + 8;
+    }
+    if ((len & 7) != 0) {
+      size_t trail_len = (len & 7);
+      unsigned long trail_base = base + (len - trail_len);
+      cdbmp[trail_base/8] &= (0xff << trail_len);
+    }
+    size_t i;
+    len /= 8;
+    base /= 8;
+    for (i = 0; i < len; i++) {
+      cdbmp[base + i] = 0;
+    }
   }
 }
 
