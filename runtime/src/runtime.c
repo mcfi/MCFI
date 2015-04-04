@@ -1239,6 +1239,20 @@ void collect_stat(void) {
 #endif
 }
 
+#define ROCK_CODE    1
+#define ROCK_OFFSET  2
+#define ROCK_VERIFY  4
+#define ROCK_COPY    8
+#define ROCK_REPLACE 16
+
+static int data(unsigned long flags) {
+  return 0 == (flags & ROCK_CODE);
+}
+
+static int code(unsigned long flags) {
+  return (flags & ROCK_CODE);
+}
+
 /* use [src, len) to fill [dst, len) */
 void code_heap_fill(void *h, /* code heap handle */
                     void *dst,
@@ -1246,6 +1260,7 @@ void code_heap_fill(void *h, /* code heap handle */
                     size_t len,
                     void *extra) {
   code_module* m = (code_module*)h;
+  unsigned long flags = (unsigned long)extra;
   //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %x\n", h, dst, src, len);
   if ((uintptr_t)dst < m->base_addr || (uintptr_t)dst >= m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[code_heap_fill] illegal dst %p, %p, %p, %x, %x\n",
@@ -1253,7 +1268,7 @@ void code_heap_fill(void *h, /* code heap handle */
     quit(-1);
   }
   void *p = dst - (void*)m->base_addr + (void*)m->osb_base_addr;
-  if (0 == extra) {
+  if (data(flags)) {
     /* pure data */
     switch (len) {
     case 1:
@@ -1271,6 +1286,10 @@ void code_heap_fill(void *h, /* code heap handle */
     }
   } else {
     /* pure code */
-    memcpy(p, src, len);
+    if (flags & ROCK_COPY)
+      memcpy(p, src, len);
+
+    if (flags & ROCK_REPLACE)
+      memcpy(p, src, len);
   }
 }
