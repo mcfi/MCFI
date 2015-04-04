@@ -1,6 +1,11 @@
 #ifndef __ROCK_H
 #define __ROCK_H
 
+#define ROCK_OFFSET  2
+#define ROCK_VERIFY  4
+#define ROCK_COPY    8
+#define ROCK_REPLACE 16
+
 #define ROCK_FUNC_SYM       0
 #define ROCK_ICJ            1
 #define ROCK_ICJ_SYM        2
