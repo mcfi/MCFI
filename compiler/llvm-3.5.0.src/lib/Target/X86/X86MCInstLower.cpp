@@ -963,12 +963,20 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     switch (reg) {
     case X86::R8: case X86::R9: case X86::R10: case X86::R11:
     case X86::R12: case X86::R13: case X86::R14: case X86::R15:
+#ifdef NO_ONLINE_PATCHING
+      OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 3);
+#else
       OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0);
       OutStreamer.EmitCodeAlignment(8, 0, 3);
+#endif
       break;
     default:
+#ifdef NO_ONLINE_PATCHING
+      OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
+#else
       OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 7);
       OutStreamer.EmitCodeAlignment(8, 0, 2);
+#endif
     }
     break;
   }
