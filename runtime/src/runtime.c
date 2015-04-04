@@ -1132,6 +1132,62 @@ int rock_fork(void) {
   return rv;
 }
 
+#ifdef COLLECT_STAT
+/* count indirect branch edges */
+static unsigned long ibe_count(void) {
+  unsigned long IBEs = 0;
+  code_module *m;
+  dict *ib = 0;
+  dict *ibt = 0;
+  unsigned int i;
+
+  DL_FOREACH(modules, m) {
+    //dprintf(STDERR_FILENO, "Module: %x, %x\n", m->base_addr, m->sz);
+    unsigned long* p = (unsigned long*)(table + m->base_addr);
+    size_t sz = m->sz / 8;
+    for (i = 0; i < sz; i++) {
+      if (p[i] & 1) {
+        keyvalue *kv = dict_find(ibt, (void*)p[i]);
+        if (!kv) {
+          kv = dict_add(&ibt, (void*)p[i], (void*)0);
+        }
+        unsigned long count = (unsigned long)kv->value;
+        count++;
+        kv->value = (void*)count;
+      }
+    }
+  }
+  unsigned id = (alloc_bid_slot() - BID_SLOT_START)/ 8;
+  unsigned long *p = (unsigned long*)(table + BID_SLOT_START);
+  for (i = 0; i < id; i++) {
+    if (p[i] & 1) {
+      keyvalue *kv = dict_find(ib, (void*)p[i]);
+      if (!kv) {
+        kv = dict_add(&ib, (void*)p[i], (void*)0);
+      }
+      unsigned long count = (unsigned long)kv->value;
+      count++;
+      kv->value = (void*)count;
+    }
+  }
+  keyvalue *ikv, *tkv, *tmp;
+  HASH_ITER(hh, ib, ikv, tmp) {
+    tkv = dict_find(ibt, ikv->key);
+    if (tkv) {
+      IBEs += (unsigned long)ikv->value * (unsigned long)tkv->value;
+      dict_del(&ibt, tkv->key);
+    }
+  }
+  /* TODO: some IBTs do not have corresponding IBs. All cases seem to
+     be return addresses whose preceding indirect call do not have targets.
+  HASH_ITER(hh, ibt, tkv, tmp) {
+    dprintf(STDERR_FILENO, "%lx, %lx\n", tkv->key, tkv->value);
+  }
+  */
+  return IBEs;
+}
+#endif
+
 void collect_stat(void) {
 #ifdef COLLECT_STAT
   unsigned int lp_count = 0;
@@ -1177,6 +1233,8 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of InDirect Calls: %u\n",
           pid, raic_patch_count);
 #endif
+  dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges: %lu\n",
+          pid, ibe_count());
   dprintf(STDERR_FILENO, "\n");
 #endif
 }

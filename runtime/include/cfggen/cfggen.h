@@ -1190,4 +1190,8 @@ static void populate_landingpads(code_module *m, char *table) {
   }
 }
 
+/* bid starts right after the first unmapped 64KB and the [64KB, 68KB], which
+   holds the trampolines */
+#define BID_SLOT_START 0x11000
+
 #endif

@@ -226,7 +226,7 @@ void install_trampolines(void) {
   tp->delete_code = &runtime_delete_code;
   tp->move_code = &runtime_move_code;
   /* set the first 68KB read-only */
-  if (0 != mprotect(table,  0x11000, PROT_READ)) {
+  if (0 != mprotect(table,  BID_SLOT_START, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
   }
 }
@@ -481,7 +481,7 @@ unsigned int alloc_bid_slot(void) {
    * so the bid slots start from the second page.
    * Later we should extend this function to be an ID allocation routine.
    */
-  static unsigned int bid_slot = 0x11000;
+  static unsigned int bid_slot = BID_SLOT_START;
   unsigned int rbid_slot = bid_slot;
   bid_slot += 8; /* 8 bytes */
   //dprintf(STDERR_FILENO, "%x\n", rbid_slot);
