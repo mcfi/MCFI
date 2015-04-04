@@ -656,6 +656,13 @@ void *create_code_heap(void **ph, size_t size) {
   m->sz = size;
   m->activated = TRUE;
   m->code_heap = TRUE;
+  m->code_data_bitmap = mmap(NULL, RoundToPage(size/8), PROT_WRITE,
+                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  if (m->code_data_bitmap == (void*)-1) {
+    dprintf(STDERR_FILENO, "[rock_create_code_heap] code_data_bitmap allocation failed\n");
+    quit(-1);
+  }
+
   *ph = m;
 
   DL_APPEND(modules, m);
@@ -972,16 +979,58 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
   //dprintf(STDERR_FILENO, "[reg_cfg_metadata] exited\n");
 }
 
+#define ROCK_INVALID -1
+#define ROCK_DATA    0
+#define ROCK_CODE    1
+#define ROCK_OFFSET  2
+#define ROCK_VERIFY  4
+#define ROCK_COPY    8
+#define ROCK_REPLACE 16
+
+/* if [base, len) in code areas, return ROCK_CODE;
+   else if in data areas, return ROCK_DATA;
+   else return ROCK_INVALID
+*/
+static int which_area(const char* cdbmp, unsigned long base, size_t len) {
+  unsigned long byte;
+  size_t bitsum = 0;
+  for (byte = base; byte < base + len; byte++) {
+    bitsum += ((cdbmp[byte / 8] & (1 << (byte % 8))) != 0) ? 1 : 0;
+  }
+  if (bitsum == len)
+    return ROCK_CODE;
+  else if (bitsum == 0)
+    return ROCK_DATA;
+  else
+    return ROCK_INVALID;
+}
+
+static void set_code(char *cdbmp, unsigned long base, size_t len) {
+  unsigned long byte;
+  for (byte = base; byte < base + len; byte++) {
+    cdbmp[byte / 8] |= (1 << (byte % 8));
+  }
+}
+
+static void set_data(char *cdbmp, unsigned long base, size_t len) {
+  unsigned long byte;
+  for (byte = base; byte < base + len; byte++) {
+    cdbmp[byte / 8] &= (~(1 << (byte % 8)));
+  }
+}
+
 void delete_code(void *h, /* handle */
                  uintptr_t addr,
                  size_t length) {
   code_module *m = (code_module*)h;
-  addr = addr & (-8);
-  length = length & (-8);
   if (addr < m->base_addr || addr + length >= m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_delete_code] illegal %x, %x\n", addr, length);
     quit(-1);
   }
+  set_data(m->code_data_bitmap, addr - m->base_addr, length);
+  addr = addr & (-8);
+  length = length & (-8);
+
   //dprintf(STDERR_FILENO, "[rock_delete_code] %x, %x\n", addr, length);
   unsigned long *p = (unsigned long*)(table+addr);
   length /= 8;
@@ -995,9 +1044,6 @@ void move_code(void *h,
                uintptr_t source,
                size_t length) {
   code_module *m = (code_module*)h;
-  target = target & (-8);
-  source = source & (-8);
-  length = length & (-8);
   if (target < m->base_addr || target + length >= m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_move_code] illegal target %x\n", target);
     quit(-1);
@@ -1006,6 +1052,13 @@ void move_code(void *h,
     dprintf(STDERR_FILENO, "[rock_move_code] illegal source %x\n", source);
     quit(-1);
   }
+  
+  set_data(m->code_data_bitmap, source - m->base_addr, length);
+  set_code(m->code_data_bitmap, target - m->base_addr, length);
+  target = target & (-8);
+  source = source & (-8);
+  length = length & (-8);
+
   //dprintf(STDERR_FILENO, "[rock_move_code] %x, %x, %x\n", target, source, length);
   unsigned long *p = (unsigned long*)(table+target);
   unsigned long *q = (unsigned long*)(table+source);
@@ -1239,12 +1292,6 @@ void collect_stat(void) {
 #endif
 }
 
-#define ROCK_CODE    1
-#define ROCK_OFFSET  2
-#define ROCK_VERIFY  4
-#define ROCK_COPY    8
-#define ROCK_REPLACE 16
-
 static int data(unsigned long flags) {
   return 0 == (flags & ROCK_CODE);
 }
@@ -1261,7 +1308,7 @@ void code_heap_fill(void *h, /* code heap handle */
                     void *extra) {
   code_module* m = (code_module*)h;
   unsigned long flags = (unsigned long)extra;
-  //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %x\n", h, dst, src, len);
+  //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %u, %x\n", h, dst, src, len, extra);
   if ((uintptr_t)dst < m->base_addr || (uintptr_t)dst >= m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[code_heap_fill] illegal dst %p, %p, %p, %x, %x\n",
             h, dst, src, len, extra);
@@ -1269,7 +1316,14 @@ void code_heap_fill(void *h, /* code heap handle */
   }
   void *p = dst - (void*)m->base_addr + (void*)m->osb_base_addr;
   if (data(flags)) {
-    /* pure data */
+    /* the entire data should be either in data areas or code areas */
+    int area = which_area(m->code_data_bitmap, dst - (void*)m->base_addr, len);
+    if (ROCK_INVALID == area) {
+      unsigned long *rsp = (unsigned long*)thread_self()->user_ctx.rsp;
+      dprintf(STDERR_FILENO, "[code_heap_fill data] crossing boundary of code and data %p, %x\n",
+              thread_self()->continuation, *rsp);
+      quit(-1);
+    }
     switch (len) {
     case 1:
       *((char*)p) = *((char*)src);
@@ -1291,5 +1345,7 @@ void code_heap_fill(void *h, /* code heap handle */
 
     if (flags & ROCK_REPLACE)
       memcpy(p, src, len);
+
+    set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
   }
 }
