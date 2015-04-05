@@ -1,8 +1,8 @@
 #include "trampolines.h"
 #include <rock.h>
 
-void *rock_create_code_heap(void **ph, unsigned long sz) {
-  return trampoline_create_code_heap((unsigned long)ph, sz);
+void *rock_create_code_heap(void **ph, unsigned long sz, const void* verifier) {
+  return trampoline_create_code_heap((unsigned long)ph, sz, verifier);
 }
 
 void rock_code_heap_fill(void *h, void *dst, const void *src, unsigned long len,

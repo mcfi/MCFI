@@ -172,10 +172,10 @@ long trampoline_collect_stat(void) {
 }
 
 static __attribute__((noinline))
-long trampoline_create_code_heap(unsigned long n1, unsigned long n2) {
+long trampoline_create_code_heap(unsigned long n1, unsigned long n2, unsigned long n3) {
   long ret;
   __asm__ __volatile__(TRAMP_CALL(ROCK_CREATE_CODE_HEAP)
-                       "D"(n1), "S"(n2):
+                       "D"(n1), "S"(n2), "d"(n3):
                        "memory");
   return ret;
 }

@@ -20,7 +20,7 @@
 extern "C" {
 #endif
   void rock_reg_cfg_metadata(const void *h, int type, const void *md, const void *extra);
-  void *rock_create_code_heap(void **ph, unsigned long size);
+  void *rock_create_code_heap(void **ph, unsigned long size, const void* verifier);
   void rock_delete_code(const void *h, const void *addr, unsigned long length);
   void rock_move_code(const void *h, const void *target, const void *source, unsigned long length);
   void rock_code_heap_fill(void *h, void *dst, const void *src,
