@@ -1195,6 +1195,18 @@ void *__dynlink(int argc, char **argv)
 	__init_libc(envp, argv[0]);
 	atexit(do_fini);
 	errno = 0;
+
+        /* set up signal handling stack before executing any application init procedures */
+        stack_t ss;
+        ss.ss_sp = malloc(SIGSTKSZ);
+        ss.ss_size = SIGSTKSZ;
+        ss.ss_flags = 0;
+        if (NULL == ss.ss_sp || sigaltstack(&ss, NULL) == -1) {
+          fprintf(stderr, "Initially setting up signal stack failed\n");
+          exit(-1);
+        }
+        pthread_self()->signalstack = ss.ss_sp;
+
 	do_init_fini(tail);
 
 	return (void *)aux[AT_ENTRY];

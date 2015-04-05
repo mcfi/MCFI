@@ -69,12 +69,15 @@ _Noreturn void pthread_exit(void *result)
 		 * detached later (== 2), we need to clear it here. */
 		if (self->detached == 2) __syscall(SYS_set_tid_address, 0);
 
+                /* free the signal stack */
+                free(self->signalstack);
 		/* The following call unmaps the thread's stack mapping
 		 * and then exits without touching the stack. */
                 trampoline_free_tcb(pthread_self());
 		__unmapself(mcfi_sandbox_mask(self->map_base), mcfi_sandbox_mask(self->map_size));
 	}
-
+        /* free the signal stack */
+        free(self->signalstack);
         trampoline_free_tcb(pthread_self());
 	for (;;) __syscall(SYS_exit, 0);
 }
@@ -98,6 +101,16 @@ static int __do_pthread_internal_start(void *p) __attribute__((threadentry));
 int __do_pthread_internal_start(void *p)
 {
 	pthread_t self = p;
+        /* set up signal handling stack */
+        stack_t ss;
+        ss.ss_sp = malloc(SIGSTKSZ);
+        ss.ss_size = SIGSTKSZ;
+        ss.ss_flags = 0;
+        if (NULL == ss.ss_sp || sigaltstack(&ss, NULL) == -1) {
+          fprintf(stderr, "Setting up signal stack for a thread failed\n");
+          exit(-1);
+        }
+        self->signalstack = ss.ss_sp;
 	if (self->startlock[0]) {
 		__wait(self->startlock, 0, 1, 1);
 		if (self->startlock[0]) {
