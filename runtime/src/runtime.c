@@ -991,25 +991,30 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
    else if in data areas, return ROCK_DATA;
    else return ROCK_INVALID
 */
-static int which_area(const char* cdbmp, unsigned long base, size_t len) {
+static size_t count_bits(const unsigned char* bmp, unsigned long base, size_t len) {
+  size_t bitsum = 0;
   unsigned long byte;
+  for (byte = base; byte < base + len; byte++) {
+    bitsum += ((bmp[byte / 8] & (1 << (byte % 8))) != 0) ? 1 : 0;
+  }
+  return bitsum;
+}
+
+static int which_area(const unsigned char* cdbmp, unsigned long base, size_t len) {
   size_t bitsum = 0;
 
-  if (len < 16) {
-    for (byte = base; byte < base + len; byte++) {
-      bitsum += ((cdbmp[byte / 8] & (1 << (byte % 8))) != 0) ? 1 : 0;
-    }
+  if (len < 32) {
+    bitsum += count_bits(cdbmp, base, len);
   } else {
     if ((base & 7) != 0) {
       unsigned long base_align = base & (~7);
-      bitsum += (cdbmp[base_align] & ((0xff >> (base - base_align)) << (base - base_align)));
+      bitsum += count_bits(cdbmp, base, 8 - (base - base_align));
       len -= (8 - (base - base_align));
       base = base_align + 8;
     }
     if ((len & 7) != 0) {
       size_t trail_len = (len & 7);
-      unsigned long trail_base = base + (len - trail_len);
-      bitsum += (cdbmp[trail_base/8] & ((1 << trail_len) - 1));
+      bitsum += count_bits(cdbmp, base + (len - trail_len), trail_len);
     }
     size_t i;
     len /= 8;
@@ -1026,8 +1031,8 @@ static int which_area(const char* cdbmp, unsigned long base, size_t len) {
     return ROCK_INVALID;
 }
 
-static void set_code(char *cdbmp, unsigned long base, size_t len) {
-  if (len < 16) {
+static void set_code(unsigned char *cdbmp, unsigned long base, size_t len) {
+  if (len < 16) { // tunable
     unsigned long byte;
     for (byte = base; byte < base + len; byte++) {
       cdbmp[byte / 8] |= (1 << (byte % 8));
@@ -1053,8 +1058,8 @@ static void set_code(char *cdbmp, unsigned long base, size_t len) {
   }
 }
 
-static void set_data(char *cdbmp, unsigned long base, size_t len) {
-  if (len < 16) {
+static void set_data(unsigned char *cdbmp, unsigned long base, size_t len) {
+  if (len < 16) { // tunable
     unsigned long byte;
     for (byte = base; byte < base + len; byte++) {
       cdbmp[byte / 8] &= (~(1 << (byte % 8)));
@@ -1400,13 +1405,18 @@ void code_heap_fill(void *h, /* code heap handle */
       break;
     }
   } else {
+    //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %u, %x\n", h, dst, src, len, extra);
+    int area = which_area(m->code_data_bitmap, dst - (void*)m->base_addr, len);
     /* pure code */
-    if (flags & ROCK_COPY)
+    if (flags & ROCK_COPY) {
+      assert(ROCK_DATA == area);
       memcpy(p, src, len);
-
-    if (flags & ROCK_REPLACE)
+      flags &= ROCK_VERIFY;
+    }
+    if (flags & ROCK_REPLACE) {
+      assert(ROCK_CODE == area);
       memcpy(p, src, len);
-
+    }
     set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
   }
 }
