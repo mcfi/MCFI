@@ -631,8 +631,13 @@ extern void *create_parallel_mapping(void *base,
                                      size_t size,
                                      int prot);
 
-void *create_code_heap(void **ph, size_t size) {
+void *create_code_heap(void **ph, size_t size, struct verifier_t *verifier) {
   code_module* m = alloc_code_module();
+  if (verifier == 0) {
+    dprintf(STDERR_FILENO, "[rock_create_code_heap] illegal verifier\n");
+    quit(-1);
+  }
+  //dprintf(STDERR_FILENO, "%p\n", verifier);
   if (!ph || (size_t)ph > FourGB) {
     dprintf(STDERR_FILENO,
             "[rock_create_code_heap] illegal pointer to shadow code heap\n");
@@ -656,6 +661,7 @@ void *create_code_heap(void **ph, size_t size) {
   m->sz = size;
   m->activated = TRUE;
   m->code_heap = TRUE;
+  m->verifier = verifier;
   m->code_data_bitmap = mmap(NULL, RoundToPage(size/8), PROT_WRITE,
                              MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   if (m->code_data_bitmap == (void*)-1) {
@@ -1093,6 +1099,7 @@ void delete_code(void *h, /* handle */
     dprintf(STDERR_FILENO, "[rock_delete_code] illegal %x, %x\n", addr, length);
     quit(-1);
   }
+  //dprintf(STDERR_FILENO, "[rock_delete_code] %x, %x\n", addr, length);
   set_data(m->code_data_bitmap, addr - m->base_addr, length);
   addr = addr & (-8);
   length = length & (-8);
@@ -1110,6 +1117,7 @@ void move_code(void *h,
                uintptr_t source,
                size_t length) {
   code_module *m = (code_module*)h;
+
   if (target < m->base_addr || target + length >= m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_move_code] illegal target %x\n", target);
     quit(-1);
@@ -1118,7 +1126,7 @@ void move_code(void *h,
     dprintf(STDERR_FILENO, "[rock_move_code] illegal source %x\n", source);
     quit(-1);
   }
-  
+  //dprintf(STDERR_FILENO, "[rock_move_code] %x, %x, %u\n", target, source, length);
   set_data(m->code_data_bitmap, source - m->base_addr, length);
   set_code(m->code_data_bitmap, target - m->base_addr, length);
   target = target & (-8);
@@ -1366,6 +1374,64 @@ static int code(unsigned long flags) {
   return (flags & ROCK_CODE);
 }
 
+/* verify the jitted code */
+static int verify(code_module *m,
+                  unsigned char* cur, unsigned char *end,
+                  uint16_t start, uint16_t *end_state, unsigned char** endptr) {
+  verifier *v = m->verifier;
+  uint16_t state = start;
+  while (cur < end) {
+    //dprintf(STDERR_FILENO, "%u\n", state);
+    state = dfa_lookup(v, state, *cur++);
+    if (0 == state) {
+      return -1;
+    } else if (accepts_mcficall(v, state) ||
+               accepts_mcfiret(v, state) ||
+               accepts_mcficheck(v, state) ||
+               accepts_dcall(v, state) ||
+               accepts_icall(v, state) ||
+               accepts_jmp_rel1(v, state) ||
+               accepts_jmp_rel4(v, state)) {
+      *end_state = state;
+      *endptr = cur;
+      return 0;
+    } else if (accepts(v, state)) {
+      *end_state = state;
+      *endptr = cur;
+      verify(m, cur, end, state, end_state, endptr);
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int verify_jitted_code(code_module *m, unsigned char *data, size_t size) {
+  int result = 0;
+  uint8_t *ptr = data;
+  uint8_t *end = data + size;
+  uint8_t *endptr = 0;
+  uint16_t state;
+  uint8_t *i;
+
+  int line = 1;
+  while (ptr < end) {
+    result = verify(m, ptr, end, m->verifier->start, &state, &endptr);
+    //for (i = ptr; i < endptr; i++)
+    //  dprintf(STDERR_FILENO, "0x%02x ", *i);
+    //dprintf(STDERR_FILENO, "\n");
+
+    if (result != 0) {
+      for (ptr = data; ptr < end; ptr++) {
+        dprintf(STDERR_FILENO, "0x%02x ", *ptr);
+      }
+      dprintf(STDERR_FILENO, "Error: %lx\n", ptr - data);
+      quit(-1);
+    }
+    ptr = endptr;
+  }
+  return result;
+}
+
 /* use [src, len) to fill [dst, len) */
 void code_heap_fill(void *h, /* code heap handle */
                     void *dst,
@@ -1385,6 +1451,7 @@ void code_heap_fill(void *h, /* code heap handle */
     /* the entire data should be either in data areas or code areas */
     int area = which_area(m->code_data_bitmap, dst - (void*)m->base_addr, len);
     if (ROCK_INVALID == area) {
+      //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %u, %x\n", h, dst, src, len, extra);
       unsigned long *rsp = (unsigned long*)thread_self()->user_ctx.rsp;
       dprintf(STDERR_FILENO, "[code_heap_fill data] crossing boundary of code and data %p, %x\n",
               thread_self()->continuation, *rsp);
@@ -1413,10 +1480,21 @@ void code_heap_fill(void *h, /* code heap handle */
       memcpy(p, src, len);
       flags &= ROCK_VERIFY;
     }
+
+    if (flags & ROCK_VERIFY) {
+      verify_jitted_code(m, dst, len);
+      set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
+    }
+
     if (flags & ROCK_REPLACE) {
-      assert(ROCK_CODE == area);
+      //dprintf(STDERR_FILENO, "[cdbmp] %x\n", m->code_data_bitmap[(size_t)dst/8]);
+      if (ROCK_CODE != area) {
+        //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %u, %x, %d, %x\n",
+        //        h, dst, src, len, extra, area, m->code_data_bitmap[(size_t)dst/8]);
+        return;
+      }
+      //verify_jitted_code(m, dst, len);
       memcpy(p, src, len);
     }
-    set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
   }
 }

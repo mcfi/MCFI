@@ -27,6 +27,7 @@ enum Qualifiers {
 };
 
 typedef struct code_module_t code_module;
+typedef struct verifier_t verifier;
 typedef struct function_t function;
 typedef struct icf_t icf;
 typedef struct sym_t sym;
@@ -116,6 +117,21 @@ static symbol *alloc_sym(void) {
   return r;
 };
 
+struct verifier_t {
+  uint16_t *dfa;
+  int states;
+  uint16_t start;
+  uint16_t dcall;
+  uint16_t icall;
+  uint16_t jmp_rel1;
+  uint16_t jmp_rel4;
+  uint16_t mcficall;
+  uint16_t mcficheck;
+  uint16_t mcfiret;
+  int count; // number of accept states
+  uint16_t accept[16]; // point to an array of accept states
+};
+
 /**
  * A code module may be an executable or a *.so library.
  */
@@ -150,6 +166,7 @@ struct code_module_t {
   int      activated;     /* whether indirect branch targets are activated by default */
   int      code_heap;  /* whether this code module is a code_heap created for allowing changing */
   unsigned char*    code_data_bitmap;/* remembers what areas are code and what areas are data */
+  struct verifier_t *verifier; /* pointer to the verifier */
 };
 
 static code_module *alloc_code_module(void) {
@@ -157,6 +174,48 @@ static code_module *alloc_code_module(void) {
   if (!cm) oom();
   memset(cm, 0, sizeof(*cm));
   return cm;
+}
+
+static uint16_t dfa_lookup(const struct verifier_t* v, uint16_t state, uint16_t byte) {
+  return v->dfa[(uint32_t)state * 256 + byte];
+}
+
+static int accepts(const struct verifier_t* v, uint16_t state) {
+  int i;
+  int result = FALSE;
+  for (i = 0; i < v->count; i++) {
+    if (v->accept[i] == state)
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static int accepts_dcall(const struct verifier_t* v, uint16_t state) {
+  return v->dcall == state;
+}
+
+static int accepts_icall(const struct verifier_t* v, uint16_t state) {
+  return v->icall == state;
+}
+
+static int accepts_jmp_rel1(const struct verifier_t* v, uint16_t state) {
+  return v->jmp_rel1 == state;
+}
+
+static int accepts_jmp_rel4(const struct verifier_t* v, uint16_t state) {
+  return v->jmp_rel4 == state;
+}
+
+static int accepts_mcficall(const struct verifier_t* v, uint16_t state) {
+  return v->mcficall == state;
+}
+
+static int accepts_mcficheck(const struct verifier_t* v, uint16_t state) {
+  return v->mcficheck == state;
+}
+
+static int accepts_mcfiret(const struct verifier_t* v, uint16_t state) {
+  return v->mcfiret == state;
 }
 
 /**
