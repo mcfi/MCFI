@@ -371,6 +371,18 @@ static void print_cfgcc(void *cc) {
   }
 }
 
+static void update_thesc(void) {
+  TCB *tcb = tcb_list;
+  while (tcb) {
+    if (!tcb->remove) {
+      keyvalue *thesc = dict_find(thread_escape_map, tcb);
+      assert(thesc);
+      thesc->value = (void*)tcb->sandbox_escape;
+    }
+    tcb = tcb->next;
+  }
+}
+
 static int safe(void) {
   TCB *tcb = tcb_list;
   int safe = TRUE;
@@ -383,12 +395,11 @@ static int safe(void) {
       /* neither the thread is in a system call, nor
        * has the thread invoked any system calls */
       if (!tcb->insyscall && thescs == (unsigned long)thesc->value)
-        safe = FALSE;
-      thesc->value = (void*)thescs;
+        return FALSE;
     }
     tcb = tcb->next;
   }
-  return safe;
+  return TRUE;
 }
 
 /* Version Space
@@ -527,6 +538,9 @@ int gen_cfg(void) {
     }
     dict_clear(&patch_compensate);
   }
+
+  /* update the counters */
+  update_thesc();
   return 0;
 }
 
@@ -1447,6 +1461,68 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
   return result;
 }
 
+/* test whether the old code and the new code patch have the same internal
+   pseudo-inst boundary */
+static int same_internal_boundary(char* old_tary, char* tary,
+                                  char *safe_old_code, char* safe_code, size_t len) {
+  size_t i;
+  int result = TRUE;
+  for (i = 0; i < len; i++) {
+    if (old_tary[i] != tary[i]) {
+      result = FALSE;
+    }
+    if ((int)old_tary[i] == DCV) {
+      safe_old_code[i] = DCV;
+    }
+    if ((int)tary[i] == DCV) {
+      safe_code[i] = DCV;
+    }
+  }
+  return result;
+}
+
+static void cpuid(void) {
+  __asm__ __volatile__("cpuid":::"rax", "rbx", "rcx", "rdx");
+}
+
+static void wait(void) {
+  static unsigned long thread_escapes[256]; // at most 128 threads can be handled
+  TCB *tcb = tcb_list;
+  int count = 0;
+  /* record the thread escapes for all threads that are not trapped in
+     system calls */
+  while (tcb && count < 256) {
+    if (!tcb->remove) {
+      if (!tcb->insyscall) {
+        thread_escapes[count++] = (unsigned long)tcb;
+        thread_escapes[count++] = tcb->sandbox_escape;
+      }
+    }
+    tcb = tcb->next;
+  }
+  if (count >= 256) {
+    dprintf(STDERR_FILENO, "[wait] too many threads\n");
+    quit(-1);
+  }
+  /* check to see if all threads have executed at least one system call */
+  int safe = FALSE;
+  while (!safe) {
+    safe = TRUE;
+    int i;
+    for (i = 0; i < count; i += 2) {
+      tcb = (TCB*)thread_escapes[i];
+      if (tcb) {
+        if (tcb->insyscall)
+          thread_escapes[i] = 0;  // clear this thread
+        else if (tcb->sandbox_escape == thread_escapes[i+1]) {
+          safe = FALSE;
+          break;
+        }
+      }
+    }
+  }
+}
+
 /* use [src, len) to fill [dst, len) */
 void code_heap_fill(void *h, /* code heap handle */
                     void *dst,
@@ -1511,8 +1587,55 @@ void code_heap_fill(void *h, /* code heap handle */
         //        h, dst, src, len, extra, area, m->code_data_bitmap[(size_t)dst/8]);
         return;
       }
-      //verify_jitted_code(m, dst, len);
-      memcpy(p, src, len);
+      char *code = malloc(len*5);
+      char *tary = code + len;
+      char *old_tary = code + len*2;
+      char *safe_old_code = code + len*3;
+      char *safe_code = code + len*4;
+      // copy out the code
+      memcpy(code, src, len);
+      // copy out the safe old code
+      memcpy(safe_old_code, dst, len);
+      // copy out the safe code
+      memcpy(safe_code, src, len);
+      // copy out the old tary part
+      memcpy(old_tary, table + (uintptr_t)dst, len);
+      verify_jitted_code(m, code, len, tary);
+      if (same_internal_boundary(old_tary, tary, safe_old_code, safe_code, len)) {
+        /* if the patch is within [8-byte aligned address, 8), then
+           we use an 8-byte write to atomically write it */
+        void *p_align = (void*)((unsigned long)p & (~7));
+        if (p + len <= p_align + 8) {
+          unsigned long v = *(unsigned long*)p_align;
+          memcpy((char*)&v + (p - p_align), p, len);
+          *(unsigned long*)p_align = v;
+        } else {
+          /* patch every instruction's first byte to be DCV */
+          memcpy(p, safe_old_code, len);
+          /* do a cpuid to sync all current instruction streams */
+          cpuid();
+          /* copy the rest of each instruction */
+          memcpy(p, safe_code, len);
+          /* do a cpuid to sync all current instruction streams */
+          cpuid();
+          /* copy the first byte back */
+          memcpy(p, code, len);
+        }
+      } else {
+        /* patch every instruction's first byte to be DCV */
+        memcpy(p, safe_old_code, len);
+        /* clear the tary table */
+        memset(table + (uintptr_t)dst, 0x00, len);
+        /* wait after a grace period so that no thread is running in the region */
+        wait();
+        /* copy the safe version of the new code */
+        memcpy(p, safe_code, len);
+        /* set the tary table */
+        memcpy(table + (uintptr_t)dst, tary, len);
+        /* copy the actual code */
+        memcpy(p, code, len);
+      }
+      free(code);
     }
   }
 }
