@@ -1405,15 +1405,15 @@ static int verify(code_module *m,
   return 1;
 }
 
-static int verify_jitted_code(code_module *m, unsigned char *data, size_t size) {
+static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, char *tary) {
   int result = 0;
   uint8_t *ptr = data;
   uint8_t *end = data + size;
   uint8_t *endptr = 0;
   uint16_t state;
   uint8_t *i;
+  verifier *v = m->verifier;
 
-  int line = 1;
   while (ptr < end) {
     result = verify(m, ptr, end, m->verifier->start, &state, &endptr);
     //for (i = ptr; i < endptr; i++)
@@ -1426,6 +1426,21 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size) 
       }
       dprintf(STDERR_FILENO, "Error: %lx\n", ptr - data);
       quit(-1);
+    }
+    assert(state != 0);
+    tary[ptr - data] = DCV;
+    if (accepts(v, state)) {
+    } else if (accepts_mcficall(v, state)) {
+      if (((uintptr_t)endptr & 0x7) != 0) {
+        dprintf(STDERR_FILENO, "[verify] mcficall at %p not 8-byte aligned\n", ptr);
+        quit(-1);
+      }
+    } else if (accepts_mcfiret(v, state)) {
+    } else if (accepts_mcficheck(v, state)) {
+    } else if (accepts_dcall(v, state)) {
+    } else if (accepts_icall(v, state)) {
+    } else if (accepts_jmp_rel1(v, state)) {
+    } else if (accepts_jmp_rel4(v, state)) {
     }
     ptr = endptr;
   }
@@ -1482,7 +1497,10 @@ void code_heap_fill(void *h, /* code heap handle */
     }
 
     if (flags & ROCK_VERIFY) {
-      verify_jitted_code(m, dst, len);
+      char *tary = malloc(len);
+      verify_jitted_code(m, dst, len, tary);
+      memcpy(table + (uintptr_t)dst, tary, len);
+      free(tary);
       set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
     }
 
