@@ -126,8 +126,8 @@ void rock_patch(unsigned long patchpoint) {
       break;
     }
   }
-  /*
   assert(found);
+  /*
   assert(patchpoint % 8 == 0 ||
          (patchpoint + 3) % 8 == 0||
          (patchpoint + 2) % 8 == 0);

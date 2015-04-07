@@ -510,7 +510,6 @@ int VmmapCheckExistingMapping(struct Vmmap  *self,
         return 0;
       }
       page_num = ent_end_page;
-      npages = region_end_page - ent_end_page;
     } else if (page_num < ent->page_num) {
       /* The mapping without backing store. */
       return 0;

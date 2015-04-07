@@ -25,7 +25,7 @@ ifeq ($(SDK), )
   SDK = $(HOMEDIR)/MCFI/toolchain
 endif
 
-.PHONY: $(RTIME) all release debug build clean
+.PHONY: $(RTIME) all release debug staticcheck build clean
 
 all: release
 
@@ -34,6 +34,9 @@ release: build
 
 debug: CFLAGS+=-O0 -g
 debug: build
+
+staticcheck: CFLAGS+=--analyze
+staticcheck: build
 
 build:
 ifeq ($(STAT), 1)

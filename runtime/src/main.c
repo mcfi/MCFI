@@ -402,9 +402,11 @@ static void stack_init(void) {
   int argc;
   char **argv;
   stack = build_stack(stack);
+  /*
   argc = ((unsigned long*)stack)[0];
   argv = (char**)&((unsigned long*)stack)[1];
-  /* dump_stack(argc, argv); */
+  dump_stack(argc, argv);
+  */
 }
 
 static void extract_elf_load_data(int argc, char **argv) {
