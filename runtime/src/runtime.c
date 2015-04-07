@@ -1662,7 +1662,12 @@ void code_heap_fill(void *h, /* code heap handle */
       memcpy(code, src, len);
       // copy out the safe code
       memcpy(safe_code, src, len);
-      verify_jitted_code(m, (unsigned char*)code, len, tary, (long)dst, FALSE);
+      // check to see if the patch is made at the end of the code
+      area = which_area(m->code_data_bitmap, dst - (void*)m->base_addr + len, 1);
+      if (ROCK_CODE == area)
+        verify_jitted_code(m, (unsigned char*)code, len, tary, (long)dst, FALSE);
+      else
+        verify_jitted_code(m, (unsigned char*)code, len, tary, (long)dst, TRUE);
 
       // same_internal_boundary also patches every instruction's first byte
       // to be DCV
