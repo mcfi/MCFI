@@ -1607,7 +1607,7 @@ void code_heap_fill(void *h, /* code heap handle */
         void *p_align = (void*)((unsigned long)p & (~7));
         if (p + len <= p_align + 8) {
           unsigned long v = *(unsigned long*)p_align;
-          memcpy((char*)&v + (p - p_align), p, len);
+          memcpy((char*)&v + (p - p_align), code, len);
           *(unsigned long*)p_align = v;
         } else {
           /* patch every instruction's first byte to be DCV */
@@ -1627,14 +1627,7 @@ void code_heap_fill(void *h, /* code heap handle */
         /* clear the tary table */
         memset(table + (uintptr_t)dst, 0x00, len);
         /* wait after a grace period so that no thread is running in the region */
-        /* TODO: adding the wait() call makes v8 crash sometimes. I guess it might
-           be the case that the patching has to be done within a certain amount of
-           time. For v8, it is okay if we just don't do wait, because at any time
-           there is only one thread patching itself. It is hard for attackers to
-           control the compilation thread and sweeper threads since they don't deal
-           with any user inputs. In addition, the patched code never blocks.
-        */
-        //wait();
+        wait();
         /* copy the safe version of the new code */
         memcpy(p, safe_code, len);
         /* set the tary table */
