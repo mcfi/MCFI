@@ -1587,20 +1587,27 @@ void code_heap_fill(void *h, /* code heap handle */
         //        h, dst, src, len, extra, area, m->code_data_bitmap[(size_t)dst/8]);
         return;
       }
-      char *code = malloc(len*5);
+      // Code patches should start at an instruction boundary
+      // TODO: mcficall return sites may also be a patch point in general, but since
+      //       it is not for v8, we will consider it later.
+      if (((char*)table)[(uintptr_t)dst] != (char)DCV) {
+        dprintf(STDERR_FILENO,
+                "[code_heap_fill replace] the patch does not start at an instruction boudary\n");
+        quit(-1);
+      }
+      char *code = malloc(len*3);
       char *tary = code + len;
-      char *old_tary = code + len*2;
-      char *safe_old_code = code + len*3;
-      char *safe_code = code + len*4;
+      char *safe_code = code + len*2;
+      char *old_tary = (char*)table + (uintptr_t)dst;
+      char *safe_old_code = code;
       // copy out the code
       memcpy(code, src, len);
-      // copy out the safe old code
-      memcpy(safe_old_code, dst, len);
       // copy out the safe code
       memcpy(safe_code, src, len);
-      // copy out the old tary part
-      memcpy(old_tary, table + (uintptr_t)dst, len);
       verify_jitted_code(m, code, len, tary);
+
+      // same_internal_boundary also patches every instruction's first byte
+      // to be DCV
       if (same_internal_boundary(old_tary, tary, safe_old_code, safe_code, len)) {
         /* if the patch is within [8-byte aligned address, 8), then
            we use an 8-byte write to atomically write it */
@@ -1611,7 +1618,7 @@ void code_heap_fill(void *h, /* code heap handle */
           *(unsigned long*)p_align = v;
         } else {
           /* patch every instruction's first byte to be DCV */
-          memcpy(p, safe_old_code, len);
+          // Already done by same_internal_boundary
           /* do a cpuid to sync all current instruction streams */
           cpuid();
           /* copy the rest of each instruction */
@@ -1623,17 +1630,20 @@ void code_heap_fill(void *h, /* code heap handle */
         }
       } else {
         /* patch every instruction's first byte to be DCV */
-        memcpy(p, safe_old_code, len);
+        // Already done by same_internal_boundary
         /* clear the tary table */
         memset(table + (uintptr_t)dst, 0x00, len);
         /* wait after a grace period so that no thread is running in the region */
         wait();
-        /* copy the safe version of the new code */
-        memcpy(p, safe_code, len);
+        /* copy the the new code, but leave the first instruction's opcode to DCV
+           to prevent any thread entering the patch before it is done. This assumes
+           that there should be no direct branch targeting any internal part of the
+           patched code, which seems to be reasonable. */
+        memcpy((char*)p + 1, code + 1, len - 1);
         /* set the tary table */
         memcpy(table + (uintptr_t)dst, tary, len);
-        /* copy the actual code */
-        memcpy(p, code, len);
+        /* copy the first instruction's opcode */
+        *(char*)p = *code;
       }
       free(code);
     }
