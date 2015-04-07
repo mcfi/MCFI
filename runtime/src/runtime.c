@@ -1389,10 +1389,9 @@ static int code(unsigned long flags) {
 }
 
 /* verify the jitted code */
-static int verify(code_module *m,
-                  unsigned char* cur, unsigned char *end,
+static int verify(const struct verifier_t *v,
+                  unsigned char* cur, const unsigned char *end,
                   uint16_t start, uint16_t *end_state, unsigned char** endptr) {
-  verifier *v = m->verifier;
   uint16_t state = start;
   while (cur < end) {
     //dprintf(STDERR_FILENO, "%u\n", state);
@@ -1416,7 +1415,7 @@ static int verify(code_module *m,
     } else if (accepts(v, state)) {
       *end_state = state;
       *endptr = cur;
-      verify(m, cur, end, state, end_state, endptr);
+      verify(v, cur, end, state, end_state, endptr);
       return 0;
     }
   }
@@ -1444,7 +1443,7 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
   }
 
   while (ptr < end) {
-    result = verify(m, ptr, end, m->verifier->start, &state, &endptr);
+    result = verify(v, ptr, end, m->verifier->start, &state, &endptr);
     /*
     uint8_t *i;
     for (i = ptr; i < endptr; i++)
