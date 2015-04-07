@@ -1605,7 +1605,26 @@ void code_heap_fill(void *h, /* code heap handle */
       dprintf(STDERR_FILENO, "[code_heap_fill data] crossing boundary of code and data %p, %x\n",
               thread_self()->continuation, *rsp);
       quit(-1);
+    } else if (ROCK_CODE == area) {
+      size_t old_len = len;
+      while ((uintptr_t)dst >= m->base_addr &&
+             ((char*)table)[(uintptr_t)dst] != (char)DCV) {
+        --dst;
+        ++len;
+      }
+      //dprintf(STDERR_FILENO, "%p, %d\n", dst, ((char*)table)[(uintptr_t)dst]);
+      void *src_code = malloc(len);
+      assert(src_code);
+      // copy the opcode
+      memcpy(src_code, dst, len - old_len);
+      // copy the patch
+      memcpy(src_code + len - old_len, src, old_len);
+      // do the patch
+      code_heap_fill(h, dst, src_code, len, (void*)(ROCK_CODE | ROCK_REPLACE));
+      free(src_code);
+      return;
     }
+
     switch (len) {
     case 1:
       *((char*)p) = *((char*)src);
@@ -1621,7 +1640,7 @@ void code_heap_fill(void *h, /* code heap handle */
       break;
     }
   } else {
-    //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %u, %x\n", h, dst, src, len, extra);
+    //dprintf(STDERR_FILENO, "[code_heap_fill code] %p, %p, %p, %u, %x\n", h, dst, src, len, extra);
     int area = which_area(m->code_data_bitmap, dst - (void*)m->base_addr, len);
     /* pure code */
     if (flags & ROCK_COPY) {
@@ -1632,6 +1651,7 @@ void code_heap_fill(void *h, /* code heap handle */
 
     if (flags & ROCK_VERIFY) {
       char *tary = malloc(len);
+      memset(tary, 0, len);
       verify_jitted_code(m, (unsigned char*)dst, len, tary, (long)dst, TRUE);
       memcpy(table + (uintptr_t)dst, tary, len);
       free(tary);
@@ -1655,6 +1675,7 @@ void code_heap_fill(void *h, /* code heap handle */
       }
       char *code = malloc(len*3);
       char *tary = code + len;
+      memset(tary, 0, len);
       char *safe_code = code + len*2;
       char *old_tary = (char*)table + (uintptr_t)dst;
       char *safe_old_code = code;
