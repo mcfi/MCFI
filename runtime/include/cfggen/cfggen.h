@@ -123,11 +123,15 @@ struct verifier_t {
   uint16_t start;
   uint16_t dcall;
   uint16_t icall;
+  uint16_t ijmp;
   uint16_t jmp_rel1;
   uint16_t jmp_rel4;
+  uint16_t jcc_rel1;
+  uint16_t jcc_rel4;
   uint16_t mcficall;
   uint16_t mcficheck;
   uint16_t mcfiret;
+  uint16_t terminator;
   int count; // number of accept states
   uint16_t accept[16]; // point to an array of accept states
 };
@@ -198,12 +202,24 @@ static int accepts_icall(const struct verifier_t* v, uint16_t state) {
   return v->icall == state;
 }
 
+static int accepts_ijmp(const struct verifier_t* v, uint16_t state) {
+  return v->ijmp == state;
+}
+
 static int accepts_jmp_rel1(const struct verifier_t* v, uint16_t state) {
   return v->jmp_rel1 == state;
 }
 
 static int accepts_jmp_rel4(const struct verifier_t* v, uint16_t state) {
   return v->jmp_rel4 == state;
+}
+
+static int accepts_jcc_rel1(const struct verifier_t* v, uint16_t state) {
+  return v->jcc_rel1 == state;
+}
+
+static int accepts_jcc_rel4(const struct verifier_t* v, uint16_t state) {
+  return v->jcc_rel4 == state;
 }
 
 static int accepts_mcficall(const struct verifier_t* v, uint16_t state) {
@@ -216,6 +232,18 @@ static int accepts_mcficheck(const struct verifier_t* v, uint16_t state) {
 
 static int accepts_mcfiret(const struct verifier_t* v, uint16_t state) {
   return v->mcfiret == state;
+}
+
+static int accepts_terminator(const struct verifier_t* v, uint16_t state) {
+  return v->terminator == state;
+}
+
+static int terminator(const struct verifier_t* v, uint16_t state) {
+  return accepts_terminator(v, state) || accepts_dcall(v, state) ||
+    accepts_icall(v, state) || accepts_ijmp(v, state) ||
+    accepts_jmp_rel1(v, state) || accepts_jmp_rel4(v, state) ||
+    accepts_mcficall(v, state) || accepts_mcficheck(v, state) ||
+    accepts_mcfiret(v, state);
 }
 
 /**

@@ -1404,8 +1404,12 @@ static int verify(code_module *m,
                accepts_mcficheck(v, state) ||
                accepts_dcall(v, state) ||
                accepts_icall(v, state) ||
+               accepts_ijmp(v, state) ||
                accepts_jmp_rel1(v, state) ||
-               accepts_jmp_rel4(v, state)) {
+               accepts_jmp_rel4(v, state) ||
+               accepts_jcc_rel1(v, state) ||
+               accepts_jcc_rel4(v, state) ||
+               accepts_terminator(v, state)) {
       *end_state = state;
       *endptr = cur;
       return 0;
@@ -1420,7 +1424,7 @@ static int verify(code_module *m,
 }
 
 static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, char *tary,
-                              long install_addr) {
+                              long install_addr, int check_terminate) {
   int result = 0;
   uint8_t *ptr = data;
   uint8_t *end = data + size;
@@ -1462,7 +1466,6 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
         dprintf(STDERR_FILENO, "[verify] mcficall at %p not 8-byte aligned\n", ptr);
         quit(-1);
       }
-    } else if (accepts_mcfiret(v, state)) {
     } else if (accepts_mcficheck(v, state)) {
     } else if (accepts_dcall(v, state)) {
       int offset = *(int*)(endptr - 4);
@@ -1472,8 +1475,7 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
       //dprintf(STDERR_FILENO, "c4, %lx, %lx, %d\n", ptr, target, offset);
       // target would be in the sandbox, so the following cast is secure
       jmp_targets[jmp_count++] = (unsigned)target;
-    } else if (accepts_icall(v, state)) {
-    } else if (accepts_jmp_rel1(v, state)) {
+    } else if (accepts_jmp_rel1(v, state) || accepts_jcc_rel1(v, state)) {
       char offset = *(char*)(endptr - 1);
       long target = install_addr + endptr - data + (long)offset;
       assert((uintptr_t)target >= m->base_addr &&
@@ -1481,7 +1483,7 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
       //dprintf(STDERR_FILENO, "j1, %lx, %lx, %d\n", ptr, target, offset);
       // target would be in the sandbox, so the following cast is secure
       jmp_targets[jmp_count++] = (unsigned)target;
-    } else if (accepts_jmp_rel4(v, state)) {
+    } else if (accepts_jmp_rel4(v, state) || accepts_jcc_rel4(v, state)) {
       int offset = *(int*)(endptr - 4);
       long target = install_addr + endptr - data + (long)offset;
       assert((uintptr_t)target >= m->base_addr &&
@@ -1491,6 +1493,12 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
       jmp_targets[jmp_count++] = (unsigned)target;
     }
     ptr = endptr;
+  }
+  // if we are installing new code, we should make sure the code ends with a terminator
+  if (check_terminate && !terminator(v, state)) {
+    dprintf(STDERR_FILENO,
+            "[verify jitted code] the code does not end with a safe instruction, %p\n", data);
+    quit(-1);
   }
   unsigned i;
   for (i = 0; i < jmp_count; i++) {
@@ -1624,7 +1632,7 @@ void code_heap_fill(void *h, /* code heap handle */
 
     if (flags & ROCK_VERIFY) {
       char *tary = malloc(len);
-      verify_jitted_code(m, (unsigned char*)dst, len, tary, (long)dst);
+      verify_jitted_code(m, (unsigned char*)dst, len, tary, (long)dst, TRUE);
       memcpy(table + (uintptr_t)dst, tary, len);
       free(tary);
       set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
@@ -1654,7 +1662,7 @@ void code_heap_fill(void *h, /* code heap handle */
       memcpy(code, src, len);
       // copy out the safe code
       memcpy(safe_code, src, len);
-      verify_jitted_code(m, (unsigned char*)code, len, tary, (long)dst);
+      verify_jitted_code(m, (unsigned char*)code, len, tary, (long)dst, FALSE);
 
       // same_internal_boundary also patches every instruction's first byte
       // to be DCV
