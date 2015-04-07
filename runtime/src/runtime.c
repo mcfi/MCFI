@@ -1419,21 +1419,34 @@ static int verify(code_module *m,
   return 1;
 }
 
-static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, char *tary) {
+static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, char *tary,
+                              long install_addr) {
   int result = 0;
   uint8_t *ptr = data;
   uint8_t *end = data + size;
   uint8_t *endptr = 0;
   uint16_t state;
-  uint8_t *i;
   verifier *v = m->verifier;
+  unsigned jmp_count = 0;
+  /* for each direct call/jump instruction, we need a 4-byte slot to record
+     its target address. For a code piece of size, there are (size + 1) / 2
+     direct call/jmp instructions at most, since a direct call/jmp instruction
+     is at least 2 bytes.
+  */
+  unsigned *jmp_targets = malloc(2 * (size + 1));
+  if (!jmp_targets) {
+    dprintf(STDERR_FILENO, "[verify_jitted_code] jmp_targets allocation failed\n");
+    quit(-1);
+  }
 
   while (ptr < end) {
     result = verify(m, ptr, end, m->verifier->start, &state, &endptr);
-    //for (i = ptr; i < endptr; i++)
-    //  dprintf(STDERR_FILENO, "0x%02x ", *i);
-    //dprintf(STDERR_FILENO, "\n");
-
+    /*
+    uint8_t *i;
+    for (i = ptr; i < endptr; i++)
+      dprintf(STDERR_FILENO, "0x%02x ", *i);
+    dprintf(STDERR_FILENO, "\n");
+    */
     if (result != 0) {
       for (ptr = data; ptr < end; ptr++) {
         dprintf(STDERR_FILENO, "0x%02x ", *ptr);
@@ -1452,12 +1465,49 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
     } else if (accepts_mcfiret(v, state)) {
     } else if (accepts_mcficheck(v, state)) {
     } else if (accepts_dcall(v, state)) {
+      int offset = *(int*)(endptr - 4);
+      long target = install_addr + endptr - data + (long)offset;
+      assert((uintptr_t)target >= m->base_addr &&
+             (uintptr_t)target <  m->base_addr + m->sz);
+      //dprintf(STDERR_FILENO, "c4, %lx, %lx, %d\n", ptr, target, offset);
+      // target would be in the sandbox, so the following cast is secure
+      jmp_targets[jmp_count++] = (unsigned)target;
     } else if (accepts_icall(v, state)) {
     } else if (accepts_jmp_rel1(v, state)) {
+      char offset = *(char*)(endptr - 1);
+      long target = install_addr + endptr - data + (long)offset;
+      assert((uintptr_t)target >= m->base_addr &&
+             (uintptr_t)target <  m->base_addr + m->sz);
+      //dprintf(STDERR_FILENO, "j1, %lx, %lx, %d\n", ptr, target, offset);
+      // target would be in the sandbox, so the following cast is secure
+      jmp_targets[jmp_count++] = (unsigned)target;
     } else if (accepts_jmp_rel4(v, state)) {
+      int offset = *(int*)(endptr - 4);
+      long target = install_addr + endptr - data + (long)offset;
+      assert((uintptr_t)target >= m->base_addr &&
+             (uintptr_t)target <  m->base_addr + m->sz);
+      //dprintf(STDERR_FILENO, "j4, %lx, %lx, %d\n", ptr, target, offset);
+      // target would be in the sandbox, so the following cast is secure
+      jmp_targets[jmp_count++] = (unsigned)target;
     }
     ptr = endptr;
   }
+  unsigned i;
+  for (i = 0; i < jmp_count; i++) {
+    if (jmp_targets[i] < (unsigned)install_addr ||
+        jmp_targets[i] >= (unsigned)install_addr + size) {
+      if (*(char*)(table + jmp_targets[i]) != (char)DCV) {
+        dprintf(STDERR_FILENO, "jmp_targets wrong %x\n", jmp_targets[i]);
+        quit(-1);
+      }
+    } else {
+      if (tary[jmp_targets[i] - (unsigned)install_addr] != (char)DCV) {
+        dprintf(STDERR_FILENO, "jmp_targets wrong %x\n", jmp_targets[i]);
+        quit(-1);
+      }
+    }
+  }
+  free(jmp_targets);
   return result;
 }
 
@@ -1574,7 +1624,7 @@ void code_heap_fill(void *h, /* code heap handle */
 
     if (flags & ROCK_VERIFY) {
       char *tary = malloc(len);
-      verify_jitted_code(m, dst, len, tary);
+      verify_jitted_code(m, (unsigned char*)dst, len, tary, (long)dst);
       memcpy(table + (uintptr_t)dst, tary, len);
       free(tary);
       set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
@@ -1604,7 +1654,7 @@ void code_heap_fill(void *h, /* code heap handle */
       memcpy(code, src, len);
       // copy out the safe code
       memcpy(safe_code, src, len);
-      verify_jitted_code(m, code, len, tary);
+      verify_jitted_code(m, (unsigned char*)code, len, tary, (long)dst);
 
       // same_internal_boundary also patches every instruction's first byte
       // to be DCV
