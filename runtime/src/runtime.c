@@ -1633,7 +1633,7 @@ void code_heap_fill(void *h, /* code heap handle */
         // Already done by same_internal_boundary
         /* clear the tary table */
         memset(table + (uintptr_t)dst, 0x00, len);
-        /* wait after a grace period so that no thread is running in the region */
+        /* wait after a grace period so that no thread is sleeping in the region */
         wait();
         /* copy the the new code, but leave the first instruction's opcode to DCV
            to prevent any thread entering the patch before it is done. This assumes
