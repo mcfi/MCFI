@@ -132,8 +132,7 @@ struct verifier_t {
   uint16_t mcficheck;
   uint16_t mcfiret;
   uint16_t terminator;
-  int count; // number of accept states
-  uint16_t accept[16]; // point to an array of accept states
+  uint16_t max_accept; // point to an array of accept states
 };
 
 /**
@@ -185,13 +184,12 @@ static uint16_t dfa_lookup(const struct verifier_t* v, uint16_t state, uint16_t 
 }
 
 static int accepts(const struct verifier_t* v, uint16_t state) {
-  int i;
-  int result = FALSE;
-  for (i = 0; i < v->count; i++) {
-    if (v->accept[i] == state)
-      return TRUE;
-  }
-  return FALSE;
+  /* accept states should be contiguous */
+  return state <= v->max_accept && state > 0;
+}
+
+static int accepts_others(const struct verifier_t* v, uint16_t state) {
+  return state > v->max_accept && state < v->start;
 }
 
 static int accepts_dcall(const struct verifier_t* v, uint16_t state) {

@@ -1396,27 +1396,24 @@ static int verify(const struct verifier_t *v,
   while (cur < end) {
     //dprintf(STDERR_FILENO, "%u\n", state);
     state = dfa_lookup(v, state, *cur++);
-    if (0 == state) {
+    if (state >= v->start)
+      continue;
+    else if (accepts(v, state)) {
+      *end_state = state;
+      *endptr = cur;
+      if (cur + 1 < end) {
+        /* look one state ahead to postpone the recursive call*/
+        uint16_t next_state = dfa_lookup(v, state, *cur++);
+        if (next_state != 0)
+          verify(v, cur, end, next_state, end_state, endptr);
+      }
+      return 0;
+    } else if (accepts_others(v, state)) {
+      *end_state = state;
+      *endptr = cur;
+      return 0;
+    } else if (0 == state) {
       return -1;
-    } else if (accepts_mcficall(v, state) ||
-               accepts_mcfiret(v, state) ||
-               accepts_mcficheck(v, state) ||
-               accepts_dcall(v, state) ||
-               accepts_icall(v, state) ||
-               accepts_ijmp(v, state) ||
-               accepts_jmp_rel1(v, state) ||
-               accepts_jmp_rel4(v, state) ||
-               accepts_jcc_rel1(v, state) ||
-               accepts_jcc_rel4(v, state) ||
-               accepts_terminator(v, state)) {
-      *end_state = state;
-      *endptr = cur;
-      return 0;
-    } else if (accepts(v, state)) {
-      *end_state = state;
-      *endptr = cur;
-      verify(v, cur, end, state, end_state, endptr);
-      return 0;
     }
   }
   return 1;
@@ -1457,39 +1454,39 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
       dprintf(STDERR_FILENO, "Error: %lx\n", ptr - data);
       quit(-1);
     }
-    assert(state != 0);
+    //assert(state != 0);
     tary[ptr - data] = DCV;
-    if (accepts(v, state)) {
-    } else if (accepts_mcficall(v, state)) {
-      if (((uintptr_t)endptr & 0x7) != 0) {
-        dprintf(STDERR_FILENO, "[verify] mcficall at %p not 8-byte aligned\n", ptr);
-        quit(-1);
+    if (state > v->max_accept) {
+      if (accepts_jmp_rel1(v, state) || accepts_jcc_rel1(v, state)) {
+        char offset = *(char*)(endptr - 1);
+        long target = install_addr + endptr - data + (long)offset;
+        assert((uintptr_t)target >= m->base_addr &&
+               (uintptr_t)target <  m->base_addr + m->sz);
+        //dprintf(STDERR_FILENO, "j1, %lx, %lx, %d\n", ptr, target, offset);
+        // target would be in the sandbox, so the following cast is secure
+        jmp_targets[jmp_count++] = (unsigned)target;
+      } else if (accepts_jmp_rel4(v, state) || accepts_jcc_rel4(v, state)) {
+        int offset = *(int*)(endptr - 4);
+        long target = install_addr + endptr - data + (long)offset;
+        assert((uintptr_t)target >= m->base_addr &&
+               (uintptr_t)target <  m->base_addr + m->sz);
+        //dprintf(STDERR_FILENO, "j4, %lx, %lx, %d\n", ptr, target, offset);
+        // target would be in the sandbox, so the following cast is secure
+        jmp_targets[jmp_count++] = (unsigned)target;
+      } else if (accepts_dcall(v, state)) {
+        int offset = *(int*)(endptr - 4);
+        long target = install_addr + endptr - data + (long)offset;
+        assert((uintptr_t)target >= m->base_addr &&
+               (uintptr_t)target <  m->base_addr + m->sz);
+        //dprintf(STDERR_FILENO, "c4, %lx, %lx, %d\n", ptr, target, offset);
+        // target would be in the sandbox, so the following cast is secure
+        jmp_targets[jmp_count++] = (unsigned)target;
+      } else if (accepts_mcficall(v, state)) {
+        if (((uintptr_t)endptr & 0x7) != 0) {
+          dprintf(STDERR_FILENO, "[verify] mcficall at %p not 8-byte aligned\n", ptr);
+          quit(-1);
+        }
       }
-    } else if (accepts_mcficheck(v, state)) {
-    } else if (accepts_dcall(v, state)) {
-      int offset = *(int*)(endptr - 4);
-      long target = install_addr + endptr - data + (long)offset;
-      assert((uintptr_t)target >= m->base_addr &&
-             (uintptr_t)target <  m->base_addr + m->sz);
-      //dprintf(STDERR_FILENO, "c4, %lx, %lx, %d\n", ptr, target, offset);
-      // target would be in the sandbox, so the following cast is secure
-      jmp_targets[jmp_count++] = (unsigned)target;
-    } else if (accepts_jmp_rel1(v, state) || accepts_jcc_rel1(v, state)) {
-      char offset = *(char*)(endptr - 1);
-      long target = install_addr + endptr - data + (long)offset;
-      assert((uintptr_t)target >= m->base_addr &&
-             (uintptr_t)target <  m->base_addr + m->sz);
-      //dprintf(STDERR_FILENO, "j1, %lx, %lx, %d\n", ptr, target, offset);
-      // target would be in the sandbox, so the following cast is secure
-      jmp_targets[jmp_count++] = (unsigned)target;
-    } else if (accepts_jmp_rel4(v, state) || accepts_jcc_rel4(v, state)) {
-      int offset = *(int*)(endptr - 4);
-      long target = install_addr + endptr - data + (long)offset;
-      assert((uintptr_t)target >= m->base_addr &&
-             (uintptr_t)target <  m->base_addr + m->sz);
-      //dprintf(STDERR_FILENO, "j4, %lx, %lx, %d\n", ptr, target, offset);
-      // target would be in the sandbox, so the following cast is secure
-      jmp_targets[jmp_count++] = (unsigned)target;
     }
     ptr = endptr;
   }
