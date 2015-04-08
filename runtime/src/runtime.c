@@ -1110,11 +1110,21 @@ void delete_code(void *h, /* handle */
                  uintptr_t addr,
                  size_t length) {
   code_module *m = (code_module*)h;
-  if (addr < m->base_addr || addr + length >= m->base_addr + m->sz) {
+  if (addr < m->base_addr || addr + length > m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_delete_code] illegal %x, %x\n", addr, length);
     quit(-1);
   }
   //dprintf(STDERR_FILENO, "[rock_delete_code] %x, %x\n", addr, length);
+  // the to-be deleted code region should not be reachable from direct control-transfer
+  if ((addr > m->base_addr &&
+       ROCK_CODE == which_area(m->code_data_bitmap, addr - m->base_addr - 1, 2)) ||
+      (addr + length < m->base_addr + m->sz &&
+       ROCK_CODE == which_area(m->code_data_bitmap, addr + length - 1, 2))) {
+    dprintf(STDERR_FILENO,
+            "[rock_delete_code] to-be deleted code is reachable "
+            "from sequential control-flow transfer\n");
+    quit(-1);
+  }
   set_data(m->code_data_bitmap, addr - m->base_addr, length);
   addr = addr & (-8);
   length = length & (-8);
