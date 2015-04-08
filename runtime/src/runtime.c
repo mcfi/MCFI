@@ -324,13 +324,13 @@ void *rock_mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
       if ((prot & PROT_WRITE) && (prot & PROT_EXEC)) {
         dprintf(STDERR_FILENO, "[rock_map] mapping WX code heap %p, %x\n", start, len);
         quit(-1);
+      } else {
+        if (ROCK_DATA != which_area(m->code_data_bitmap, (uintptr_t)start - m->base_addr, len)) {
+          dprintf(STDERR_FILENO, "[rock_map] mapping existing code\n");
+          quit(-1);
+        }
       }
 
-      if (prot & PROT_EXEC) {
-        /* TODO: verify */
-      } else if (prot & PROT_WRITE) {
-        assert(ROCK_DATA == which_area(m->code_data_bitmap, (uintptr_t)start - m->base_addr, len));
-      }
       int rs = mprotect(start, len, prot);
       if (rs == 0)
         return start;
