@@ -1127,7 +1127,7 @@ void delete_code(void *h, /* handle */
   }
   set_data(m->code_data_bitmap, addr - m->base_addr, length);
   addr = addr & (-8);
-  length = length & (-8);
+  length = ((length + 7) & (-8));
 
   //dprintf(STDERR_FILENO, "[rock_delete_code] %x, %x\n", addr, length);
   unsigned long *p = (unsigned long*)(table+addr);
@@ -1143,7 +1143,8 @@ void move_code(void *h,
                size_t length) {
   code_module *m = (code_module*)h;
 
-  if (target < m->base_addr || target + length > m->base_addr + m->sz) {
+  if (target < m->base_addr || target + length > m->base_addr + m->sz ||
+      (target & 7)) {
     dprintf(STDERR_FILENO, "[rock_move_code] illegal target %x\n", target);
     quit(-1);
   }
@@ -1171,7 +1172,7 @@ void move_code(void *h,
   set_code(m->code_data_bitmap, target - m->base_addr, length);
   target = target & (-8);
   source = source & (-8);
-  length = length & (-8);
+  length = ((length + 7)& (-8));
 
   //dprintf(STDERR_FILENO, "[rock_move_code] %x, %x, %x\n", target, source, length);
   unsigned long *p = (unsigned long*)(table+target);
@@ -1673,6 +1674,7 @@ void code_heap_fill(void *h, /* code heap handle */
     }
 
     if (flags & ROCK_VERIFY) {
+      assert(((uintptr_t)dst & 7) == 0); // each code piece should start at 8-byte aligned addr
       char *tary = malloc(len);
       memset(tary, 0, len);
       verify_jitted_code(m, (unsigned char*)dst, len, tary, (long)dst, TRUE);
