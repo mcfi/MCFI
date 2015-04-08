@@ -1133,15 +1133,30 @@ void move_code(void *h,
                size_t length) {
   code_module *m = (code_module*)h;
 
-  if (target < m->base_addr || target + length >= m->base_addr + m->sz) {
+  if (target < m->base_addr || target + length > m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_move_code] illegal target %x\n", target);
     quit(-1);
   }
-  if (source < m->base_addr || source + length >= m->base_addr + m->sz) {
+  if (source < m->base_addr || source + length > m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_move_code] illegal source %x\n", source);
     quit(-1);
   }
   //dprintf(STDERR_FILENO, "[rock_move_code] %x, %x, %u\n", target, source, length);
+  if (ROCK_CODE != which_area(m->code_data_bitmap, source - m->base_addr, length)) {
+    dprintf(STDERR_FILENO, "[rock_move_code not code]\n");
+    quit(-1);
+  }
+  if ((source > m->base_addr &&
+      ROCK_CODE == which_area(m->code_data_bitmap, source - m->base_addr - 1, 1)) ||
+      (source + length < m->base_addr + m->sz &&
+       ROCK_CODE == which_area(m->code_data_bitmap, source + length, 1))) {
+    dprintf(STDERR_FILENO, "[rock_move_code not moving all code]\n");
+    quit(-1);
+  }
+  if (ROCK_DATA != which_area(m->code_data_bitmap, target - m->base_addr, length)) {
+    dprintf(STDERR_FILENO, "[rock_move_code not data]\n");
+    quit(-1);
+  }
   set_data(m->code_data_bitmap, source - m->base_addr, length);
   set_code(m->code_data_bitmap, target - m->base_addr, length);
   target = target & (-8);
