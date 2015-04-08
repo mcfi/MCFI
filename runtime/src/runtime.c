@@ -1668,7 +1668,8 @@ void code_heap_fill(void *h, /* code heap handle */
     if (flags & ROCK_COPY) {
       assert(ROCK_DATA == area);
       memcpy(p, src, len);
-      flags &= ROCK_VERIFY;
+      flags |= ROCK_VERIFY;
+      flags &= (~ROCK_REPLACE);
     }
 
     if (flags & ROCK_VERIFY) {
@@ -1678,6 +1679,7 @@ void code_heap_fill(void *h, /* code heap handle */
       memcpy(table + (uintptr_t)dst, tary, len);
       free(tary);
       set_code(m->code_data_bitmap, dst - (void*)m->base_addr, len);
+      flags &= (~ROCK_REPLACE);
     }
 
     if (flags & ROCK_REPLACE) {
