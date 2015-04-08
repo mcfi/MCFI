@@ -1022,6 +1022,7 @@ static size_t count_bits(const unsigned char* bmp, unsigned long base, size_t le
 
 static int which_area(const unsigned char* cdbmp, unsigned long base, size_t len) {
   size_t bitsum = 0;
+  size_t bitlen = len;
 
   if (len < 32) {
     bitsum += count_bits(cdbmp, base, len);
@@ -1032,18 +1033,18 @@ static int which_area(const unsigned char* cdbmp, unsigned long base, size_t len
       len -= (8 - (base - base_align));
       base = base_align + 8;
     }
-    if ((len & 7) != 0) {
-      size_t trail_len = (len & 7);
+    if ((len & 63) != 0) {
+      size_t trail_len = (len & 63);
       bitsum += count_bits(cdbmp, base + (len - trail_len), trail_len);
     }
+    len >>= 6; // len /= 64
     size_t i;
-    len /= 8;
-    base /= 8;
+    unsigned long*p = (unsigned long*)&cdbmp[base/8];
     for (i = 0; i < len; i++) {
-      bitsum += cdbmp[base + i];
+      bitsum += __builtin_popcountl(*p);
     }
   }
-  if (bitsum == len)
+  if (bitsum == bitlen)
     return ROCK_CODE;
   else if (bitsum == 0)
     return ROCK_DATA;
