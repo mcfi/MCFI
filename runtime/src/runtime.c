@@ -293,7 +293,7 @@ static int insecure_overlap_rdonly(uintptr_t start, size_t len, int prot) {
 code_module* in_code_heap(uintptr_t start, size_t len) {
   code_module* m;
   DL_FOREACH(modules, m) {
-    if (m->code_heap && start >= m->base_addr && len <= m->sz)
+    if (m->code_heap && start >= m->base_addr && start + len <= m->base_addr + m->sz)
       return m;
   }
   return 0;
@@ -877,6 +877,22 @@ static symbol *query_icfsym(const char *name) {
   return 0;
 }
 
+static code_module *get_code_heap(void *h) {
+  static code_module* prev_code_module = 0;
+  code_module* m = (code_module*)h;
+  if (m == prev_code_module)
+    return m;
+  else {
+    DL_FOREACH(modules, m) {
+      if (m == (code_module*)h && m->code_heap)
+        return m;
+    }
+  }
+  dprintf(STDERR_FILENO, "[get_code_heap] invalid code module used, %p\n", h);
+  quit(-1);
+  return 0;
+}
+
 static dict *icj_target = 0;
 static dict *icj_target_ret = 0;
 static dict *ret_name = 0;
@@ -887,7 +903,7 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
                       void *md,   /* metadata, whose semantics depends on the type */
                       void *extra /* extra info, optional */
                       ) {
-  code_module *m = (code_module*)h;
+  code_module *m = get_code_heap(h);
 
   switch(type) {
   case ROCK_FUNC_SYM:
@@ -1109,7 +1125,7 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
 void delete_code(void *h, /* handle */
                  uintptr_t addr,
                  size_t length) {
-  code_module *m = (code_module*)h;
+  code_module *m = get_code_heap(h);
   if (addr < m->base_addr || addr + length > m->base_addr + m->sz) {
     dprintf(STDERR_FILENO, "[rock_delete_code] illegal %x, %x\n", addr, length);
     quit(-1);
@@ -1141,7 +1157,7 @@ void move_code(void *h,
                uintptr_t target,
                uintptr_t source,
                size_t length) {
-  code_module *m = (code_module*)h;
+  code_module *m = get_code_heap(h);
 
   if (target < m->base_addr || target + length > m->base_addr + m->sz ||
       (target & 7)) {
@@ -1610,7 +1626,7 @@ void code_heap_fill(void *h, /* code heap handle */
                     void *src,
                     size_t len,
                     void *extra) {
-  code_module* m = (code_module*)h;
+  code_module* m = get_code_heap(h);
   unsigned long flags = (unsigned long)extra;
   //dprintf(STDERR_FILENO, "[code_heap_fill] %p, %p, %p, %u, %x\n", h, dst, src, len, extra);
   if ((uintptr_t)dst < m->base_addr || (uintptr_t)dst >= m->base_addr + m->sz) {
