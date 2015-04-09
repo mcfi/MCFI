@@ -1491,10 +1491,10 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
     dprintf(STDERR_FILENO, "\n");
     */
     if (result != 0) {
-      for (ptr = data; ptr < end; ptr++) {
+      for (; ptr < end; ptr++) {
         dprintf(STDERR_FILENO, "0x%02x ", *ptr);
       }
-      dprintf(STDERR_FILENO, "Error: %lx\n", ptr - data);
+      //dprintf(STDERR_FILENO, "Error: %lx\n", ptr - data);
       quit(-1);
     }
     //assert(state != 0);
