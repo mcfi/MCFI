@@ -80,7 +80,10 @@ static inline void shr(size_t p[2], int n)
   p[1] >>= n;
 }
 
-static void sift(unsigned char *head, size_t width, cmpfun cmp, int pshift, size_t lp[])
+// TODO: figuring out why not inling the following sift functions makes v8
+//       signal handling not crash. Without this fix, v8 would crash when
+//       fed --log_timer_events and turned profiling on.
+static __attribute__((noinline)) void sift(unsigned char *head, size_t width, cmpfun cmp, int pshift, size_t lp[])
 {
   unsigned char *rt, *lf;
   unsigned char *ar[14 * sizeof(size_t) + 1];
