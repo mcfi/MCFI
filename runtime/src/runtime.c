@@ -1004,7 +1004,15 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
     {
       symbol *icfsym = alloc_sym();
       icfsym->name = sp_intern_string(&stringpool, md);
-      unsigned int bid_slot = alloc_bid_slot();
+      keyvalue *cached_bid_slot = dict_find(m->bid_slot_in_codeheap, icfsym->name);
+      unsigned int bid_slot;
+      if (!cached_bid_slot) {
+        bid_slot = alloc_bid_slot();
+        cached_bid_slot = dict_add(&(m->bid_slot_in_codeheap),
+                                   icfsym->name, (void*)(unsigned long)bid_slot);
+      } else {
+        bid_slot = (unsigned int)cached_bid_slot->value;
+      }
       uintptr_t addr = (uintptr_t)extra;
       if (addr < m->base_addr || addr >= m->base_addr + m->sz) {
         dprintf(STDERR_FILENO,
@@ -1016,7 +1024,8 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       icfsym->offset = bid_slot;
       DL_APPEND(m->icfsyms, icfsym);
       //dprintf(STDERR_FILENO,
-      //        "[rock_reg_cfg_metadata] icfsym %s, %x, %p\n", icfsym->name, icfsym->offset, extra);
+      //        "[rock_reg_cfg_metadata] icfsym %s, %x, %p\n",
+      //        icfsym->name, icfsym->offset, extra);
       keyvalue *icj = dict_find(icj_target, icfsym->name);
       assert(icj);
       unsigned long *p = (unsigned long*)(table + bid_slot);
