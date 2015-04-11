@@ -168,7 +168,10 @@ struct code_module_t {
   void     *gotpltcontent; /* contents of the gotplt during fork */
   int      activated;     /* whether indirect branch targets are activated by default */
   int      code_heap;  /* whether this code module is a code_heap created for allowing changing */
-  unsigned char*    code_data_bitmap;/* remembers what areas are code and what areas are data */
+  unsigned char* code_data_bitmap;/* remembers what areas are code and what areas are data */
+  unsigned char* internal_dbt_bitmap; /* remembers internal direct branch targets */
+  graph    *forward_reference;
+  graph    *backward_reference;
   dict     *bid_slot_in_codeheap;/* remembers bid slots needed for instructions in the codeheap */
   struct verifier_t *verifier; /* pointer to the verifier */
 };

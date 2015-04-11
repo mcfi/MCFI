@@ -32,8 +32,8 @@ static struct {
   int free_lock[2];
 } mal;
 
-/* our fake brk region size is 512MB, which is tunable */
-#define BRKSIZE 0x20000000UL
+/* our fake brk region size is 1GB, which is tunable */
+#define BRKSIZE 0x40000000UL
 
 #define SIZE_ALIGN (4*sizeof(size_t))
 #define SIZE_MASK (-SIZE_ALIGN)
