@@ -1002,6 +1002,13 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
     break;
   case ROCK_ICJ_SYM:
     {
+      uintptr_t addr = (uintptr_t)extra;
+      if (addr < m->base_addr || addr >= m->base_addr + m->sz) {
+        dprintf(STDERR_FILENO,
+                "[rock_reg_cfg_metadata] illegal icj sym %lx registered\n",
+                addr);
+        quit(-1);
+      }
       symbol *icfsym = alloc_sym();
       icfsym->name = sp_intern_string(&stringpool, md);
       keyvalue *cached_bid_slot = dict_find(m->bid_slot_in_codeheap, icfsym->name);
@@ -1010,15 +1017,13 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
         bid_slot = alloc_bid_slot();
         cached_bid_slot = dict_add(&(m->bid_slot_in_codeheap),
                                    icfsym->name, (void*)(unsigned long)bid_slot);
+        keyvalue *icj = dict_find(icj_target, icfsym->name);
+        assert(icj);
+        unsigned long *p = (unsigned long*)(table + bid_slot);
+        unsigned long *q = (unsigned long*)(table + (uintptr_t)icj->value);
+        *p = *q;
       } else {
         bid_slot = (unsigned int)cached_bid_slot->value;
-      }
-      uintptr_t addr = (uintptr_t)extra;
-      if (addr < m->base_addr || addr >= m->base_addr + m->sz) {
-        dprintf(STDERR_FILENO,
-                "[rock_reg_cfg_metadata] illegal icj sym %lx registered\n",
-                addr);
-        quit(-1);
       }
       *(unsigned int*)(m->osb_base_addr + (addr - m->base_addr - 4)) = bid_slot;
       icfsym->offset = bid_slot;
@@ -1026,11 +1031,6 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       //dprintf(STDERR_FILENO,
       //        "[rock_reg_cfg_metadata] icfsym %s, %x, %p\n",
       //        icfsym->name, icfsym->offset, extra);
-      keyvalue *icj = dict_find(icj_target, icfsym->name);
-      assert(icj);
-      unsigned long *p = (unsigned long*)(table + bid_slot);
-      unsigned long *q = (unsigned long*)(table + (uintptr_t)icj->value);
-      *p = *q;
     }
     break;
   case ROCK_RAI:
