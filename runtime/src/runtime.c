@@ -1137,6 +1137,44 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
   //dprintf(STDERR_FILENO, "[reg_cfg_metadata] exited\n");
 }
 
+static void wait(void) {
+  static unsigned long thread_escapes[256]; // at most 128 threads can be handled
+  TCB *tcb = tcb_list;
+  int count = 0;
+  /* record the thread escapes for all threads that are not trapped in
+     system calls */
+  while (tcb && count < 256) {
+    if (!tcb->remove) {
+      if (!tcb->insyscall) {
+        thread_escapes[count++] = (unsigned long)tcb;
+        thread_escapes[count++] = tcb->sandbox_escape;
+      }
+    }
+    tcb = tcb->next;
+  }
+  if (count >= 256) {
+    dprintf(STDERR_FILENO, "[wait] too many threads\n");
+    quit(-1);
+  }
+  /* check to see if all threads have executed at least one system call */
+  int safe = FALSE;
+  while (!safe) {
+    safe = TRUE;
+    int i;
+    for (i = 0; i < count; i += 2) {
+      tcb = (TCB*)thread_escapes[i];
+      if (tcb) {
+        if (tcb->insyscall)
+          thread_escapes[i] = 0;  // clear this thread
+        else if (tcb->sandbox_escape == thread_escapes[i+1]) {
+          safe = FALSE;
+          break;
+        }
+      }
+    }
+  }
+}
+
 static void check_code_addr_for_deletion(code_module *m, uintptr_t code_addr,
                                          uintptr_t addr, size_t length) {
   vertex *v = dict_find(m->backward_reference, (void*)code_addr);
@@ -1210,6 +1248,7 @@ void delete_code(void *h, /* handle */
   unsigned i;
   for (i = 0; i < length; i++)
     p[i] = 0;
+  wait();
 }
 
 static void check_code_addr_for_move(code_module *m, uintptr_t target,
@@ -1300,6 +1339,7 @@ void move_code(void *h,
       //        p[i]);
     }
   }
+  wait();
 }
 
 /* fork of rock, pretty tricky, now we do not support fork in a multi-threading
@@ -1685,44 +1725,6 @@ static int same_internal_boundary(char* old_tary, char* tary,
 
 static void cpuid(void) {
   __asm__ __volatile__("cpuid":::"rax", "rbx", "rcx", "rdx");
-}
-
-static void wait(void) {
-  static unsigned long thread_escapes[256]; // at most 128 threads can be handled
-  TCB *tcb = tcb_list;
-  int count = 0;
-  /* record the thread escapes for all threads that are not trapped in
-     system calls */
-  while (tcb && count < 256) {
-    if (!tcb->remove) {
-      if (!tcb->insyscall) {
-        thread_escapes[count++] = (unsigned long)tcb;
-        thread_escapes[count++] = tcb->sandbox_escape;
-      }
-    }
-    tcb = tcb->next;
-  }
-  if (count >= 256) {
-    dprintf(STDERR_FILENO, "[wait] too many threads\n");
-    quit(-1);
-  }
-  /* check to see if all threads have executed at least one system call */
-  int safe = FALSE;
-  while (!safe) {
-    safe = TRUE;
-    int i;
-    for (i = 0; i < count; i += 2) {
-      tcb = (TCB*)thread_escapes[i];
-      if (tcb) {
-        if (tcb->insyscall)
-          thread_escapes[i] = 0;  // clear this thread
-        else if (tcb->sandbox_escape == thread_escapes[i+1]) {
-          safe = FALSE;
-          break;
-        }
-      }
-    }
-  }
 }
 
 /* use [src, len) to fill [dst, len) */
