@@ -1175,34 +1175,6 @@ static void wait(void) {
   }
 }
 
-static void check_code_addr_for_deletion(code_module *m, uintptr_t code_addr,
-                                         uintptr_t addr, size_t length) {
-  vertex *v = dict_find(m->backward_reference, (void*)code_addr);
-  // if there exists backward references, check if these references come
-  // the current region
-  if (v) {
-    graph *dbs = (graph*)(v->value);
-    vertex *r, *tmp;
-    HASH_ITER(hh, dbs, r, tmp) {
-      if (!((uintptr_t)r->key >= addr && (uintptr_t)r->key < addr + length)) {
-        dprintf(STDERR_FILENO,
-                "[rock_delete_code] to-be deleted code is reachable by direct branches\n");
-        quit(-1);
-      }
-    }
-  }
-  // delete all forward references
-  v = dict_find(m->forward_reference, (void*)code_addr);
-  if (v) {
-    graph *dbts = (graph*)(v->value);
-    vertex *r, *tmp;
-    HASH_ITER(hh, dbts, r, tmp) {
-      g_del_directed_edge(&(m->backward_reference), r->key, (void*)code_addr);
-    }
-    g_del_vertex(&(m->forward_reference), (void*)code_addr);
-  }
-}
-
 void delete_code(void *h, /* handle */
                  uintptr_t addr,
                  size_t length) {
@@ -1223,21 +1195,6 @@ void delete_code(void *h, /* handle */
     quit(-1);
   }
   // check whether this region is referenced by other regions
-  set_data(m->internal_dbt_bitmap, addr - m->base_addr, length);
-  uintptr_t code_addr = addr;
-  while (code_addr < addr + length) {
-    if (ROCK_CODE == which_area(m->code_data_bitmap, code_addr - m->base_addr, 1)) {
-      // check this code piece
-      check_code_addr_for_deletion(m, code_addr, addr, length);
-      while (code_addr < addr + length) {
-        if (ROCK_DATA == which_area(m->code_data_bitmap, code_addr - m->base_addr, 1))
-          break;
-        code_addr++;
-      }
-    }
-    code_addr++;
-  }
-
   set_data(m->code_data_bitmap, addr - m->base_addr, length);
   addr = addr & (-8);
   length = ((length + 7) & (-8));
@@ -1248,36 +1205,6 @@ void delete_code(void *h, /* handle */
   unsigned i;
   for (i = 0; i < length; i++)
     p[i] = 0;
-  wait();
-}
-
-static void check_code_addr_for_move(code_module *m, uintptr_t target,
-                                     uintptr_t code_addr, size_t length) {
-  vertex *v = dict_find(m->backward_reference, (void*)code_addr);
-  /* TODO: Code move might move referenced code before moving referencing code,
-     so the following check might fail, it might be good to change the code
-     move routines in v8 to respect the order. Anyway, even the following
-     check code is activated, only one check fails.
-  */
-  /*
-  if (v) {
-    dprintf(STDERR_FILENO,
-            "[rock_move_code] to-be moved code is reachable by direct branches, %p\n", v->value);
-    quit(-1);
-  }
-  */
-  // adjust all forward / backward references
-  v = dict_find(m->forward_reference, (void*)code_addr);
-  if (v) {
-    graph *dbts = (graph*)(v->value);
-    vertex *r, *tmp;
-    HASH_ITER(hh, dbts, r, tmp) {
-      g_del_directed_edge(&(m->backward_reference), r->key, (void*)code_addr);
-      g_add_directed_edge(&(m->backward_reference), r->key, (void*)target);
-    }
-    dict_add(&(m->forward_reference), (void*)target, v->value);
-    dict_del(&(m->forward_reference), v->key);
-  }
 }
 
 void move_code(void *h,
@@ -1312,10 +1239,6 @@ void move_code(void *h,
     dprintf(STDERR_FILENO, "[rock_move_code not data]\n");
     quit(-1);
   }
-  // check whether there is any direct branch targeting this code piece
-  set_data(m->internal_dbt_bitmap, source - m->base_addr, length);
-  check_code_addr_for_move(m, target, source, length);
-  
   set_data(m->code_data_bitmap, source - m->base_addr, length);
   set_code(m->code_data_bitmap, target - m->base_addr, length);
 
@@ -1339,7 +1262,6 @@ void move_code(void *h,
       //        p[i]);
     }
   }
-  wait();
 }
 
 /* fork of rock, pretty tricky, now we do not support fork in a multi-threading
@@ -1680,11 +1602,7 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
       quit(-1);
     } else if (jmp_targets[i] < (unsigned)install_addr ||
         jmp_targets[i] >= (unsigned)install_addr + size) {
-      if (*(char*)(table + jmp_targets[i]) != (char)DCV &&
-          (jmp_targets[i] == m->base_addr ||
-           // The direct branch target is not at beginning of another code piece
-           ROCK_DATA != which_area(m->code_data_bitmap,
-                                   jmp_targets[i] - m->base_addr - 1, 1))) {
+      if (*(char*)(table + jmp_targets[i]) != (char)DCV) {
         dprintf(STDERR_FILENO, "jmp_targets wrong %x\n", jmp_targets[i]);
         quit(-1);
       }
@@ -1693,10 +1611,6 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
         dprintf(STDERR_FILENO, "jmp_targets wrong %x\n", jmp_targets[i]);
         quit(-1);
       }
-      g_add_directed_edge(&(m->forward_reference), (void*)install_addr, (void*)jmp_targets[i]);
-      g_add_directed_edge(&(m->backward_reference), (void*)jmp_targets[i], (void*)install_addr);
-      // set the bit in the internal dbt bitmap to 1
-      set_code(m->internal_dbt_bitmap, jmp_targets[i] - m->base_addr, 1);
     }
   }
   free(jmp_targets);
@@ -1868,8 +1782,8 @@ void code_heap_fill(void *h, /* code heap handle */
         // Already done by same_internal_boundary
         /* clear the tary table */
         memset(table + (uintptr_t)dst, 0x00, len);
-        /* wait after a grace period so that no thread is sleeping in the region */
-        wait();
+        /* wait after a grace period so that no thread is sleeping in the region.*/
+        //wait();
         /* make sure that no direct branch targets the old code's internal bytes */
         if (ROCK_DATA != which_area(m->internal_dbt_bitmap,
                                     (uintptr_t)dst - m->base_addr + 1, len)) {
