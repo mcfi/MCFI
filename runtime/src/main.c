@@ -166,7 +166,7 @@ void install_trampolines(void) {
     void *dyncode_modify;
     void *dyncode_delete;
     void *report_cfi_violation;
-    void *online_patch;
+    void *patch_call;
     void *take_addr_and_gen_cfg;
     void *set_gotplt;
     void *fork;
@@ -174,6 +174,7 @@ void install_trampolines(void) {
     void *reg_cfg_metadata;
     void *delete_code;
     void *move_code;
+    void *patch_at;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -191,7 +192,8 @@ void install_trampolines(void) {
   extern unsigned long runtime_dyncode_modify;
   extern unsigned long runtime_dyncode_delete;
   extern unsigned long runtime_report_cfi_violation;
-  extern unsigned long runtime_online_patch;
+  extern unsigned long runtime_patch_call;
+  extern unsigned long runtime_patch_at;
   extern unsigned long runtime_take_addr_and_gen_cfg;
   extern unsigned long runtime_set_gotplt;
   extern unsigned long runtime_rock_fork;
@@ -216,7 +218,7 @@ void install_trampolines(void) {
   tp->dyncode_modify = &runtime_dyncode_modify;
   tp->dyncode_delete = &runtime_dyncode_delete;
   tp->report_cfi_violation = &runtime_report_cfi_violation;
-  tp->online_patch = &runtime_online_patch;
+  tp->patch_call = &runtime_patch_call;
   tp->take_addr_and_gen_cfg = &runtime_take_addr_and_gen_cfg;
   tp->set_gotplt = &runtime_set_gotplt;
   tp->fork = &runtime_rock_fork;
@@ -225,6 +227,8 @@ void install_trampolines(void) {
   tp->reg_cfg_metadata = &runtime_reg_cfg_metadata;
   tp->delete_code = &runtime_delete_code;
   tp->move_code = &runtime_move_code;
+  tp->patch_at = &runtime_patch_at;
+
   /* set the first 68KB read-only */
   if (0 != mprotect(table,  BID_SLOT_START, PROT_READ)) {
     dprintf(STDERR_FILENO, "[install_trampolines] mprotect failed %d\n", errn);
@@ -512,7 +516,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   dict *classes = 0;
   dict *cha = 0;
   dict *aliases = 0;
-  dict *fats = 0;
+  dict *fats_in_code = 0;
+  dict *fats_in_data = 0;
   code_module *cm = alloc_code_module();
 
   for (cnt = 0; cnt < ehdr->e_shnum; cnt++) {
@@ -544,7 +549,11 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     } else if (0 == strcmp(shname, ".MCFIAddrTaken")) {
       parse_fats(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
-                 &fats, &stringpool);
+                 &fats_in_data, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFIAddrTakenInCode")) {
+      parse_fats(elf + shdr[cnt].sh_offset, /* content */
+                 elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                 &fats_in_code, &stringpool);
     } else if (0 == strcmp(shname, ".MCFIDtorCxaAtExit")) {
       // TODO: Add handling code here
     } else if (0 == strcmp(shname, ".MCFIDtorCxaThrow")) {
@@ -576,7 +585,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     DL_APPEND(functions, f);
 
     /* the fake function's address is taken */
-    dict_add(&fats, f->name, 0);
+    dict_add(&fats_in_data, f->name, 0);
 
     /* add the fake function's address */
     symbol *funcsym = alloc_sym();
@@ -589,12 +598,18 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   cm->classes = classes;
   cm->cha = cha;
   cm->aliases = aliases;
-  cm->fats = fats;
+  cm->fats_in_code = fats_in_code;
+  cm->fats_in_data = fats_in_data;
+  merge_dicts(&(cm->fats), cm->fats_in_code);
+  merge_dicts(&(cm->fats), cm->fats_in_data);
+
   cm->sz = sz;
   graph *aliases_tc = g_transitive_closure(&aliases);
 
   unsigned int patch_call_offset = -1;
   const char *patch_call = sp_intern_string(&stringpool, "__patch_call");
+  unsigned int patch_at_offset = -1;
+  const char *patch_at = sp_intern_string(&stringpool, "__patch_at");
 
   for (cnt = 0; cnt < numsym; cnt++) {
     char *symname = strtab + sym[cnt].st_name;
@@ -617,6 +632,14 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       keyvalue *patch = dict_add(&(cm->ra_orig), (void*)icjsym->offset,
                                  (void*)*((unsigned long*)(elf + icjsym->offset - 8)));
       patch->key = _mark_ra_ic(patch->key);
+    } else if (0 == strncmp(symname, "__mcfi_at_", 10)) {
+      /* save the original code bytes for function address taken */
+      size_t offset = sym[cnt].st_value - cm->base_addr;
+      char *name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 10));
+      /* TODO: replace the name with the actual function's address */
+      dict_add(&(cm->at_func), (void*)offset, name);
+      dict_add(&(cm->at_orig), (void*)offset,
+               (void*)*((unsigned long*)(elf + offset)));
     } else if (0 == strncmp(symname, "__mcfi_lp_", 10)) {
       symbol *lpsym = alloc_sym();
       /* no needs to record the name for a landing pad symbol */
@@ -644,6 +667,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       DL_APPEND(cm->funcsyms, funcsym);
       if (funcsym->name == patch_call)
         patch_call_offset = funcsym->offset;
+      if (funcsym->name == patch_at)
+        patch_at_offset = funcsym->offset;
 
       if (ELF64_ST_BIND(sym[cnt].st_info) == STB_WEAK) {
         /* since we are traversing the symbol table, all aliases would be added */
@@ -675,7 +700,6 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     }
   }
   g_free_transitive_closure(&aliases_tc);
-
   /* PLT entries are essentially functions */
   for (cnt = 0; cnt < numrelaplt; cnt++) {
     size_t dynsymidx = ELF64_R_SYM(relaplt[cnt].r_info);
@@ -689,6 +713,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     //dprintf(STDERR_FILENO, "%x, %s\n", relaplt[cnt].r_offset - cm->gotplt, funcsym->name);
     if (funcsym->name == patch_call)
       patch_call_offset = funcsym->offset;
+    else if (funcsym->name == patch_at)
+      patch_at_offset = funcsym->offset;
   }
 
   /* if not explicitly shutdown, just enable online patching */
@@ -720,6 +746,19 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
         patch = patch_call_offset - callsite_offset;
         memcpy(elf + callsite_offset - 4, &patch, 4);
       }
+    }
+  }
+  if (patch_at_offset != -1) {
+    // patch function address taken sites
+    keyvalue *kv, *tmp;
+    unsigned int at_offset;
+    unsigned int patch;
+    HASH_ITER(hh, cm->at_orig, kv, tmp) {
+      at_offset = (unsigned int)kv->key;
+      char *p = elf + at_offset;
+      *p = 0xe8;
+      patch = patch_at_offset - (at_offset + 5);
+      memcpy(elf + at_offset + 1, &patch, 4);
     }
   }
 #endif

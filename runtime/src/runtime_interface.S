@@ -45,8 +45,9 @@ locked:
         movq \scratchreg, %fs:THREAD_ESCAPES
 .endm
 
-        .global runtime_online_patch
-runtime_online_patch:
+.macro online_patch patch_func
+        .global runtime_\patch_func
+runtime_\patch_func:
         # entering a trusted call
         movb $1, %fs:IN_SYSCALL
 
@@ -84,7 +85,7 @@ runtime_online_patch:
         switch_runtime_stack
         movq %r11, %rdi
         spin_lock
-        callq rock_patch
+        callq \patch_func
         spin_unlock
         # restore states
         movq %fs:USER_CTX, %rax
@@ -115,8 +116,14 @@ runtime_online_patch:
         # exiting a trusted call
         movb $0, %fs:IN_SYSCALL
 
+        # eflags
+        popfq
         # jump to the place
         jmpq *%fs:CONTINUATION
+
+.endm
+        online_patch patch_call
+        online_patch patch_at
 
 # The ABI requires that fcw and mxcsr are both callee-saved, so
 # we do not need to save them.
