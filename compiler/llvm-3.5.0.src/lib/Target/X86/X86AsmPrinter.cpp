@@ -52,6 +52,7 @@ bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   if (M != newM) {
     M = newM;
     AddrTakenFunctions.clear();
+    AddrTakenFunctionsInCode.clear();
     SmallSandbox = !M->getNamedMetadata("MCFILargeSandbox");
     SmallID = !M->getNamedMetadata("MCFILargeID");
     NoReturnFunctions.clear();
@@ -781,13 +782,20 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
                                  MDString::get(M.getContext(), AliasStr.c_str())));      
     }
     EmitMCFIInfo(".MCFIAliases", M);
-    // AddrTakenFunctions
+    // AddrTakenFunctionsInData
     MD = M.getOrInsertNamedMetadata("MCFIAddrTaken");
     for (const auto &FN: AddrTakenFunctions) {
       MD->addOperand(MDNode::get(M.getContext(),
                                  MDString::get(M.getContext(), FN.c_str())));
     }
     EmitMCFIInfo(".MCFIAddrTaken", M);
+    // AddrTakenFunctionsInCode
+    MD = M.getOrInsertNamedMetadata("MCFIAddrTakenInCode");
+    for (const auto &FN: AddrTakenFunctionsInCode) {
+      MD->addOperand(MDNode::get(M.getContext(),
+                                 MDString::get(M.getContext(), FN.c_str())));
+    }
+    EmitMCFIInfo(".MCFIAddrTakenInCode", M);
   }
 }
 

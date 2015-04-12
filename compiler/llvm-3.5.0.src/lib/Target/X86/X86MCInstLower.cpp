@@ -798,6 +798,8 @@ static void LowerPATCHPOINT(MCStreamer &OS, StackMaps &SM,
 }
 
 void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
+  static unsigned long Seq;
+
   X86MCInstLower MCInstLowering(*MF, *this);
   const X86RegisterInfo *RI =
       static_cast<const X86RegisterInfo *>(TM.getRegisterInfo());
@@ -1011,7 +1013,6 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
   MCInst TmpInst;
   MCInstLowering.Lower(MI, TmpInst);
-  EmitToStreamer(OutStreamer, TmpInst);
 
   // get the address taken function
   if (!MI->isBranch()) {
@@ -1024,14 +1025,34 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
         ME->print(OS);
         OS.flush();
         if (isID(MEStr)) {
-          // This might include global variables, but it's fine, since later
-          // we will intersection the AddrTakenFunction set with all the actual
-          // functions.
-          AddrTakenFunctions.insert(MEStr);
+          const Module *m = MI->getParent()->getParent()->getFunction()->getParent();
+          for (auto f = m->getFunctionList().begin();
+               f != m->getFunctionList().end(); f++) {
+            const StringRef fn = f->getName();
+            if (f->hasName() && fn.equals(MEStr)) {
+              if (fn.startswith("_GLOBAL__E_") || fn.startswith("_GLOBAL__D_"))
+                AddrTakenFunctions.insert(MEStr);
+              else {
+                AddrTakenFunctionsInCode.insert(MEStr);
+                // align to 8-byte aligned addresses
+                OutStreamer.EmitCodeAlignment(8, 0);
+                MCSymbol *Sym =
+                  OutContext.GetOrCreateSymbol(StringRef("__mcfi_at_")
+                                               + to_hex(++Seq)
+                                               + std::string("_")
+                                               + MEStr);
+#ifndef NO_ONLINE_PATCHING
+                OutStreamer.EmitSymbolAttribute(Sym, MCSymbolAttr::MCSA_Hidden);
+                OutStreamer.EmitLabel(Sym);
+#endif
+              }
+            }
+          }
         }
       }
     }
   }
+  EmitToStreamer(OutStreamer, TmpInst);
   switch (MI->getOpcode()) {
     // MCFI instrumentation completeness validation
   case X86::RETW:
@@ -1094,7 +1115,6 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::CALL32r:
   case X86::CALL64r:
   {
-    static unsigned long Seq;
     MCSymbol *RetAddrSym;
     if (MI->getOpcode() == X86::CALL64r ||
         MI->getOpcode() == X86::CALL32r) {
