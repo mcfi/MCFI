@@ -143,7 +143,9 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
     // manager to get the same behavior as EP_OptimizerLast in non-O0 builds.
     if (!GlobalExtensions->empty() || !Extensions.empty())
       MPM.add(createBarrierNoopPass());
-
+#ifndef NO_ONLINE_PATCHING
+    MPM.add(createFuncAddrTakenPass()); // register function address taken events
+#endif
     addExtensionsToPM(EP_EnabledOnOptLevel0, MPM);
     return;
   }
@@ -279,6 +281,9 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
       MPM.add(createConstantMergePass());     // Merge dup global constants
     }
   }
+#ifndef NO_ONLINE_PATCHING
+  MPM.add(createFuncAddrTakenPass()); // register function address taken events
+#endif
   addExtensionsToPM(EP_OptimizerLast, MPM);
 }
 

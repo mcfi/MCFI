@@ -53,6 +53,11 @@ bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
     M = newM;
     AddrTakenFunctions.clear();
     AddrTakenFunctionsInCode.clear();
+    AllFunctions.clear();
+    for (auto f = M->getFunctionList().begin();
+         f != M->getFunctionList().end(); f++)
+      if (f->hasName())
+        AllFunctions.insert(f->getName().str());
     SmallSandbox = !M->getNamedMetadata("MCFILargeSandbox");
     SmallID = !M->getNamedMetadata("MCFILargeID");
     NoReturnFunctions.clear();

@@ -799,7 +799,8 @@ static void LowerPATCHPOINT(MCStreamer &OS, StackMaps &SM,
 
 void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   static unsigned long Seq;
-
+  bool DCJSymbol = true;
+        
   X86MCInstLower MCInstLowering(*MF, *this);
   const X86RegisterInfo *RI =
       static_cast<const X86RegisterInfo *>(TM.getRegisterInfo());
@@ -951,6 +952,48 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   {
     if (!isNoReturnFunction(MI->getOperand(0))) {
       OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 5);
+#ifndef NO_ONLINE_PATCHING
+      StringRef FuncName;
+      const MachineOperand &MO = MI->getOperand(0);
+      if (MO.isSymbol()) {
+        FuncName = MO.getSymbolName();
+      } else if (MO.isGlobal()) {
+        FuncName = MO.getGlobal()->getName();
+      }
+      if (FuncName == "__patch_at")
+        DCJSymbol = false;
+      else if (FuncName.startswith("__patch_at")) {
+        // FuncName may contain @
+        size_t atsym = FuncName.find('@');
+        std::string suffix;
+        if (atsym != StringRef::npos) {
+          suffix = FuncName.substr(atsym);
+          FuncName = FuncName.substr(10, atsym);
+        } else
+          FuncName = FuncName.substr(10, FuncName.size()-10);
+        AddrTakenFunctionsInCode.insert(FuncName);
+        MCInst PatchAtCallInst;
+        MCInst TmpInst;
+        MCInstLowering.Lower(MI, TmpInst);
+        PatchAtCallInst.setOpcode(TmpInst.getOpcode());
+        const MCSymbolRefExpr *OldExpr = cast<MCSymbolRefExpr>(TmpInst.getOperand(0).getExpr());
+        MCSymbol *Sym =
+          OutContext.GetOrCreateSymbol(StringRef(std::string("__patch_at") + suffix));
+        const MCSymbolRefExpr *NewExpr =
+          MCSymbolRefExpr::Create(Sym, OldExpr->getKind(),
+                                  MI->getParent()->getParent()->getContext());
+        PatchAtCallInst.addOperand(MCOperand::CreateExpr(NewExpr));
+        EmitToStreamer(OutStreamer, PatchAtCallInst);
+        Sym =
+          OutContext.GetOrCreateSymbol(StringRef("__mcfi_at_")
+                                       + to_hex(++Seq)
+                                       + std::string("_")
+                                       + FuncName);
+        OutStreamer.EmitSymbolAttribute(Sym, MCSymbolAttr::MCSA_Hidden);
+        OutStreamer.EmitLabel(Sym);
+        return;
+      }
+#endif
     }
     break;
   }
@@ -1025,28 +1068,10 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
         ME->print(OS);
         OS.flush();
         if (isID(MEStr)) {
-          const Module *m = MI->getParent()->getParent()->getFunction()->getParent();
-          for (auto f = m->getFunctionList().begin();
-               f != m->getFunctionList().end(); f++) {
-            const StringRef fn = f->getName();
-            if (f->hasName() && fn.equals(MEStr)) {
-              if (fn.startswith("_GLOBAL__E_") || fn.startswith("_GLOBAL__D_"))
-                AddrTakenFunctions.insert(MEStr);
-              else {
-                AddrTakenFunctionsInCode.insert(MEStr);
-                // align to 8-byte aligned addresses
-                OutStreamer.EmitCodeAlignment(8, 0);
-                MCSymbol *Sym =
-                  OutContext.GetOrCreateSymbol(StringRef("__mcfi_at_")
-                                               + to_hex(++Seq)
-                                               + std::string("_")
-                                               + MEStr);
-#ifndef NO_ONLINE_PATCHING
-                OutStreamer.EmitSymbolAttribute(Sym, MCSymbolAttr::MCSA_Hidden);
-                OutStreamer.EmitLabel(Sym);
-#endif
-              }
-            }
+          if (AllFunctions.find(MEStr) != AllFunctions.end()) {
+            StringRef fn(MEStr);
+            if (fn.startswith("_GLOBAL__E_") || fn.startswith("_GLOBAL__D_"))
+              AddrTakenFunctions.insert(MEStr);
           }
         }
       }

@@ -32,6 +32,7 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
   std::set<StringRef> NoReturnFunctions;
   std::set<std::string> AddrTakenFunctionsInCode;
   std::set<std::string> AddrTakenFunctions;
+  std::set<std::string> AllFunctions;
 
   // test if ID is an identifier in C
   bool isID(std::string &ID) {
