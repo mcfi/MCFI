@@ -158,7 +158,6 @@ struct code_module_t {
   vertex   *fats_in_code; /* functions whose addresses are taken in code */
   vertex   *fats_in_data; /* functions whose addresses are taken in data */
   dict     *ra_orig;   /* original values of call sites */
-  dict     *at_orig;   /* original values of function address taken instructions */
   dict     *at_func;   /* which function's address is taken at which site */
   graph    *dynfuncs;  /* map from position of to a couple of functions */
   graph    *weakfuncs; /* weak functions symbols */

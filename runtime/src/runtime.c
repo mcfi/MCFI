@@ -116,7 +116,7 @@ void free_tcb(void *user_tcb) {
 
 void patch_at(unsigned long patchpoint) {
 #ifndef NO_ONLINE_PATCHING
-  //dprintf(STDERR_FILENO, "patched at %lx\n", patchpoint);
+  dprintf(STDERR_FILENO, "patched at %lx\n", patchpoint);
   code_module *m;
   int found = FALSE;
   DL_FOREACH(modules, m) {
@@ -126,20 +126,20 @@ void patch_at(unsigned long patchpoint) {
       break;
     }
   }
-  assert(found && (patchpoint - 5) % 8 == 0);
-  patchpoint -= 5;
-  keyvalue *patch = dict_find(m->at_orig, (const void*)(patchpoint - m->base_addr));
+  assert(found && patchpoint % 8 == 0);
+  //keyvalue *patch = dict_find(m->at_orig, (const void*)(patchpoint - m->base_addr));
   if (cfggened) {
-    *((unsigned long*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
+    //*((unsigned long*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
   } else {
     /* add all possible function addresses to patch_compensate */
     //dict_add(&patch_compensate, table + m->base_addr + (unsigned long)patch->key, 0);
   }
-
   /* the patch should be performed after the tary id is set valid */
+  /*
   unsigned long *p =
     (unsigned long*)(m->osb_base_addr + (unsigned long)patch->key);
   *p = (unsigned long)patch->value;
+  */
 #endif
 }
 

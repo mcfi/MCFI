@@ -116,14 +116,11 @@ runtime_\patch_func:
         # exiting a trusted call
         movb $0, %fs:IN_SYSCALL
 
-        # eflags
-        popfq
         # jump to the place
         jmpq *%fs:CONTINUATION
 
 .endm
         online_patch patch_call
-        online_patch patch_at
 
 # The ABI requires that fcw and mxcsr are both callee-saved, so
 # we do not need to save them.
@@ -175,3 +172,4 @@ runtime_\func:
         runtime_function reg_cfg_metadata
         runtime_function delete_code
         runtime_function move_code
+        runtime_function patch_at

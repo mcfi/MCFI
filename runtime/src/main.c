@@ -608,8 +608,6 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
 
   unsigned int patch_call_offset = -1;
   const char *patch_call = sp_intern_string(&stringpool, "__patch_call");
-  unsigned int patch_at_offset = -1;
-  const char *patch_at = sp_intern_string(&stringpool, "__patch_at");
 
   for (cnt = 0; cnt < numsym; cnt++) {
     char *symname = strtab + sym[cnt].st_name;
@@ -636,10 +634,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       /* save the original code bytes for function address taken */
       size_t offset = sym[cnt].st_value - cm->base_addr;
       char *name = sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 10));
-      /* TODO: replace the name with the actual function's address */
       dict_add(&(cm->at_func), (void*)offset, name);
-      dict_add(&(cm->at_orig), (void*)offset,
-               (void*)*((unsigned long*)(elf + offset)));
     } else if (0 == strncmp(symname, "__mcfi_lp_", 10)) {
       symbol *lpsym = alloc_sym();
       /* no needs to record the name for a landing pad symbol */
@@ -667,8 +662,6 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       DL_APPEND(cm->funcsyms, funcsym);
       if (funcsym->name == patch_call)
         patch_call_offset = funcsym->offset;
-      if (funcsym->name == patch_at)
-        patch_at_offset = funcsym->offset;
 
       if (ELF64_ST_BIND(sym[cnt].st_info) == STB_WEAK) {
         /* since we are traversing the symbol table, all aliases would be added */
@@ -713,8 +706,6 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     //dprintf(STDERR_FILENO, "%x, %s\n", relaplt[cnt].r_offset - cm->gotplt, funcsym->name);
     if (funcsym->name == patch_call)
       patch_call_offset = funcsym->offset;
-    else if (funcsym->name == patch_at)
-      patch_at_offset = funcsym->offset;
   }
 
   /* if not explicitly shutdown, just enable online patching */
@@ -746,19 +737,6 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
         patch = patch_call_offset - callsite_offset;
         memcpy(elf + callsite_offset - 4, &patch, 4);
       }
-    }
-  }
-  if (patch_at_offset != -1) {
-    // patch function address taken sites
-    keyvalue *kv, *tmp;
-    unsigned int at_offset;
-    unsigned int patch;
-    HASH_ITER(hh, cm->at_orig, kv, tmp) {
-      at_offset = (unsigned int)kv->key;
-      char *p = elf + at_offset;
-      *p = 0xe8;
-      patch = patch_at_offset - (at_offset + 5);
-      memcpy(elf + at_offset + 1, &patch, 4);
     }
   }
 #endif
