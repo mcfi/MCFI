@@ -127,7 +127,7 @@ void patch_at(unsigned long patchpoint) {
     }
   }
   assert(found && patchpoint % 8 == 0);
-  //keyvalue *patch = dict_find(m->at_orig, (const void*)(patchpoint - m->base_addr));
+
   if (cfggened) {
     //*((unsigned long*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
   } else {
@@ -135,11 +135,12 @@ void patch_at(unsigned long patchpoint) {
     //dict_add(&patch_compensate, table + m->base_addr + (unsigned long)patch->key, 0);
   }
   /* the patch should be performed after the tary id is set valid */
-  /*
-  unsigned long *p =
-    (unsigned long*)(m->osb_base_addr + (unsigned long)patch->key);
-  *p = (unsigned long)patch->value;
-  */
+  char *p = (char*)(m->osb_base_addr + patchpoint - m->base_addr - 8);
+  char patch[8];
+  memcpy(patch, p, 3);
+  static const char fivebytenop[5] = {0x0f, 0x1f, 0x44, 0x00, 0x00};
+  memcpy(patch+3, fivebytenop, 5);
+  *(unsigned long*)p = *(unsigned long*)patch;
 #endif
 }
 
