@@ -46,7 +46,8 @@ namespace {
   private:
     Value *InnerMost(Value *V);
     void addPatchAt(Module &M, FunctionType *FT,
-                    Value *V, Instruction *MI);
+                    Value *V, Instruction *MI,
+                    std::map<BasicBlock*, std::set<std::string> >&);
   };
 }
 
@@ -70,11 +71,19 @@ Value *FuncAddrTaken::InnerMost(Value *V) {
 }
 
 void FuncAddrTaken::addPatchAt(Module &M, FunctionType *FT,
-                               Value *V, Instruction *MI) {
+                               Value *V, Instruction *MI,
+                               std::map<BasicBlock*, std::set<std::string> >& UniqPatchAt) {
   if (isa<Function>(V) && cast<Function>(V)->hasName()) {
     StringRef fn = cast<Function>(V)->getName();
     if (fn.startswith("_GLOBAL__D_") || fn.startswith("_GLOBAL__E_"))
       return;
+    std::string patchname = std::string("__patch_at") + fn.str();
+    BasicBlock* BB = MI->getParent();
+    if (UniqPatchAt.find(BB) == UniqPatchAt.end())
+      UniqPatchAt[BB] = std::set<std::string>();
+    if (UniqPatchAt[BB].find(patchname) != UniqPatchAt[BB].end())
+      return;
+    UniqPatchAt[BB].insert(patchname);
     IRBuilder<> Builder(M.getContext());
     Constant* PatchAtHere =
       M.getOrInsertFunction(
@@ -98,6 +107,10 @@ bool FuncAddrTaken::runOnModule(Module &M) {
   }
   Changed = true;
 
+  // Simple optimization so that no function address will be taken twice
+  // in the same basic block.
+  std::map<BasicBlock*, std::set<std::string> > UniqPatchAt;
+
   // before each store instruction that manipulates a function, create a call
   // to __patch_at
   for (auto F = M.getFunctionList().begin(); F != M.getFunctionList().end(); F++) {
@@ -106,13 +119,13 @@ bool FuncAddrTaken::runOnModule(Module &M) {
         if (isa<StoreInst>(MI)) {
           // check if the store inst moves a function to a variable
           Value *V = InnerMost(cast<StoreInst>(MI)->getValueOperand());
-          addPatchAt(M, FT, V, MI);
+          addPatchAt(M, FT, V, MI, UniqPatchAt);
           if (isa<ConstantVector>(V)) {
             std::set<Value*> patched;
             for (unsigned i = 0; i < cast<ConstantVector>(V)->getNumOperands(); i++) {
               Value *VV = InnerMost(cast<ConstantVector>(V)->getOperand(i));
               if (patched.find(VV) == patched.end()) {
-                addPatchAt(M, FT, VV, MI);
+                addPatchAt(M, FT, VV, MI, UniqPatchAt);
                 patched.insert(VV);
               }
             }
@@ -121,7 +134,7 @@ bool FuncAddrTaken::runOnModule(Module &M) {
             for (unsigned i = 0; i < cast<ConstantStruct>(V)->getNumOperands(); i++) {
               Value *VV = InnerMost(cast<ConstantStruct>(V)->getOperand(i));
               if (patched.find(VV) == patched.end()) {
-                addPatchAt(M, FT, VV, MI);
+                addPatchAt(M, FT, VV, MI, UniqPatchAt);
                 patched.insert(VV);
               }
             }
@@ -130,40 +143,40 @@ bool FuncAddrTaken::runOnModule(Module &M) {
             for (unsigned i = 0; i < cast<ConstantArray>(V)->getNumOperands(); i++) {
               Value *VV = InnerMost(cast<ConstantArray>(V)->getOperand(i));
               if (patched.find(VV) == patched.end()) {
-                addPatchAt(M, FT, VV, MI);
+                addPatchAt(M, FT, VV, MI, UniqPatchAt);
                 patched.insert(VV);
               }
             }
           }
         } else if (isa<SelectInst>(MI)) {
           Value *V = InnerMost(cast<SelectInst>(MI)->getTrueValue());
-          addPatchAt(M, FT, V, MI);
+          addPatchAt(M, FT, V, MI, UniqPatchAt);
           V = InnerMost(cast<SelectInst>(MI)->getFalseValue());
-          addPatchAt(M, FT, V, MI);
+          addPatchAt(M, FT, V, MI, UniqPatchAt);
         } else if (isa<CallInst>(MI)) {
           CallInst* CI = cast<CallInst>(MI);
           for (unsigned i = 0; i < CI->getNumArgOperands(); i++) {
             Value *V = InnerMost(CI->getArgOperand(i));
-            addPatchAt(M, FT, V, MI);
+            addPatchAt(M, FT, V, MI, UniqPatchAt);
           }
         } else if (isa<InvokeInst>(MI)) {
           InvokeInst* CI = cast<InvokeInst>(MI);
           for (unsigned i = 0; i < CI->getNumArgOperands(); i++) {
             Value *V = InnerMost(CI->getArgOperand(i));
-            addPatchAt(M, FT, V, MI);
+            addPatchAt(M, FT, V, MI, UniqPatchAt);
           }
         } else if (isa<ReturnInst>(MI)) {
           Value *V = cast<ReturnInst>(MI)->getReturnValue();
           if (V) {
             V = InnerMost(V);
-            addPatchAt(M, FT, V, MI);
+            addPatchAt(M, FT, V, MI, UniqPatchAt);
           }
         } else if (isa<PHINode>(MI)) {
           for (unsigned i = 0; i < cast<PHINode>(MI)->getNumIncomingValues(); i++) {
             Value *V = InnerMost(cast<PHINode>(MI)->getIncomingValue(i));
             BasicBlock* BB = cast<PHINode>(MI)->getIncomingBlock(i);
             // right before the last (maybe terminator) instruction.
-            addPatchAt(M, FT, V, &(BB->back()));
+            addPatchAt(M, FT, V, &(BB->back()), UniqPatchAt);
           }
         }
       }

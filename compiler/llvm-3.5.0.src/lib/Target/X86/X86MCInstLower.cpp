@@ -799,7 +799,6 @@ static void LowerPATCHPOINT(MCStreamer &OS, StackMaps &SM,
 
 void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   static unsigned long Seq;
-  bool DCJSymbol = true;
         
   X86MCInstLower MCInstLowering(*MF, *this);
   const X86RegisterInfo *RI =
@@ -960,9 +959,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
       } else if (MO.isGlobal()) {
         FuncName = MO.getGlobal()->getName();
       }
-      if (FuncName == "__patch_at")
-        DCJSymbol = false;
-      else if (FuncName.startswith("__patch_at")) {
+      if (FuncName.startswith("__patch_at")) {
         // FuncName may contain @
         size_t atsym = FuncName.find('@');
         std::string suffix;
