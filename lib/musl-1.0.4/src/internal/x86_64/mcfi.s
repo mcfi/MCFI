@@ -6,9 +6,6 @@ __patch_call:
         movq %r11, %fs:0x88
         /* pop the return address */
         popq %r11
-        /* push eflags, not necessary for patch_call since eflags is dead, but
-           __patch_at needs to save the value of eflags. */
-        pushfq
         /* set continuation */
         movq %r11, %fs:0x20
         /* subtract the length of the direct call instruction */
@@ -19,16 +16,10 @@ __patch_call:
         .globl __patch_at
         .type __patch_at,@function
 __patch_at:
-        /* save %r11 */
-        movq %r11, %fs:0x88
         /* pop the return address */
-        popq %r11
-        /* push the eflags */
-        pushfq
+        popq %rdi
         /* set continuation */
-        movq %r11, %fs:0x20
-        /* subtract the length of the direct call instruction */
-        subl $0x5, %fs:0x20
+        movq %rdi, %fs:0x20
         jmpq *%gs:0x10108 /* patch at */
 
         .globl __report_cfi_violation_for_return
