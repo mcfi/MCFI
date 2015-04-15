@@ -858,6 +858,8 @@ static void merge_mcfi_metainfo(code_module *modules,
                                 /*out*/dict **classes,
                                 /*out*/graph **cha,
                                 /*out*/dict **fats,
+                                /*out*/dict **fats_in_data,
+                                /*out*/dict **fats_in_code,
                                 /*out*/graph **aliases) {
   code_module *m;
   DL_FOREACH(modules, m) {
@@ -866,6 +868,8 @@ static void merge_mcfi_metainfo(code_module *modules,
     merge_dicts(classes, m->classes);
     merge_graphs(cha, m->cha);
     merge_dicts(fats, m->fats);
+    merge_dicts(fats_in_data, m->fats_in_data);
+    merge_dicts(fats_in_code, m->fats_in_code);
     merge_graphs(aliases, m->aliases);
   }
 }
@@ -1200,48 +1204,98 @@ static void gen_mcfi_id(node **lcg, node **lrt,
 
 #ifdef COLLECT_STAT
 static unsigned int ibt_funcs = 0; /* functions that are indirect branch targets */
+static dict* ibt_funcs_taken_in_code = 0;
 static unsigned int ibt_radcs = 0; /* return addresses of direct calls */
 static unsigned int ibt_raics = 0; /* return addresses of indirect calls */
 static unsigned int ict_count = 0; /* indirect calls */
 static unsigned int rt_count = 0;  /* returns */
+
+static void incr_ibt_radcs(void) {
+  ++ibt_radcs;
+}
+static void incr_ibt_raics(void) {
+  ++ibt_raics;
+}
+static void incr_ibt_funcs(void) {
+  ++ibt_funcs;
+}
+#else
+static void incr_ibt_radcs(void) {
+}
+static void incr_ibt_raics(void) {
+}
+static void incr_ibt_funcs(void) {
+}
 #endif
+
+static void populate_tary_for_func_addr(code_module *m,
+                                        char *tary, dict *ids, symbol *syms,
+                                        void* (*mark)(void*), int activated,
+                                        dict **fats_in_code,
+                                        void (*incr)(void)) {
+  symbol *sym;
+  DL_FOREACH(syms, sym) {
+    keyvalue *id = dict_find(ids, mark(sym->name));
+    size_t mask = (size_t)-1;
+    if (id) {
+      size_t* p = (size_t*)(tary + sym->offset);
+      if (!activated && !(*p & 1)) {
+        if (dict_find(*fats_in_code, _unmark_ptr(sym->name))) {
+          g_add_directed_edge(fats_in_code, _unmark_ptr(sym->name),
+                              (void*)(m->base_addr + sym->offset));
+          mask = ((size_t)-2);
+#ifdef COLLECT_STAT
+          if (!dict_find(ibt_funcs_taken_in_code, (void*)(m->base_addr + sym->offset)))
+            dict_add(&ibt_funcs_taken_in_code, (void*)(m->base_addr + sym->offset), 0);
+#endif
+        }
+      }
+      *p = ((unsigned long)id->value & mask);
+      incr(); /* collect stat data */
+    }
+  }
+}
+
+static void populate_tary_for_return_addr(char* tary, dict *ids, symbol *syms,
+                                          void* (*mark)(void*),
+                                          int activated,
+                                          void (*incr)(void)) {
+  symbol *sym;
+  DL_FOREACH(syms, sym) {
+    keyvalue *id = dict_find(ids, mark(sym->name));
+    size_t mask = (size_t)-1;
+    if (id) {
+      size_t* p = (size_t*)(tary + sym->offset);
+      /* if the target has not been activated, do not activate it */
+      if (!activated && !(*p & 1)) {
+        mask = ((size_t)-2);
+      }
+      *p = ((unsigned long)id->value & mask);
+      if (incr) incr(); /* collect stat data */
+    }
+  }
+}
 
 /* generate and populate the tary table for module m */
-static void gen_tary(code_module *m, dict *callids, dict *retids, char *table) {
+static void gen_tary(code_module *m, dict *callids, dict *retids, char *table,
+                     graph **fats_in_code) {
   char *tary = table + m->base_addr;
-#ifdef COLLECT_STAT
-#define incr_count(count) ++count
-#else
-#define incr_count(count)
-#endif
-
-#define POPULATE_TARY(ids, syms, mark, activation_considered, count) do { \
-    symbol *sym;                                                        \
-    DL_FOREACH(syms, sym) {                                             \
-      keyvalue *id = dict_find(ids, mark(sym->name));                   \
-      size_t mask = (size_t)-1;                                         \
-      if (id) {                                                         \
-        size_t* p = (size_t*)(tary + sym->offset);                      \
-        if (!m->activated && activation_considered) {                   \
-          /* if the target has not been activated, do activate it */    \
-          if (!(*p & 1))                                                \
-            mask = ((size_t)-2);                                        \
-        }                                                               \
-        *p = ((unsigned long)id->value & mask);                         \
-        incr_count(count);                                              \
-      }                                                                 \
-    }                                                                   \
-  } while (0)
-  POPULATE_TARY(callids, m->funcsyms, _mark_func, FALSE, ibt_funcs);
 #ifndef NO_ONLINE_PATCHING
-  POPULATE_TARY(retids, m->rad, _mark_ra_dc, TRUE, ibt_radcs);
-  POPULATE_TARY(retids, m->rai, _mark_ra_ic, TRUE, ibt_raics);
+  populate_tary_for_func_addr(m, tary, callids, m->funcsyms, _mark_func,
+                              FALSE, fats_in_code, incr_ibt_funcs);
+  populate_tary_for_return_addr(tary, retids, m->rad, _mark_ra_dc,
+                                m->activated, incr_ibt_radcs);
+  populate_tary_for_return_addr(tary, retids, m->rai, _mark_ra_ic,
+                                m->activated, incr_ibt_raics);
 #else
-  POPULATE_TARY(retids, m->rad, _mark_ra_dc, FALSE, ibt_radcs);
-  POPULATE_TARY(retids, m->rai, _mark_ra_ic, FALSE, ibt_raics);
+  graph *empty = 0;
+  populate_tary_for_func_addr(m, tary, callids, m->funcsyms, _mark_func,
+                              TRUE, &empty, incr_ibt_funcs);
+  populate_tary_for_return_addr(tary, retids, m->rad, _mark_ra_dc,
+                                TRUE, incr_ibt_radcs);
+  populate_tary_for_return_addr(tary, retids, m->rai, _mark_ra_ic,
+                                TRUE, incr_ibt_raics);
 #endif
-#undef incr_count
-#undef POPULATE_TARY
 }
 
 /* generate and populate the bary table for module m */

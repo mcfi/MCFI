@@ -18,6 +18,7 @@ static TCB *tcb_list = 0;
 dict *thread_escape_map = 0;
 
 #ifdef COLLECT_STAT
+static unsigned int at_patch_count = 0;
 static unsigned int radc_patch_count = 0;
 static unsigned int raic_patch_count = 0;
 static unsigned int eqc_callgraph_count = 0;
@@ -114,9 +115,10 @@ void free_tcb(void *user_tcb) {
   }
 }
 
+static graph *fats_in_code = 0;
+
 void patch_at(unsigned long patchpoint) {
-#ifndef NO_ONLINE_PATCHING
-  dprintf(STDERR_FILENO, "patched at %lx\n", patchpoint);
+  //dprintf(STDERR_FILENO, "patched at %lx\n", patchpoint);
   code_module *m;
   int found = FALSE;
   DL_FOREACH(modules, m) {
@@ -127,21 +129,37 @@ void patch_at(unsigned long patchpoint) {
     }
   }
   assert(found && patchpoint % 8 == 0);
-
-  if (cfggened) {
-    //*((unsigned long*)(table + m->base_addr + (unsigned long)patch->key)) |= 1;
-  } else {
-    /* add all possible function addresses to patch_compensate */
-    //dict_add(&patch_compensate, table + m->base_addr + (unsigned long)patch->key, 0);
-  }
+  patchpoint -= m->base_addr;
+  keyvalue *kv = dict_find(m->at_func, (void*)patchpoint);
+  assert(kv);
+#ifndef NO_ONLINE_PATCHING
+  vertex *v = dict_find(fats_in_code, kv->value);
+  if (v) {
+    vertex *tmp, *atsite;
+    HASH_ITER(hh, (graph*)(v->value), atsite, tmp) {
+      assert (cfggened);
+      *((unsigned long*)(table + (unsigned long)atsite->key)) |= 1;
+      // Luckily, libc does not take any function address before the
+      // the CFG generation.
+      //else {
+      //  /* add all possible function addresses to patch_compensate */
+      //  dict_add(&patch_compensate, table + (unsigned long)atsite->key, 0);
+      //}
+      //dprintf(STDERR_FILENO, "Patch %x\n", (unsigned long)atsite->key);
+#ifdef COLLECT_STAT
+      ++at_patch_count;
+#endif
+    }
+    g_del_vertex(&fats_in_code, v->key);
+  } /* else the address is also taken in data */
+#endif
   /* the patch should be performed after the tary id is set valid */
-  char *p = (char*)(m->osb_base_addr + patchpoint - m->base_addr - 8);
+  char *p = (char*)(m->osb_base_addr + patchpoint - 8);
   char patch[8];
   memcpy(patch, p, 3);
   static const char fivebytenop[5] = {0x0f, 0x1f, 0x44, 0x00, 0x00};
   memcpy(patch+3, fivebytenop, 5);
   *(unsigned long*)p = *(unsigned long*)patch;
-#endif
 }
 
 void patch_call(unsigned long patchpoint) {
@@ -540,6 +558,32 @@ static int safe(void) {
   return TRUE;
 }
 
+static void compute_fic(dict **fats_in_code,
+                        dict **fats_in_data,
+                        graph *aliases_tc) {
+#define ADD(fats, v) do {                               \
+    if (dict_find(fats, v->key)) {                      \
+      vertex *a, *atmp;                                 \
+      HASH_ITER(hh, (graph*)(v->value), a, atmp) {      \
+        dict_add(&fats, a->key, 0);                     \
+      }                                                 \
+    }                                                   \
+  } while (0);
+  keyvalue *v, *tmp;
+  HASH_ITER(hh, aliases_tc, v, tmp) {
+    ADD(*fats_in_code, v);
+    ADD(*fats_in_data, v);
+  }
+#undef ADD
+  /* for any function whose address is taken in data, remove
+     its name from the set where each function's address is taken in code*/
+  HASH_ITER(hh, *fats_in_code, v, tmp) {
+    if (dict_find(*fats_in_data, v->key)) {
+      HASH_DEL(*fats_in_code, v);
+      free(v);
+    }
+  }
+}
 /* Version Space
  * We use four 7-bit fields to represent the version, excluding
  * 0xfe and 0xf4 for exception landingpads and dynamic code generation.
@@ -563,10 +607,16 @@ int gen_cfg(void) {
   dict *classes = 0;
   graph *cha = 0;
   dict *fats = 0;
+  dict *fats_in_data = 0;
   graph *aliases = 0;
 
+  if (fats_in_code) {
+    g_dtor(&fats_in_code);
+    fats_in_code = 0;
+  }
+
   merge_mcfi_metainfo(modules, &icfs, &functions, &classes,
-                      &cha, &fats, &aliases);
+                      &cha, &fats, &fats_in_data, &fats_in_code, &aliases);
 
   graph *all_funcs_grouped_by_name = 0;
   graph *callgraph =
@@ -578,6 +628,12 @@ int gen_cfg(void) {
   g_dtor(&cha);
   dict_clear(&fats);
   g_dtor(&aliases);
+
+  graph *aliases_tc = g_transitive_closure(&aliases);
+  /* build complete fats_in_data and fats_in_code */
+  compute_fic(&fats_in_code, &fats_in_data, aliases_tc);
+  g_dtor(&fats_in_data);
+  g_free_transitive_closure(&aliases_tc);
 
   node *lcg = g_get_lcc(&callgraph);
 
@@ -643,7 +699,7 @@ int gen_cfg(void) {
 
   DL_FOREACH(modules, m) {
     if (!m->cfggened) {
-      gen_tary(m, callids, retids, table);
+      gen_tary(m, callids, retids, table, &fats_in_code);
       gen_bary(m, callids, retids, table, id_for_others);
       populate_landingpads(m, table);
     }
@@ -651,7 +707,7 @@ int gen_cfg(void) {
   
   DL_FOREACH(modules, m) {
     if (m->cfggened)
-      gen_tary(m, callids, retids, table);
+      gen_tary(m, callids, retids, table, &fats_in_code);
   }
 
   /* write barrier, if needed */
@@ -1472,6 +1528,7 @@ void collect_stat(void) {
   }
   if (lp_count > 0)
     ++eqclp;
+
   unsigned int pid = __syscall0(SYS_getpid);
 
   dprintf(STDERR_FILENO, "\n[%u] MCFI Statistics\n", pid);
@@ -1484,8 +1541,8 @@ void collect_stat(void) {
 
   dprintf(STDERR_FILENO, "[%u] Total Indirect Branches: %u\n", pid,
           ict_count + rt_count);
-  dprintf(STDERR_FILENO, "[%u] Forward-Edges: %u\n", pid, ict_count);
-  dprintf(STDERR_FILENO, "[%u] Back-Edges: %u\n", pid, rt_count);
+  dprintf(STDERR_FILENO, "[%u] Forward Branches: %u\n", pid, ict_count);
+  dprintf(STDERR_FILENO, "[%u] Backward Branches: %u\n", pid, rt_count);
 
   dprintf(STDERR_FILENO, "[%u] Total Indirect Branch Targets: %u\n", pid,
           ibt_funcs + ibt_radcs + ibt_raics + lp_count);
@@ -1497,6 +1554,10 @@ void collect_stat(void) {
           pid, ibt_raics);
   dprintf(STDERR_FILENO, "[%u] Landing Pads: %u\n", pid, lp_count);
 #ifndef NO_ONLINE_PATCHING
+  dprintf(STDERR_FILENO, "[%u] Functions AddrTaken In Code: %u\n",
+          pid, HASH_COUNT(ibt_funcs_taken_in_code));
+  dprintf(STDERR_FILENO, "[%u] Total online activated functions: %u\n",
+          pid, at_patch_count);
   dprintf(STDERR_FILENO, "[%u] Total Patches (or Activated Return Addrs): %u\n",
           pid, radc_patch_count + raic_patch_count);
   dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of Direct Calls: %u\n",
