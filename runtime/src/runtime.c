@@ -162,9 +162,56 @@ void patch_at(unsigned long patchpoint) {
   *(unsigned long*)p = *(unsigned long*)patch;
 }
 
+static dict* vmtd = 0;
+
+void patch_entry(unsigned long patchpoint) {
+#ifndef NO_ONLINE_PATCHING
+  //dprintf(STDERR_FILENO, "patched entry %x\n", patchpoint);
+  code_module *m;
+  int found = FALSE;
+  /*
+  DL_FOREACH(modules, m) {
+    dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, m->sz);
+  }
+  */
+  DL_FOREACH(modules, m) {
+    if (patchpoint >= m->base_addr &&
+        patchpoint < m->base_addr + m->sz) {
+      found = TRUE;
+      break;
+    }
+  }
+  assert(found);
+  patchpoint -= m->base_addr;
+  assert(cfggened);
+  keyvalue *kv_ctor = dict_find(m->ctor, (void*)patchpoint);
+  assert(kv_ctor);
+  //dprintf(STDERR_FILENO, "ctor: %s\n", kv_ctor->value);
+  // kv_ctor->value is the actual constructor's demangled name
+  keyvalue *kv_methods = dict_find(m->vtable, kv_ctor->value);
+  assert(kv_methods);
+  node *n;
+  DL_FOREACH((node*)(kv_methods->value), n) {
+    // for each virtual method, we set its tary id to be valid
+    keyvalue *kv_m = dict_find(vmtd, n->val);
+    if (kv_m) {
+      keyvalue *v, *tmp;
+      HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
+        *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
+      }
+    }
+  }
+  // kv_methods->value is a list of virtual methods
+  keyvalue *kv = dict_find(m->func_orig, (void*)patchpoint);
+  assert(kv);
+  char *p = (char*)(m->osb_base_addr + patchpoint);
+  *(unsigned long*)p = (unsigned long)(kv->value);
+#endif
+}
+
 void patch_call(unsigned long patchpoint) {
 #ifndef NO_ONLINE_PATCHING
-  //dprintf(STDERR_FILENO, "patched %lx\n", patchpoint);
+  //dprintf(STDERR_FILENO, "patched call %lx\n", patchpoint);
   code_module *m;
   int found = FALSE;
   DL_FOREACH(modules, m) {
@@ -584,6 +631,46 @@ static void compute_fic(dict **fats_in_code,
     }
   }
 }
+
+extern dict *vtabletaken;
+
+static dict *get_all_vmtd(dict *vtable, dict *defined_ctors) {
+  dict *all_vmtd = 0;
+  keyvalue *kv, *tmp;
+  HASH_ITER(hh, vtable, kv, tmp) {
+    node *n;
+    if (!dict_find(vtabletaken, kv->key) &&
+        dict_find(defined_ctors, kv->key)) {
+      //dprintf(STDERR_FILENO, "%s\n", kv->key);
+      DL_FOREACH((node*)kv->value, n) {
+        if (!dict_find(all_vmtd, n->val))
+          dict_add(&all_vmtd, n->val, 0);
+      }
+    }
+  }
+  return all_vmtd;
+}
+
+static void compute_tc_vmtd(dict **vmtd,
+                            dict *defined_ctors,
+                            graph *aliases_tc) {
+  code_module *m;
+
+  DL_FOREACH(modules, m) {
+    merge_dicts(vmtd, get_all_vmtd(m->vtable, defined_ctors));
+  }
+
+  keyvalue *v, *tmp;
+  HASH_ITER(hh, aliases_tc, v, tmp) {
+    if (dict_find(*vmtd, v->key)) {
+      vertex *a, *atmp;
+      HASH_ITER(hh, (graph*)(v->value), a, atmp) {
+        dict_add(vmtd, a->key, 0);
+      }
+    }
+  }
+}
+
 /* Version Space
  * We use four 7-bit fields to represent the version, excluding
  * 0xfe and 0xf4 for exception landingpads and dynamic code generation.
@@ -608,6 +695,7 @@ int gen_cfg(void) {
   graph *cha = 0;
   dict *fats = 0;
   dict *fats_in_data = 0;
+  dict *defined_ctors = 0;
   graph *aliases = 0;
 
   if (fats_in_code) {
@@ -615,8 +703,13 @@ int gen_cfg(void) {
     fats_in_code = 0;
   }
 
+  if (vmtd) {
+    g_dtor(&vmtd);
+    vmtd = 0;
+  }
+
   merge_mcfi_metainfo(modules, &icfs, &functions, &classes,
-                      &cha, &fats, &fats_in_data, &fats_in_code, &aliases);
+                      &cha, &fats, &fats_in_data, &fats_in_code, &aliases, &defined_ctors);
 
   graph *all_funcs_grouped_by_name = 0;
   graph *callgraph =
@@ -633,6 +726,9 @@ int gen_cfg(void) {
   /* build complete fats_in_data and fats_in_code */
   compute_fic(&fats_in_code, &fats_in_data, aliases_tc);
   g_dtor(&fats_in_data);
+  /* handle vmtd aliases of virtual destructors */
+  compute_tc_vmtd(&vmtd, defined_ctors, aliases_tc);
+  dict_clear(&defined_ctors);
   g_free_transitive_closure(&aliases_tc);
 
   node *lcg = g_get_lcc(&callgraph);
@@ -699,7 +795,7 @@ int gen_cfg(void) {
 
   DL_FOREACH(modules, m) {
     if (!m->cfggened) {
-      gen_tary(m, callids, retids, table, &fats_in_code);
+      gen_tary(m, callids, retids, table, &fats_in_code, &vmtd);
       gen_bary(m, callids, retids, table, id_for_others);
       populate_landingpads(m, table);
     }
@@ -707,7 +803,7 @@ int gen_cfg(void) {
   
   DL_FOREACH(modules, m) {
     if (m->cfggened)
-      gen_tary(m, callids, retids, table, &fats_in_code);
+      gen_tary(m, callids, retids, table, &fats_in_code, &vmtd);
   }
 
   /* write barrier, if needed */

@@ -159,6 +159,10 @@ struct code_module_t {
   vertex   *fats_in_data; /* functions whose addresses are taken in data */
   dict     *ra_orig;   /* original values of call sites */
   dict     *at_func;   /* which function's address is taken at which site */
+  dict     *func_orig; /* original values of function's entries */
+  dict     *ctor;      /* mangled c++ constructor offset and their demangled class names */
+  dict     *vtable;    /* c++ constructor's demangled name and its mangled virtual methods */
+  dict     *defined_ctors; /* c++ constructors which have function bodies */
   graph    *dynfuncs;  /* map from position of to a couple of functions */
   graph    *weakfuncs; /* weak functions symbols */
   uintptr_t gotplt;    /* offset of .got.plt */
@@ -560,6 +564,7 @@ static void _add_node_list(char *cursor, char local_symbol, /*out*/node **node_l
 }
 
 static void parse_functions(char *content, const char *end, function **functions,
+                            /*out*/dict **ctor,
                             /*out*/str **sp) {
   char *cursor = content;
 
@@ -614,6 +619,15 @@ static void parse_functions(char *content, const char *end, function **functions
         local_cursor = _get_string_before_symbol(&cursor, '\n', &stop, 0);
         _add_node_list(local_cursor, ' ', &(f->returns), sp);
         break;
+      case 'C':
+        cursor += 2;
+        {
+          keyvalue *kv = dict_find(*ctor, f->name);
+          char *ctorname = sp_intern_string(sp, _get_string_before_symbol(&cursor, '\n', &stop, 0));
+          if (!kv)
+            dict_add(ctor, f->name, ctorname);
+        }
+        break;
       case '}':
         cursor += 2;
         DL_APPEND(*functions, f);
@@ -624,6 +638,36 @@ static void parse_functions(char *content, const char *end, function **functions
         dprintf(STDERR_FILENO, "Functions parsing failed at %lu\n", cursor - content);
         quit(-1);
       }
+    }
+  }
+}
+
+static void parse_vtable(char *content, const char *end,
+                         /*out*/dict **vtable,
+                         /*out*/str **sp) {
+  char *cursor = content;
+
+  char *local_cursor = 0;
+
+  int stop;
+
+  while (cursor < end) {
+    char *ctorname = sp_intern_string(sp, _get_string_before_symbol(&cursor, '#', &stop, 0));
+    //dprintf(STDERR_FILENO, "ctorname: %s\n", ctorname);
+    local_cursor = _get_string_before_symbol(&cursor, '\n', &stop, 0);
+    node *vmtd = 0;
+    _add_node_list(local_cursor, '#', &vmtd, sp);
+    /*
+      node *n;
+      DL_FOREACH(vmtd, n) {
+      dprintf(STDERR_FILENO, "  vmtd: %s\n", n->val);
+      }
+    */
+    keyvalue *kv = dict_find(*vtable, ctorname);
+    if (!kv) {
+      dict_add(vtable, ctorname, vmtd);
+    } else {
+      l_free(&vmtd);
     }
   }
 }
@@ -844,7 +888,7 @@ static void merge_graphs(/*out*/graph **graphs, graph *mg) {
     vertex *vv, *vtmp;
     HASH_ITER(hh, ((graph*)v->value), vv, vtmp) {
       g_add_vertex((vertex**)(&(nv->value)), vv->key);
-      //dprintf(STDERR_FILENO, "%s, %s\n", v->key, vv->key);
+      //dprintf(STDERR_FILENO, "%s\n", v->key);
     }
   }
 }
@@ -860,7 +904,8 @@ static void merge_mcfi_metainfo(code_module *modules,
                                 /*out*/dict **fats,
                                 /*out*/dict **fats_in_data,
                                 /*out*/dict **fats_in_code,
-                                /*out*/graph **aliases) {
+                                /*out*/graph **aliases,
+                                /*out*/dict **defined_ctors) {
   code_module *m;
   DL_FOREACH(modules, m) {
     merge_icfs(icfs, m->icfs);
@@ -871,6 +916,7 @@ static void merge_mcfi_metainfo(code_module *modules,
     merge_dicts(fats_in_data, m->fats_in_data);
     merge_dicts(fats_in_code, m->fats_in_code);
     merge_graphs(aliases, m->aliases);
+    merge_dicts(defined_ctors, m->defined_ctors);
   }
 }
 
@@ -1231,7 +1277,7 @@ static void incr_ibt_funcs(void) {
 static void populate_tary_for_func_addr(code_module *m,
                                         char *tary, dict *ids, symbol *syms,
                                         void* (*mark)(void*), int activated,
-                                        dict **fats_in_code,
+                                        graph **fats_in_code, graph **vmtd,
                                         void (*incr)(void)) {
   symbol *sym;
   DL_FOREACH(syms, sym) {
@@ -1248,6 +1294,11 @@ static void populate_tary_for_func_addr(code_module *m,
           if (!dict_find(ibt_funcs_taken_in_code, (void*)(m->base_addr + sym->offset)))
             dict_add(&ibt_funcs_taken_in_code, (void*)(m->base_addr + sym->offset), 0);
 #endif
+        } else if (dict_find(*vmtd, _unmark_ptr(sym->name))) {
+          //dprintf(STDERR_FILENO, "%s\n", _unmark_ptr(sym->name));
+          g_add_directed_edge(vmtd, _unmark_ptr(sym->name),
+                              (void*)(m->base_addr + sym->offset));
+          mask = ((size_t)-2);
         }
       }
       *p = ((unsigned long)id->value & mask);
@@ -1278,11 +1329,11 @@ static void populate_tary_for_return_addr(char* tary, dict *ids, symbol *syms,
 
 /* generate and populate the tary table for module m */
 static void gen_tary(code_module *m, dict *callids, dict *retids, char *table,
-                     graph **fats_in_code) {
+                     graph **fats_in_code, graph **vmtd) {
   char *tary = table + m->base_addr;
 #ifndef NO_ONLINE_PATCHING
   populate_tary_for_func_addr(m, tary, callids, m->funcsyms, _mark_func,
-                              FALSE, fats_in_code, incr_ibt_funcs);
+                              FALSE, fats_in_code, vmtd, incr_ibt_funcs);
   populate_tary_for_return_addr(tary, retids, m->rad, _mark_ra_dc,
                                 m->activated, incr_ibt_radcs);
   populate_tary_for_return_addr(tary, retids, m->rai, _mark_ra_ic,
@@ -1290,7 +1341,7 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table,
 #else
   graph *empty = 0;
   populate_tary_for_func_addr(m, tary, callids, m->funcsyms, _mark_func,
-                              TRUE, &empty, incr_ibt_funcs);
+                              TRUE, &empty, &empty, incr_ibt_funcs);
   populate_tary_for_return_addr(tary, retids, m->rad, _mark_ra_dc,
                                 TRUE, incr_ibt_radcs);
   populate_tary_for_return_addr(tary, retids, m->rai, _mark_ra_ic,

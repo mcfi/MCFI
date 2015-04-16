@@ -121,6 +121,7 @@ runtime_\patch_func:
 
 .endm
         online_patch patch_call
+        online_patch patch_entry
 
 # The ABI requires that fcw and mxcsr are both callee-saved, so
 # we do not need to save them.

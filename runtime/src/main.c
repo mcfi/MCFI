@@ -35,6 +35,7 @@ int lt_envc = 0;
 /* cfg generation data */
 code_module *modules = 0; /* code modules */
 str *stringpool = 0;
+dict *vtabletaken = 0;
 
 /* default SDK path */
 const char *MCFI_SDK = 0;
@@ -175,6 +176,7 @@ void install_trampolines(void) {
     void *delete_code;
     void *move_code;
     void *patch_at;
+    void *patch_entry;
   } *tp = (struct trampolines*)(tramp_page);
   extern unsigned long runtime_rock_mmap;
   extern unsigned long runtime_rock_mprotect;
@@ -194,6 +196,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_report_cfi_violation;
   extern unsigned long runtime_patch_call;
   extern unsigned long runtime_patch_at;
+  extern unsigned long runtime_patch_entry;
   extern unsigned long runtime_take_addr_and_gen_cfg;
   extern unsigned long runtime_set_gotplt;
   extern unsigned long runtime_rock_fork;
@@ -202,6 +205,7 @@ void install_trampolines(void) {
   extern unsigned long runtime_reg_cfg_metadata;
   extern unsigned long runtime_delete_code;
   extern unsigned long runtime_move_code;
+
   tp->mmap = &runtime_rock_mmap;
   tp->mprotect = &runtime_rock_mprotect;
   tp->munmap = &runtime_rock_munmap;
@@ -228,6 +232,7 @@ void install_trampolines(void) {
   tp->delete_code = &runtime_delete_code;
   tp->move_code = &runtime_move_code;
   tp->patch_at = &runtime_patch_at;
+  tp->patch_entry = &runtime_patch_entry;
 
   /* set the first 68KB read-only */
   if (0 != mprotect(table,  BID_SLOT_START, PROT_READ)) {
@@ -518,6 +523,8 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   dict *aliases = 0;
   dict *fats_in_code = 0;
   dict *fats_in_data = 0;
+  dict *ctor = 0;
+  dict *vtable = 0;
   code_module *cm = alloc_code_module();
 
   for (cnt = 0; cnt < ehdr->e_shnum; cnt++) {
@@ -537,7 +544,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     } else if (0 == strcmp(shname, ".MCFIFuncInfo")) {
       parse_functions(elf + shdr[cnt].sh_offset, /* content */
                       elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
-                      &functions, &stringpool);
+                      &functions, &ctor, &stringpool);
     } else if (0 == strcmp(shname, ".MCFICHA")) {
       parse_cha(elf + shdr[cnt].sh_offset, /* content */
                 elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
@@ -554,6 +561,10 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       parse_fats(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &fats_in_code, &stringpool);
+    } else if (0 == strcmp(shname, ".MCFIVtable")) {
+      parse_vtable(elf + shdr[cnt].sh_offset, /* content */
+                   elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
+                   &vtable, &stringpool);
     } else if (0 == strcmp(shname, ".MCFIDtorCxaAtExit")) {
       // TODO: Add handling code here
     } else if (0 == strcmp(shname, ".MCFIDtorCxaThrow")) {
@@ -602,12 +613,16 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   cm->fats_in_data = fats_in_data;
   merge_dicts(&(cm->fats), cm->fats_in_code);
   merge_dicts(&(cm->fats), cm->fats_in_data);
-
+  cm->vtable = vtable;
   cm->sz = sz;
+
   graph *aliases_tc = g_transitive_closure(&aliases);
 
   unsigned int patch_call_offset = -1;
   const char *patch_call = sp_intern_string(&stringpool, "__patch_call");
+
+  unsigned int patch_entry_offset = -1;
+  const char *patch_entry = sp_intern_string(&stringpool, "__patch_entry");
 
   for (cnt = 0; cnt < numsym; cnt++) {
     char *symname = strtab + sym[cnt].st_name;
@@ -660,6 +675,20 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       funcsym->offset = sym[cnt].st_value - cm->base_addr;
       //dprintf(STDERR_FILENO, "%lx, %s\n", funcsym->offset, funcsym->name);
       DL_APPEND(cm->funcsyms, funcsym);
+
+      keyvalue *kv = dict_find(ctor, funcsym->name);
+      // if kv is a virtual method and its class's vtable is nos taken yet
+      if (kv && !dict_find(vtabletaken, kv->value) &&
+          dict_find(vtable, kv->value)) {
+        dict_add(&(cm->func_orig), (void*)funcsym->offset,
+                 (void*)*((unsigned long*)(elf + funcsym->offset)));
+        dict_add(&(cm->ctor), (void*)funcsym->offset, kv->value);
+        // this class' constructor has a body
+        if (!dict_find(cm->defined_ctors, kv->value))
+          dict_add(&(cm->defined_ctors), kv->value, 0);
+        //dprintf(STDERR_FILENO, "reg ctor: %s\n", kv->value);
+      }
+
       if (funcsym->name == patch_call)
         patch_call_offset = funcsym->offset;
 
@@ -706,8 +735,10 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     //dprintf(STDERR_FILENO, "%x, %s\n", relaplt[cnt].r_offset - cm->gotplt, funcsym->name);
     if (funcsym->name == patch_call)
       patch_call_offset = funcsym->offset;
+    else if (funcsym->name == patch_entry)
+      patch_entry_offset = funcsym->offset;
   }
-
+  dict_clear(&ctor);
   /* if not explicitly shutdown, just enable online patching */
 #ifndef NO_ONLINE_PATCHING
   if (patch_call_offset != -1) {
@@ -737,6 +768,26 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
         patch = patch_call_offset - callsite_offset;
         memcpy(elf + callsite_offset - 4, &patch, 4);
       }
+    }
+  }
+  {
+    keyvalue *kv, *tmp;
+    HASH_ITER(hh, cm->func_orig, kv, tmp) {
+      if (dict_find(cm->ra_orig, (void*)((unsigned long)kv->key + 8))) {
+        // one place is patched twice, establish the order
+        kv->value = (void*)(*(unsigned long*)(elf + (unsigned long)kv->key));
+      }
+    }
+  }
+  if (patch_entry_offset != -1) {
+    keyvalue *kv, *tmp;
+    unsigned int patch;
+    HASH_ITER(hh, cm->func_orig, kv, tmp) {
+      unsigned int callsite = (unsigned int)kv->key;
+      char *p = elf + callsite;
+      *p = 0xe8;
+      patch = patch_entry_offset - (callsite+5);
+      memcpy(p+1, &patch, 4);
     }
   }
 #endif
@@ -974,6 +1025,27 @@ static void load_libc(void) {
   libc_base = load_elf_name(libc_path, FALSE, &libc_entry);
 }
 
+static void populate_vtabletaken(dict **vtt) {
+  char* libcxxtypeinfo[] =
+    {
+      "__cxxabiv1::__shim_type_info",
+      "__cxxabiv1::__fundamental_type_info",
+      "__cxxabiv1::__array_type_info",
+      "__cxxabiv1::__function_type_info",
+      "__cxxabiv1::__enum_type_info",
+      "__cxxabiv1::__class_type_info",
+      "__cxxabiv1::__si_class_type_info",
+      "__cxxabiv1::__vmi_class_type_info",
+      "__cxxabiv1::__pbase_type_info",
+      "__cxxabiv1::__pointer_type_info",
+      "__cxxabiv1::__pointer_to_member_type_info",
+    };
+  int i;
+  for (i = 0; i < sizeof(libcxxtypeinfo)/sizeof(libcxxtypeinfo[0]); i++) {
+    dict_add(vtt, sp_intern_string(&stringpool, libcxxtypeinfo[i]), 0);
+  }
+}
+
 /* main function of the runtime */
 void* runtime_init(int argc, char **argv) {
   /* let's first collect some basic information of this ELF loading */
@@ -1002,6 +1074,9 @@ void* runtime_init(int argc, char **argv) {
   
   /* load the libc */
   load_libc();
+
+  /* populate vtabletaken */
+  populate_vtabletaken(&vtabletaken);
 
   /* reload the application by creating a parallel mapping for it */
   load_elf_name(argv[0], TRUE, 0);

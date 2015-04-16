@@ -133,6 +133,14 @@ static node *new_node(void *val) {
   return n;
 }
 
+static void l_free(node **l) {
+  node *elt, *tmp;
+  DL_FOREACH_SAFE(*l, elt, tmp) {
+    DL_DELETE(*l, elt);
+    free(elt);
+  }
+}
+
 /* do a breadth-first search from node val */
 static vertex *g_bfs(vertex **g, void *val, vertex **explored) {
   vertex *rg = 0;    /* result nodes */
