@@ -1194,7 +1194,9 @@ void X86AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
   if (MBB.isLandingPad()) {
     OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0);
     MCSymbol *LPSym =
-      OutContext.GetOrCreateSymbol(StringRef("__mcfi_lp_") + to_hex(++Seq));
+      OutContext.GetOrCreateSymbol(StringRef("__mcfi_lp_") + to_hex(++Seq) +
+                                   StringRef("_") +
+                                   MBB.getParent()->getName());
     OutStreamer.EmitSymbolAttribute(LPSym, MCSymbolAttr::MCSA_Hidden);
     OutStreamer.EmitLabel(LPSym);
   }
