@@ -1251,6 +1251,7 @@ static void gen_mcfi_id(node **lcg, node **lrt,
 #ifdef COLLECT_STAT
 static unsigned int ibt_funcs = 0; /* functions that are indirect branch targets */
 static dict* ibt_funcs_taken_in_code = 0;
+static dict* vmtd_taken_in_code = 0;
 static unsigned int ibt_radcs = 0; /* return addresses of direct calls */
 static unsigned int ibt_raics = 0; /* return addresses of indirect calls */
 static unsigned int ict_count = 0; /* indirect calls */
@@ -1299,6 +1300,10 @@ static void populate_tary_for_func_addr(code_module *m,
           g_add_directed_edge(vmtd, _unmark_ptr(sym->name),
                               (void*)(m->base_addr + sym->offset));
           mask = ((size_t)-2);
+#ifdef COLLECT_STAT
+          if (!dict_find(vmtd_taken_in_code, (void*)(m->base_addr + sym->offset)))
+            dict_add(&vmtd_taken_in_code, (void*)(m->base_addr + sym->offset), 0);
+#endif
         }
       }
       *p = ((unsigned long)id->value & mask);

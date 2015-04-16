@@ -19,6 +19,7 @@ dict *thread_escape_map = 0;
 
 #ifdef COLLECT_STAT
 static unsigned int at_patch_count = 0;
+static unsigned int vmtd_enable_count = 0;
 static unsigned int radc_patch_count = 0;
 static unsigned int raic_patch_count = 0;
 static unsigned int eqc_callgraph_count = 0;
@@ -197,6 +198,10 @@ void patch_entry(unsigned long patchpoint) {
       if (kv_m) {
         keyvalue *v, *tmp;
         HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
+#ifdef COLLECT_STAT
+          if (!(*((unsigned long*)(table + (unsigned long)v->key)) & 1))
+            ++vmtd_enable_count;
+#endif
           *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
         }
       }
@@ -1654,10 +1659,14 @@ void collect_stat(void) {
           pid, ibt_raics);
   dprintf(STDERR_FILENO, "[%u] Landing Pads: %u\n", pid, lp_count);
 #ifndef NO_ONLINE_PATCHING
-  dprintf(STDERR_FILENO, "[%u] Functions AddrTaken In Code: %u\n",
+  dprintf(STDERR_FILENO, "[%u] C-Style Functions AddrTaken In Code: %u\n",
           pid, HASH_COUNT(ibt_funcs_taken_in_code));
-  dprintf(STDERR_FILENO, "[%u] Total online activated functions: %u\n",
+  dprintf(STDERR_FILENO, "[%u] Total online activated C-style functions: %u\n",
           pid, at_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Virtual Methods AddrTaken In Code: %u\n",
+          pid, HASH_COUNT(vmtd_taken_in_code));
+  dprintf(STDERR_FILENO, "[%u] Total online activated virtual methods: %u\n",
+          pid, vmtd_enable_count);
   dprintf(STDERR_FILENO, "[%u] Total Patches (or Activated Return Addrs): %u\n",
           pid, radc_patch_count + raic_patch_count);
   dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of Direct Calls: %u\n",
