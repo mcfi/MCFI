@@ -22,6 +22,16 @@ __patch_at:
         movq %rdi, %fs:0x20
         jmpq *%gs:0x10108 /* patch at */
 
+        .text
+        .globl __patch_entry
+        .type __patch_entry,@function
+__patch_entry:
+        popq %r11 /* r11 is surely dead */
+        subl $0x5, %r11d
+        /* set continuation */
+        movq %r11, %fs:0x20
+        jmpq *%gs:0x10110 /* patch entry */
+
         .globl __report_cfi_violation_for_return
         .type __report_cfi_violation_for_return, @function
 __report_cfi_violation_for_return:

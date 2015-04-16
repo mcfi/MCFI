@@ -42,6 +42,8 @@ die2:
         jmp __patch_call@PLT
         # trigger generation of a PLT entry for __patch_at
         jmp __patch_at@PLT
+        # trigger generation of a PLT entry for __patch_entry
+        jmp __patch_entry@PLT
 
         .section	.MCFIFuncInfo,"",@progbits
         .ascii "{ _init\nY void!\nR _libc_init\n}"
