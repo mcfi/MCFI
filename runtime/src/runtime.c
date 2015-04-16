@@ -189,17 +189,21 @@ void patch_entry(unsigned long patchpoint) {
   //dprintf(STDERR_FILENO, "ctor: %s\n", kv_ctor->value);
   // kv_ctor->value is the actual constructor's demangled name
   keyvalue *kv_methods = dict_find(m->vtable, kv_ctor->value);
-  assert(kv_methods);
-  node *n;
-  DL_FOREACH((node*)(kv_methods->value), n) {
-    // for each virtual method, we set its tary id to be valid
-    keyvalue *kv_m = dict_find(vmtd, n->val);
-    if (kv_m) {
-      keyvalue *v, *tmp;
-      HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
-        *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
+  if (kv_methods) {
+    node *n;
+    DL_FOREACH((node*)(kv_methods->value), n) {
+      // for each virtual method, we set its tary id to be valid
+      keyvalue *kv_m = dict_find(vmtd, n->val);
+      if (kv_m) {
+        keyvalue *v, *tmp;
+        HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
+          *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
+        }
       }
     }
+    l_free((node**)&(kv_methods->value));
+    /* remove the class */
+    dict_del(&(m->vtable), kv_ctor->value);
   }
   // kv_methods->value is a list of virtual methods
   keyvalue *kv = dict_find(m->func_orig, (void*)patchpoint);
