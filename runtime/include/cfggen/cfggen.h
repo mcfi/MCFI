@@ -152,6 +152,7 @@ struct code_module_t {
   symbol   *rai;       /* return addresses of indirect calls */
   symbol   *rad;       /* return addresses of direct calls */
   symbol   *lp;        /* landing pads */
+  dict     *flp;       /* mapping between a function and its landing pads */
   symbol   *funcsyms;  /* function symbols */
   symbol   *icfsyms;   /* indirect branch symbols */
   vertex   *fats;      /* functions whose addresses */

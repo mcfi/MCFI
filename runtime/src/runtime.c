@@ -20,6 +20,7 @@ dict *thread_escape_map = 0;
 #ifdef COLLECT_STAT
 static unsigned int at_patch_count = 0;
 static unsigned int vmtd_enable_count = 0;
+static unsigned int lp_enable_count = 0;
 static unsigned int radc_patch_count = 0;
 static unsigned int raic_patch_count = 0;
 static unsigned int eqc_callgraph_count = 0;
@@ -186,29 +187,41 @@ void patch_entry(unsigned long patchpoint) {
   patchpoint -= m->base_addr;
   assert(cfggened);
   keyvalue *kv_ctor = dict_find(m->ctor, (void*)patchpoint);
-  assert(kv_ctor);
-  //dprintf(STDERR_FILENO, "ctor: %s\n", kv_ctor->value);
-  // kv_ctor->value is the actual constructor's demangled name
-  keyvalue *kv_methods = dict_find(m->vtable, kv_ctor->value);
-  if (kv_methods) {
-    node *n;
-    DL_FOREACH((node*)(kv_methods->value), n) {
-      // for each virtual method, we set its tary id to be valid
-      keyvalue *kv_m = dict_find(vmtd, n->val);
-      if (kv_m) {
-        keyvalue *v, *tmp;
-        HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
+  if (kv_ctor) {
+    //dprintf(STDERR_FILENO, "ctor: %s\n", kv_ctor->value);
+    // kv_ctor->value is the actual constructor's demangled name
+    keyvalue *kv_methods = dict_find(m->vtable, kv_ctor->value);
+    if (kv_methods) {
+      node *n;
+      DL_FOREACH((node*)(kv_methods->value), n) {
+        // for each virtual method, we set its tary id to be valid
+        keyvalue *kv_m = dict_find(vmtd, n->val);
+        if (kv_m) {
+          keyvalue *v, *tmp;
+          HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
 #ifdef COLLECT_STAT
-          if (!(*((unsigned long*)(table + (unsigned long)v->key)) & 1))
-            ++vmtd_enable_count;
+            if (!(*((unsigned long*)(table + (unsigned long)v->key)) & 1))
+              ++vmtd_enable_count;
 #endif
-          *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
+            *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
+          }
         }
       }
+      l_free((node**)&(kv_methods->value));
+      /* remove the class */
+      dict_del(&(m->vtable), kv_ctor->value);
     }
-    l_free((node**)&(kv_methods->value));
-    /* remove the class */
-    dict_del(&(m->vtable), kv_ctor->value);
+  }
+  keyvalue *kv_lp = dict_find(m->flp, (void*)patchpoint);
+  if (kv_lp) {
+    keyvalue *v, *tmp;
+    HASH_ITER(hh, (dict*)(kv_lp->value), v, tmp) {
+      *(char*)(table + m->base_addr + (uintptr_t)v->key) = LPV;
+#ifdef COLLECT_STAT
+      ++lp_enable_count;
+#endif
+    }
+    g_del_vertex(&(m->flp), kv_lp->key);
   }
   // kv_methods->value is a list of virtual methods
   keyvalue *kv = dict_find(m->func_orig, (void*)patchpoint);
@@ -806,7 +819,9 @@ int gen_cfg(void) {
     if (!m->cfggened) {
       gen_tary(m, callids, retids, table, &fats_in_code, &vmtd);
       gen_bary(m, callids, retids, table, id_for_others);
+#ifdef NO_ONLINE_PATCHING
       populate_landingpads(m, table);
+#endif
     }
   }
   
@@ -1667,6 +1682,8 @@ void collect_stat(void) {
           pid, HASH_COUNT(vmtd_taken_in_code));
   dprintf(STDERR_FILENO, "[%u] Total online activated virtual methods: %u\n",
           pid, vmtd_enable_count);
+  dprintf(STDERR_FILENO, "[%u] Total online activated landing pads: %u\n",
+          pid, lp_enable_count);
   dprintf(STDERR_FILENO, "[%u] Total Patches (or Activated Return Addrs): %u\n",
           pid, radc_patch_count + raic_patch_count);
   dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of Direct Calls: %u\n",

@@ -525,6 +525,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   dict *fats_in_data = 0;
   dict *ctor = 0;
   dict *vtable = 0;
+  dict *flp = 0;
   code_module *cm = alloc_code_module();
 
   for (cnt = 0; cnt < ehdr->e_shnum; cnt++) {
@@ -655,6 +656,9 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       /* no needs to record the name for a landing pad symbol */
       lpsym->offset = sym[cnt].st_value - cm->base_addr;
       DL_APPEND(cm->lp, lpsym);
+      g_add_directed_edge(&flp,
+                          sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 10)),
+                          (void*)lpsym->offset);
     } else if (0 == strncmp(symname, "__mcfi_bary_", 12)) {
       //dprintf(STDERR_FILENO, "%s\n", symname);
       symbol *icfsym = alloc_sym();
@@ -699,6 +703,29 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     }
   }
 
+  // traverse the function symbol list to register landing pads
+  {
+    symbol *f;
+    DL_FOREACH(cm->funcsyms, f) {
+      keyvalue *kv = dict_find(flp, f->name);
+      // this function comes with landing pads
+      if (kv) {
+        keyvalue *v, *tmp;
+        HASH_ITER(hh, (dict*)(kv->value), v, tmp) {
+          g_add_edge(&(cm->flp), (void*)f->offset, v->key);
+        }
+        // this function might be a constructor which would register
+        // virtual methods to the cfg. In such a case, the original
+        // code bytes should have been registered. We should handle
+        // the opposite case.
+        if (!dict_find(cm->func_orig, (void*)f->offset)) {
+          dict_add(&(cm->func_orig), (void*)f->offset,
+                   (void*)*((unsigned long*)(elf + f->offset)));
+        }
+      }
+    }
+    g_dtor(&flp);
+  }
   /* Function's whose names appear in .dynsym may have their
      addresses taken during runtime */
   for (cnt = 0; cnt < numdynsym; ++cnt) {
