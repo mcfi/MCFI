@@ -196,11 +196,24 @@ private:
     std::string FuncInfo("{ ");
     FuncInfo += FuncName.str() + '\n';
 
-    /// C++ constructors are never indirect branch targets, so we don't need
-    /// to emit their demangled name and type
-    if (F->hasFnAttribute(Attribute::CXXCtor))
-      goto NoFuncInfoEmit;
-
+    /// We emit C++ constructor's demangled name
+    if (F->hasFnAttribute(Attribute::CXXCtor)) {
+      // if the class does not contain any virtual methods, don't
+      // emit any other information.
+      if (!F->hasFnAttribute(Attribute::NoInline))
+        goto NoFuncInfoEmit;
+      std::string DemangledName = CXXDemangledName(FuncName.data());
+      if (DemangledName.size()) {
+        DemangledName = splitMethodName(DemangledName);
+        size_t Sharp = DemangledName.find_last_of('#');
+        //llvm::errs() << DemangledName.substr(0, Sharp) << "\n";
+        FuncInfo += std::string("C ") + DemangledName.substr(0, Sharp) + '\n';
+        goto NoFuncInfoEmit;
+      } else {
+        llvm::errs() << FuncName.data() << "\n";
+        exit(-1);
+      }
+    }
     /// Other methods, including instance methods and destructors, should have
     /// their demangled name output, so that class hierarchy reconstruction
     /// can be done.

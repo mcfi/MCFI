@@ -28,6 +28,7 @@
 #include "llvm/Transforms/Utils/GlobalStatus.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <set>
+#include <cxxabi.h>
 
 using namespace llvm;
 
@@ -48,6 +49,28 @@ namespace {
     void addPatchAt(Module &M, FunctionType *FT,
                     Value *V, Instruction *MI,
                     std::map<BasicBlock*, std::set<std::string> >&);
+
+    const std::string CXXDemangledName(const char* MangledName) const {
+      int status = 0;
+      char* result = abi::__cxa_demangle(MangledName, 0, 0, &status);
+
+      if (result) {
+        const std::string DemangledName(result);
+        free(result);
+        size_t Start = 0;
+        const std::string VirtualThunk("virtual thunk to ");
+        const std::string NonVirtualThunk("non-virtual thunk to ");
+        // for thunks, we don't output the annoying "virtual thunk to" things
+        // we match the longer NonVirtualThunk first.
+        if (DemangledName.find(NonVirtualThunk) != std::string::npos) {
+          Start = NonVirtualThunk.size();
+        } else if (DemangledName.find(VirtualThunk) != std::string::npos) {
+          Start = VirtualThunk.size();
+        }
+        return DemangledName.substr(Start);
+      }
+      return std::string("");
+    }
   };
 }
 
@@ -178,6 +201,34 @@ bool FuncAddrTaken::runOnModule(Module &M) {
             // right before the last (maybe terminator) instruction.
             addPatchAt(M, FT, V, &(BB->back()), UniqPatchAt);
           }
+        }
+      }
+    }
+  }
+
+  // TODO: separate the following virtual table traversal code into another pass
+  for (auto G = M.getGlobalList().begin(); G != M.getGlobalList().end(); G++) {
+    if (isa<GlobalVariable>(G) &&
+        cast<GlobalVariable>(G)->hasInitializer()) {
+      const GlobalVariable *GV = cast<GlobalVariable>(G);
+      const Constant *C = GV->getInitializer();
+      if (GV->hasName() && isa<ConstantArray>(C) && GV->getName().startswith("_ZTV")) {
+        std::string VTName = CXXDemangledName(GV->getName().data());
+        if (VTName.size() && VTName.find("vtable") == 0) {
+          //llvm::errs() << VTName << "\n";
+          VTName = VTName.substr(11); // get pass "vtable for "
+          llvm::NamedMDNode* MD = M.getOrInsertNamedMetadata("MCFIVtable");
+          std::string info = VTName;
+          for (unsigned i = 0; i < cast<ConstantArray>(C)->getNumOperands(); i++) {
+            Value *V = InnerMost(cast<ConstantArray>(C)->getOperand(i));
+            if (isa<Function>(V) && cast<Function>(V)->hasName()) {
+              //llvm::errs() << cast<Function>(V)->getName() << "\n";
+              info += std::string("#") + cast<Function>(V)->getName().str();
+            }
+          }
+          MD->addOperand(llvm::MDNode::get(M.getContext(),
+                                           llvm::MDString::get(
+                                             M.getContext(), info.c_str())));
         }
       }
     }

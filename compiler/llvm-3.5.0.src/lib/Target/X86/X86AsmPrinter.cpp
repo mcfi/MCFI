@@ -801,6 +801,7 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
                                  MDString::get(M.getContext(), FN.c_str())));
     }
     EmitMCFIInfo(".MCFIAddrTakenInCode", M);
+    EmitMCFIInfo(".MCFIVtable", M);
   }
 }
 
