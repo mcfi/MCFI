@@ -1066,9 +1066,13 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
         OS.flush();
         if (isID(MEStr)) {
           if (AllFunctions.find(MEStr) != AllFunctions.end()) {
+#ifndef NO_ONLINE_PATCHING
             StringRef fn(MEStr);
             if (fn.startswith("_GLOBAL__E_") || fn.startswith("_GLOBAL__D_"))
               AddrTakenFunctions.insert(MEStr);
+#else
+            AddrTakenFunctions.insert(MEStr);
+#endif
           }
         }
       }
