@@ -1053,24 +1053,19 @@ static void load_libc(void) {
 }
 
 static void populate_vtabletaken(dict **vtt) {
-  char* libcxxtypeinfo[] =
-    {
-      "__cxxabiv1::__shim_type_info",
-      "__cxxabiv1::__fundamental_type_info",
-      "__cxxabiv1::__array_type_info",
-      "__cxxabiv1::__function_type_info",
-      "__cxxabiv1::__enum_type_info",
-      "__cxxabiv1::__class_type_info",
-      "__cxxabiv1::__si_class_type_info",
-      "__cxxabiv1::__vmi_class_type_info",
-      "__cxxabiv1::__pbase_type_info",
-      "__cxxabiv1::__pointer_type_info",
-      "__cxxabiv1::__pointer_to_member_type_info",
-    };
-  int i;
-  for (i = 0; i < sizeof(libcxxtypeinfo)/sizeof(libcxxtypeinfo[0]); i++) {
-    dict_add(vtt, sp_intern_string(&stringpool, libcxxtypeinfo[i]), 0);
-  }
+#define ADD(V) dict_add(vtt, sp_intern_string(&stringpool, V), 0)
+  ADD("__cxxabiv1::__shim_type_info");
+  ADD("__cxxabiv1::__fundamental_type_info");
+  ADD("__cxxabiv1::__array_type_info");
+  ADD("__cxxabiv1::__function_type_info");
+  ADD("__cxxabiv1::__enum_type_info");
+  ADD("__cxxabiv1::__class_type_info");
+  ADD("__cxxabiv1::__si_class_type_info");
+  ADD("__cxxabiv1::__vmi_class_type_info");
+  ADD("__cxxabiv1::__pbase_type_info");
+  ADD("__cxxabiv1::__pointer_type_info");
+  ADD("__cxxabiv1::__pointer_to_member_type_info");
+#undef ADD
 }
 
 /* main function of the runtime */
