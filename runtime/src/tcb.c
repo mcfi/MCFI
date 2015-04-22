@@ -13,7 +13,7 @@ TCB* alloc_tcb(void) {
   }
   memset(tcb, 0, STACK_SIZE);
   /* create a guard page between the tcb and the thread-specific stack */
-  if (0 != munmap(tcb + PAGE_SIZE, PAGE_SIZE)) {
+  if (0 != munmap((char*)tcb + PAGE_SIZE, PAGE_SIZE)) {
     // report_error
     quit(-1);
   }
