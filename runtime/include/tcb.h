@@ -30,12 +30,12 @@ struct Context {
   unsigned long mxcsr;               /* 0x88 */
   unsigned long xmm0;                /* 0x90 */
   unsigned long xmm1;                /* 0x98 */
-  unsigned long xmm2;                /* 0x100 */
-  unsigned long xmm3;                /* 0x108 */
-  unsigned long xmm4;                /* 0x110 */
-  unsigned long xmm5;                /* 0x118 */
-  unsigned long xmm6;                /* 0x120 */
-  unsigned long xmm7;                /* 0x128 */
+  unsigned long xmm2;                /* 0xa0 */
+  unsigned long xmm3;                /* 0xa8 */
+  unsigned long xmm4;                /* 0xb0 */
+  unsigned long xmm5;                /* 0xb8 */
+  unsigned long xmm6;                /* 0xc0 */
+  unsigned long xmm7;                /* 0xc8 */
 };
 
 typedef struct TCB_t {
@@ -58,9 +58,9 @@ typedef struct TCB_t {
 
   /* stack canary according to the x64 ABI */
   unsigned long canary;              /* 0x28 */
-
   /* application context */
   struct Context user_ctx;           /* 0x30 */
+  unsigned long plt;                 /* 0x100 = 0x30 + 0xd0*/
   /* next tcb in the tcb list */
   struct TCB_t *next;
   /* this tcb is marked removed and should be reclaimed */

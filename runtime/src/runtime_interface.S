@@ -65,12 +65,12 @@ runtime_\patch_func:
         # XMMs
         movq %xmm0, %fs:USER_CTX+0x90
         movq %xmm1, %fs:USER_CTX+0x98
-        movq %xmm2, %fs:USER_CTX+0x100
-        movq %xmm3, %fs:USER_CTX+0x108
-        movq %xmm4, %fs:USER_CTX+0x110
-        movq %xmm5, %fs:USER_CTX+0x118
-        movq %xmm6, %fs:USER_CTX+0x120
-        movq %xmm7, %fs:USER_CTX+0x128
+        movq %xmm2, %fs:USER_CTX+0xa0
+        movq %xmm3, %fs:USER_CTX+0xa8
+        movq %xmm4, %fs:USER_CTX+0xb0
+        movq %xmm5, %fs:USER_CTX+0xb8
+        movq %xmm6, %fs:USER_CTX+0xc0
+        movq %xmm7, %fs:USER_CTX+0xc8
 
         # st(0) and st(1) do not need to be saved, since
         # rock_patch would not deal with long double
@@ -102,12 +102,12 @@ runtime_\patch_func:
         # XMMs
         movq %fs:USER_CTX+0x90,  %xmm0
         movq %fs:USER_CTX+0x98,  %xmm1
-        movq %fs:USER_CTX+0x100, %xmm2
-        movq %fs:USER_CTX+0x108, %xmm3
-        movq %fs:USER_CTX+0x110, %xmm4
-        movq %fs:USER_CTX+0x118, %xmm5
-        movq %fs:USER_CTX+0x120, %xmm6
-        movq %fs:USER_CTX+0x128, %xmm7
+        movq %fs:USER_CTX+0xa0, %xmm2
+        movq %fs:USER_CTX+0xa8, %xmm3
+        movq %fs:USER_CTX+0xb0, %xmm4
+        movq %fs:USER_CTX+0xb8, %xmm5
+        movq %fs:USER_CTX+0xc0, %xmm6
+        movq %fs:USER_CTX+0xc8, %xmm7
 
         # restore control and status words
         fldcw   %fs:USER_CTX+FCW
