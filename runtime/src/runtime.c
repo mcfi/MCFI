@@ -578,7 +578,7 @@ void *load_native_code(int fd) {
   return load_elf(fd, FALSE, 0);
 }
 
-static unsigned long version = 0;
+static unsigned long version = 1;
 
 static void print_cfgcc(void *cc) {
   vertex *v, *tmp;
@@ -1580,12 +1580,22 @@ int rock_fork(void) {
 }
 
 #ifdef COLLECT_STAT
+struct ibe_t {
+  unsigned long ibe_count;
+  unsigned long ibe_count_wo_activation; // without considering online activation
+};
+
 /* count indirect branch edges */
-static unsigned long ibe_count(void) {
-  unsigned long IBEs = 0;
+static struct ibe_t ibe_count(void) {
+  struct ibe_t IBEs;
+  IBEs.ibe_count = 0;
+  IBEs.ibe_count_wo_activation = 0;
+
   code_module *m;
   dict *ib = 0;
   dict *ibt = 0;
+  dict *ibt_wo_activation = 0;
+  //graph *ibt_wo_ac = 0;
   unsigned int i;
 
   DL_FOREACH(modules, m) {
@@ -1601,9 +1611,33 @@ static unsigned long ibe_count(void) {
         unsigned long count = (unsigned long)kv->value;
         count++;
         kv->value = (void*)count;
+        //dprintf(STDERR_FILENO, "ibta: %x\n", (char*)p + 8*i - (char*)table);
+      }
+      if (p[i] != 0) {
+        unsigned long ivp = (p[i] & -2);
+        keyvalue *kv = dict_find(ibt_wo_activation, (void*)ivp);
+        if (!kv) {
+          kv = dict_add(&ibt_wo_activation, (void*)ivp, (void*)0);
+        }
+        unsigned long count = (unsigned long)kv->value;
+        count++;
+        kv->value = (void*)count;
+        //g_add_directed_edge(&ibt_wo_ac, (void*)ivp, (char*)p + 8*i - (char*)table);
       }
     }
   }
+  /*
+  {
+    vertex *v, *tmp;
+    HASH_ITER(hh, ibt_wo_ac, v, tmp) {
+      vertex *all, *atmp;
+      dprintf(STDERR_FILENO, "\nEQC:+++++++++++++++++++++++++++\n");
+      HASH_ITER(hh, (dict*)(v->value), all, atmp) {
+        dprintf(STDERR_FILENO, "%x\n", all->key);
+      }
+    }
+  }
+  */
   unsigned id = (alloc_bid_slot() - BID_SLOT_START)/ 8;
   unsigned long *p = (unsigned long*)(table + BID_SLOT_START);
   for (i = 0; i < id; i++) {
@@ -1621,8 +1655,15 @@ static unsigned long ibe_count(void) {
   HASH_ITER(hh, ib, ikv, tmp) {
     tkv = dict_find(ibt, ikv->key);
     if (tkv) {
-      IBEs += (unsigned long)ikv->value * (unsigned long)tkv->value;
+      IBEs.ibe_count += (unsigned long)ikv->value * (unsigned long)tkv->value;
       dict_del(&ibt, tkv->key);
+      // we only consider those edges that should have been available if no
+      // online activation is used.
+      tkv = dict_find(ibt_wo_activation, (void*)(((unsigned long)ikv->key) & -2));
+      if (tkv) {
+        IBEs.ibe_count_wo_activation += (unsigned long)ikv->value * (unsigned long)tkv->value;
+        dict_del(&ibt_wo_activation, tkv->key);
+      }
     }
   }
   /* TODO: some IBTs do not have corresponding IBs. All cases seem to
@@ -1673,6 +1714,7 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "[%u] Return Addresses of Indirect Calls: %u\n",
           pid, ibt_raics);
   dprintf(STDERR_FILENO, "[%u] Landing Pads: %u\n", pid, lp_count);
+  struct ibe_t ibe = ibe_count();
 #ifndef NO_ONLINE_PATCHING
   dprintf(STDERR_FILENO, "[%u] C-Style Functions AddrTaken In Code: %u\n",
           pid, HASH_COUNT(ibt_funcs_taken_in_code));
@@ -1690,9 +1732,11 @@ void collect_stat(void) {
           pid, radc_patch_count);
   dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of InDirect Calls: %u\n",
           pid, raic_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges Considering Activation: %lu\n",
+          pid, ibe.ibe_count);
 #endif
   dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges: %lu\n",
-          pid, ibe_count());
+          pid, ibe.ibe_count_wo_activation);
   dprintf(STDERR_FILENO, "\n");
 #endif
 }
