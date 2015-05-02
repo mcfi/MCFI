@@ -16,6 +16,7 @@ try:    movq %gs:0x1000, %rdi
 __mcfi_bary_remainderl:
         cmpq %rdi, %gs:(%rcx)
         jne check
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check:
         movq %gs:(%rcx), %rsi

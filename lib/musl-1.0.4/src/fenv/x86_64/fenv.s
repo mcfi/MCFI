@@ -25,6 +25,7 @@ try1:   movq %gs:0x1000, %rdi
 __mcfi_bary_feclearexcept:
         cmpq %rdi, %gs:(%rcx)
         jne check1
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check1:
         movq %gs:(%rcx), %rsi
@@ -52,6 +53,7 @@ try2:   movq %gs:0x1000, %rdi
 __mcfi_bary_feraiseexcept:
         cmpq %rdi, %gs:(%rcx)
         jne check2
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check2:
         movq %gs:(%rcx), %rsi
@@ -88,6 +90,7 @@ try3:   movq %gs:0x1000, %rdi
 __mcfi_bary___fesetround:
         cmpq %rdi, %gs:(%rcx)
         jne check3
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check3:
         movq %gs:(%rcx), %rsi
@@ -115,6 +118,7 @@ try4:   movq %gs:0x1000, %rdi
 __mcfi_bary_fegetround:
         cmpq %rdi, %gs:(%rcx)
         jne check4
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check4:
         movq %gs:(%rcx), %rsi
@@ -141,6 +145,7 @@ try5:   movq %gs:0x1000, %rdi
 __mcfi_bary_fegetenv:
         cmpq %rdi, %gs:(%rcx)
         jne check5
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check5:
         movq %gs:(%rcx), %rsi
@@ -178,6 +183,7 @@ try6:   movq %gs:0x1000, %rdi
 __mcfi_bary_fesetenv:
         cmpq %rdi, %gs:(%rcx)
         jne check6
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check6:
         movq %gs:(%rcx), %rsi
@@ -207,6 +213,7 @@ try7:   movq %gs:0x1000, %rdi
 __mcfi_bary_fetestexcept:
         cmpq %rdi, %gs:(%rcx)
         jne check7
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check7:
         movq %gs:(%rcx), %rsi

@@ -24,6 +24,7 @@ __mcfi_bary___exe_elf_entry:
         cmpq %rdx, %gs:(%rax)
         jne die # this indirect jump only executes once
         xor %edx,%edx
+        # addq $1, %fs:0x108 # icj_count
 	jmp *%rax
 die:
         leaq try(%rip), %rdi

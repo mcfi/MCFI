@@ -27,6 +27,7 @@ __mcfi_bary_longjmp:
 3:      
         cmp %rdi, %gs:(%rdx)
         jne 2f
+        # addq $1, %fs:0x108 # icj_count
 	jmp *%rdx               /* goto saved address without altering rsp */
 2:
         mov %gs:(%rdx), %rsi

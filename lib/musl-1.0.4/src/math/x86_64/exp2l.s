@@ -41,6 +41,7 @@ try1:   movq %gs:0x1000, %rdi
 __mcfi_bary_expm1l:
         cmpq %rdi, %gs:(%rcx)
         jne check1
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check1:
         movq %gs:(%rcx), %rsi
@@ -115,6 +116,7 @@ try2:   movq %gs:0x1000, %rdi
 __mcfi_bary_exp2l:     
         cmpq %rdi, %gs:(%rcx)
         jne check2
+        # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check2:
         movq %gs:(%rcx), %rsi
