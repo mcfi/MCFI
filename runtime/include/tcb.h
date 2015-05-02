@@ -61,6 +61,10 @@ typedef struct TCB_t {
   /* application context */
   struct Context user_ctx;           /* 0x30 */
   unsigned long plt;                 /* 0x100 = 0x30 + 0xd0*/
+  /* How many indirect branches have been executed */
+#ifdef COLLECT_STAT
+  unsigned long icj_count;           /* 0x108 */
+#endif
   /* next tcb in the tcb list */
   struct TCB_t *next;
   /* this tcb is marked removed and should be reclaimed */

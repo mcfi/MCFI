@@ -25,6 +25,7 @@ static unsigned int radc_patch_count = 0;
 static unsigned int raic_patch_count = 0;
 static unsigned int eqc_callgraph_count = 0;
 static unsigned int eqc_retgraph_count = 0;
+static unsigned long icj_count = 0;
 #endif
 
 static int cfggened = FALSE;
@@ -94,7 +95,6 @@ void free_tcb(void *user_tcb) {
      removes itself's tcb, and doing so would crash the program because the
      control flow cannot be returned back to the thread */
   remove_tcb_marked();
-
   tcb = tcb_list;
 
   if (!tcb) {
@@ -111,6 +111,9 @@ void free_tcb(void *user_tcb) {
     if (tcb->tcb_inside_sandbox == user_tcb) {
       tcb->remove = 1;
       dict_del(&thread_escape_map, tcb);
+#ifdef COLLECT_STAT
+      icj_count += tcb->icj_count;
+#endif
       break;
     }
     tcb = tcb->next;
@@ -1737,6 +1740,12 @@ void collect_stat(void) {
 #endif
   dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges: %lu\n",
           pid, ibe.ibe_count_wo_activation);
+  icj_count += thread_self()->icj_count;
+  if (icj_count > 0) {
+    /* the printf code does not support %lu well, so we use %lx instead */
+    dprintf(STDERR_FILENO, "[%u] Count of Indirect Branches: 0x%lx\n",
+            pid, icj_count);
+  }
   dprintf(STDERR_FILENO, "\n");
 #endif
 }
