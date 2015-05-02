@@ -440,7 +440,7 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
   BuildMI(*MBB, I, DL, TII->get(CmpOp))
     .addReg(TargetReg).addImm(1).addReg(0).addImm(0).addReg(X86::GS).addReg(BIDReg);
   // jne Lcheck
-  BuildMI(*MBB, I, DL, TII->get(X86::JNE_4));
+  BuildMI(*MBB, I, DL, TII->get(X86::JNE_1));
 }
 
 void MCFI::MCFIx64ICJ(MachineFunction &MF, MachineBasicBlock* MBB,
@@ -519,7 +519,7 @@ void MCFI::MCFIx64IDVersionCheck(MachineFunction &MF,
   BuildMI(*MBB, I, DL, TII->get(CmpOp))
     .addReg(BIDReg).addReg(TIDReg);
   // jne Ltry
-  BuildMI(*MBB, I, DL, TII->get(X86::JNE_4));
+  BuildMI(*MBB, I, DL, TII->get(X86::JNE_1));
 }
 
 void MCFI::MCFIx64Report(MachineFunction &MF,
