@@ -1,6 +1,7 @@
-.text
-.global __clone
-.type   __clone,@function
+        .text
+        .global __clone
+        .align 16, 0x90
+        .type   __clone,@function
 __clone:
 	xor %eax,%eax
 	mov $56,%al
