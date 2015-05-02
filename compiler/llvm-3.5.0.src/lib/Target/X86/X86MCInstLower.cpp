@@ -1128,6 +1128,17 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
         OutContext.GetOrCreateSymbol(StringRef("__mcfi_bary_") + to_hex(MCFIID));
       OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Hidden);
       OutStreamer.EmitLabel(MCFIIDSym);
+#ifdef ICJ_COUNT /* count of indirect branches */
+      MCInst CountInst;
+      CountInst.setOpcode(X86::ADD64mi8);
+      CountInst.addOperand(MCOperand::CreateReg(0));
+      CountInst.addOperand(MCOperand::CreateImm(1));
+      CountInst.addOperand(MCOperand::CreateReg(0));
+      CountInst.addOperand(MCOperand::CreateImm(0x108));
+      CountInst.addOperand(MCOperand::CreateReg(32));
+      CountInst.addOperand(MCOperand::CreateImm(1));
+      EmitToStreamer(OutStreamer, CountInst);
+#endif
     }
     break;
   }
