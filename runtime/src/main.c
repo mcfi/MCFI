@@ -42,6 +42,15 @@ const char *MCFI_SDK = 0;
 const char *HOME = 0;
 const char MCFI_SDK_NAME[] = "MCFI_SDK";
 
+
+#ifdef NOCFI
+static char two_byte_nop[]  = {0x66, 0x90};
+static char four_byte_nop[] = {0x0f, 0x1f, 0x40, 0x00};
+static char five_byte_nop[] = {0x0f, 0x1f, 0x44, 0x00, 0x00};
+static char six_byte_nop[]  = {0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00};
+static char nine_byte_nop[] = {0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00};
+#endif
+
 int snprintf(char *str, size_t size, const char *format, ...);
 
 auxv_t *lt_auxv = 0;
@@ -659,14 +668,47 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       g_add_directed_edge(&flp,
                           sp_intern_string(&stringpool, eat_hex_and_udscore(symname + 10)),
                           (void*)lpsym->offset);
-    } else if (0 == strncmp(symname, "__mcfi_bary_", 12)) {
+    }
+#ifdef NOCFI
+    else if (0 == strncmp(symname, "catchbranch", 11)) {
+      /* catch branch: cmpb $0xfe, %gs:(%r11) defined in libunwind setcontext.S */
+      char *addr = elf + sym[cnt].st_value - cm->base_addr;
+      memcpy(addr, five_byte_nop, 5);
+      if (addr[5] == 0x0f) {
+        memcpy(addr, six_byte_nop, 6);
+      } else {
+        memcpy(addr, two_byte_nop, 2);
+      }
+    }
+#endif
+    else if (0 == strncmp(symname, "__mcfi_bary_", 12)) {
       //dprintf(STDERR_FILENO, "%s\n", symname);
       symbol *icfsym = alloc_sym();
       icfsym->name = sp_intern_string(&stringpool, symname + 12);
       unsigned int bid_slot = alloc_bid_slot();
+#ifndef NOCFI
       memcpy(elf + sym[cnt].st_value - cm->base_addr - sizeof(unsigned int),
              &bid_slot,
              sizeof(unsigned int));
+#else
+      /* replace the instrumentation with nop */
+      char *addr = elf + sym[cnt].st_value - cm->base_addr;
+      /* 9-byte BID read */
+      memcpy(addr - 9, nine_byte_nop, 9);
+      /* 4/5 byte BID TID comparison, only need to check the possible sib byte */
+      if (addr[4] == 0 || addr[4] == 0x24) {
+        memcpy(addr, five_byte_nop, 5);
+        addr += 5;
+      } else {
+        memcpy(addr, four_byte_nop, 4);
+        addr += 4;
+      }
+      if (*addr == 0x0f) { /* jcc A, A, A, A */
+        memcpy(addr, six_byte_nop, 6);
+      } else { /* jcc A */
+        memcpy(addr, two_byte_nop, 2);
+      }
+#endif
       icfsym->offset = bid_slot;
       //dprintf(STDERR_FILENO, "icfsym: %s, %x, %x\n", icfsym->name, icfsym->offset,
       //        sym[cnt].st_value - cm->base_addr);
