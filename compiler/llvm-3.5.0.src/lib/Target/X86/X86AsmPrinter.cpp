@@ -779,12 +779,13 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     // Aliases
     NamedMDNode *MD = M.getOrInsertNamedMetadata("MCFIAliases");
     for (const auto &Alias : M.aliases()) {
+      //Alias.dump();
       std::string AliasStr;
       const MCSymbol *Name = getSymbol(&Alias);
       AliasStr += Name->getName().str() + ' ';
-      AliasStr += Alias.getAliasee()->getName().str();
+      AliasStr += Alias.getAliasee()->stripPointerCasts()->getName().str();
       MD->addOperand(MDNode::get(M.getContext(),
-                                 MDString::get(M.getContext(), AliasStr.c_str())));      
+                                 MDString::get(M.getContext(), AliasStr.c_str())));
     }
     EmitMCFIInfo(".MCFIAliases", M);
     // AddrTakenFunctionsInData
