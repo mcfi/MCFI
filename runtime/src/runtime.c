@@ -1614,7 +1614,9 @@ static struct ibe_t ibe_count(void) {
         unsigned long count = (unsigned long)kv->value;
         count++;
         kv->value = (void*)count;
-        //dprintf(STDERR_FILENO, "ibta: %x\n", (char*)p + 8*i - (char*)table);
+        //dprintf(STDERR_FILENO, "ibta: %lx, %lx\n",
+        //        (unsigned long)p + 8*i - (unsigned long)table,
+        //        p[i]);
       }
       if (p[i] != 0) {
         unsigned long ivp = (p[i] & -2);

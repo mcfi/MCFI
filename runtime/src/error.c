@@ -8,6 +8,9 @@
 #include <syscall.h>
 #include <io.h>
 #include <stdarg.h>
+#ifdef VERBOSE
+#include <cfggen/cfggen.h>
+#endif
 
 int vsnprintf(char *str, size_t size, const char *format, va_list ap);
 
@@ -36,6 +39,11 @@ void report_error(const char* fmt, ...) {
   quit(-1);
 }
 
+#ifdef VERBOSE
+extern code_module *modules;
+extern void *table;
+#endif
+
 void report_cfi_violation(unsigned long icf,
                           unsigned long target) {
   unsigned int pid = __syscall0(SYS_getpid);
@@ -43,6 +51,24 @@ void report_cfi_violation(unsigned long icf,
           "\n[%u] CFI violated: "
           "indirect branch at 0x%lx illegally targeted 0x%lx\n\n",
           pid, icf, target);
+
+#ifdef VERBOSE
+  {
+    code_module *m;
+    unsigned int bidslot = *(unsigned int*)(icf + 5);
+    unsigned long bid = *(unsigned long*)((char*)table + bidslot);
+    DL_FOREACH(modules, m) {
+      unsigned long *p = (unsigned long*)((char*)table + m->base_addr);
+      size_t sz = m->sz / sizeof(unsigned long);
+      size_t i;
+      for (i = 0; i < sz; i++) {
+        if (p[i] == bid)
+          dprintf(STDERR_FILENO, "%x\n", (unsigned long)p + 8*i - (unsigned long)table);
+      }
+    }
+  }
+#endif
+
   report_error("[%u] CFI violated: "
                "indirect branch at 0x%lx illegally targeted 0x%lx\n",
                pid, icf, target);

@@ -48,6 +48,9 @@ endif
 ifeq ($(NOCFI), 1)
 CFLAGS+=-DNOCFI -DNO_ONLINE_PATCHING
 endif
+ifeq ($(VERBOSE), 1)
+CFLAGS+=-DVERBOSE
+endif
 
 build: $(RTIME)
 	mkdir -p $(SDK)/bin
