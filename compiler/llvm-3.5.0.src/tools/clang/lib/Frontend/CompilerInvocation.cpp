@@ -413,6 +413,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableFPElim = Args.hasArg(OPT_mdisable_fp_elim);
   Opts.DisableFree = Args.hasArg(OPT_disable_free);
   Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
+  Opts.DisableTailCallInsts = Args.hasArg(OPT_mdisable_tail_callinsts);
   Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);
   Opts.LessPreciseFPMAD = Args.hasArg(OPT_cl_mad_enable);
   Opts.LimitFloatPrecision = Args.getLastArgValue(OPT_mlimit_float_precision);
