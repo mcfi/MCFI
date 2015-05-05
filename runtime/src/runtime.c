@@ -944,6 +944,19 @@ void set_gotplt(unsigned long addr, unsigned long v) {
 }
 
 void unload_native_code(const char* code_file_name) {
+  /* TODO: implement library unloading in four steps:
+     1. Mark all TIDs for the library-to-be-deleted as inactive by
+        clearing the least significant bit.
+     2. Update the CFG for all other modules.
+     3. Wait until all threads have executed at least one system call
+        or runtime trampoline call. Note that on some other OSes such
+        as windows that provide querying thread's context, it suffices
+        to know no other thread is in execution of the library.
+
+     // Step 2 and 3 ensure that no thread is executing code in the lib.
+
+     4. Reclaim the library's memory for future use.
+  */
 }
 
 void rock_clone(void) {
