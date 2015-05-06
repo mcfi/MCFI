@@ -469,6 +469,7 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
   Options.StackAlignmentOverride = CodeGenOpts.StackAlignment;
   Options.DisableTailCalls = CodeGenOpts.DisableTailCalls || CodeGenOpts.DisableTailCallInsts;
   Options.DisablePICFI = CodeGenOpts.DisablePICFI;
+  Options.CountInstrumentedIB = CodeGenOpts.CountInstrumentedIB;
   Options.TrapFuncName = CodeGenOpts.TrapFuncName;
   Options.PositionIndependentExecutable = LangOpts.PIELevel != 0;
   Options.FunctionSections = CodeGenOpts.FunctionSections;

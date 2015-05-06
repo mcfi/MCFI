@@ -54,6 +54,7 @@ CODEGENOPT(DisableRedZone    , 1, 0) ///< Set when -mno-red-zone is enabled.
 CODEGENOPT(DisableTailCalls  , 1, 0) ///< Do not emit tail calls.
 CODEGENOPT(DisableTailCallInsts, 1, 0) ///< Do not emit tail call instructions.
 CODEGENOPT(DisablePICFI, 1, 0) ///< Do not emit nops for online patching.
+CODEGENOPT(CountInstrumentedIB, 1, 0) ///< Count instrumented indirect branches.
 CODEGENOPT(EmitDeclMetadata  , 1, 0) ///< Emit special metadata indicating what
                                      ///< Decl* various IR entities came from. 
                                      ///< Only useful when running CodeGen as a

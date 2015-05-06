@@ -199,6 +199,8 @@ def mdisable_tail_callinsts : Flag<["-"], "mdisable-tail-callinsts">,
   HelpText<"Disable tail call optimization at machine code level, keeping the call stack accurate">;
 def mdisable_picfi : Flag<["-"], "mdisable-picfi">,
   HelpText<"Disable picfi but enable mcfi">;
+def mcount_iib : Flag<["-"], "mcount-iib">,
+  HelpText<"Count the number of instrumented indirect branches (iib) at runtime">;
 def menable_no_infinities : Flag<["-"], "menable-no-infs">,
   HelpText<"Allow optimization to assume there are no infinities.">;
 def menable_no_nans : Flag<["-"], "menable-no-nans">,

@@ -415,6 +415,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
   Opts.DisableTailCallInsts = Args.hasArg(OPT_mdisable_tail_callinsts);
   Opts.DisablePICFI = Args.hasArg(OPT_mdisable_picfi);
+  Opts.CountInstrumentedIB = Args.hasArg(OPT_mcount_iib);
   Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);
   Opts.LessPreciseFPMAD = Args.hasArg(OPT_cl_mad_enable);
   Opts.LimitFloatPrecision = Args.getLastArgValue(OPT_mlimit_float_precision);

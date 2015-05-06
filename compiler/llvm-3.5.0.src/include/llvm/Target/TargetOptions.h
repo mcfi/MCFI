@@ -59,7 +59,9 @@ namespace llvm {
           HonorSignDependentRoundingFPMathOption(false), UseSoftFloat(false),
           NoZerosInBSS(false), JITEmitDebugInfo(false),
           JITEmitDebugInfoToDisk(false), GuaranteedTailCallOpt(false),
-          DisableTailCalls(false), DisablePICFI(false), StackAlignmentOverride(0),
+          DisableTailCalls(false), DisablePICFI(false),
+          CountInstrumentedIB(false),
+          StackAlignmentOverride(0),
           EnableFastISel(false), PositionIndependentExecutable(false),
           UseInitArray(false), DisableIntegratedAS(false),
           CompressDebugSections(false), FunctionSections(false),
@@ -154,6 +156,9 @@ namespace llvm {
     /// DisablePICFI
     unsigned DisablePICFI : 1;
 
+    /// CountInstrumentedIB
+    unsigned CountInstrumentedIB : 1;
+
     /// StackAlignmentOverride - Override default stack alignment for target.
     unsigned StackAlignmentOverride;
 
@@ -245,6 +250,7 @@ inline bool operator==(const TargetOptions &LHS,
     ARE_EQUAL(GuaranteedTailCallOpt) &&
     ARE_EQUAL(DisableTailCalls) &&
     ARE_EQUAL(DisablePICFI) &&
+    ARE_EQUAL(CountInstrumentedIB) &&
     ARE_EQUAL(StackAlignmentOverride) &&
     ARE_EQUAL(EnableFastISel) &&
     ARE_EQUAL(PositionIndependentExecutable) &&
