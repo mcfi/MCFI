@@ -12,3 +12,11 @@ Also, you need a prebuilt clang 3.5.0 compiler that can be downloaded from http:
 2. cd native && ./build_native_toolchain.sh will build the native toolchain so that you can compare the performance of MCFI-hardened programs with native counterparts.
 
 3. Now you may use MCFI toolchain or the native toolchain just as you use gcc.
+
+By default, clang would generate PICFI-enforced binaries, but you may pass the following command line options to clang to experience enhanced functionalities:
+
+-Xclang -mdisable-tail-callinsts: turn tail call optimization off at the machine code level. This i s the single most important CFG precision improvement method AFAIK.
+
+-Xclang -mdisable-picfi: disable PICFI but enable MCFI.
+
+-Xclang -mcount-iib: instrument each MCFI-instrumented indirect branch further so that the amount of its dynamic execution can be counted.

@@ -1,8 +1,21 @@
-This directory contains source code for MCFI's runtime that includes the
-following major components
+This directory contains source code for MCFI's runtime, type make and build it.
 
-* Memory manager
+Or you may set parameters for the Makefile so that various functionalities
+can be built:
 
-* File streamer
+make/make release # default PICFI build with O3
 
-* Online verifier
+make debug  # default PICFI build with O0 -g
+
+make x* where x* can be combination of the follows:
+
+  STAT=1      # collecting CFG statistics
+
+  MCFI=1      # disable PICFI by turning off online patching
+
+  NOCFI=1     # do not generate the CFG, and patch the instrumention to nops
+
+  VERBOSE=1   # when CFI violation detected, dump all possible targets of
+              # the indirect branch
+
+  PROFILING=1 # dump the time stamp for each online address activation
