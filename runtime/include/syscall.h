@@ -18,6 +18,7 @@
 #define SYS_fork        57
 #define SYS_ftruncate   77
 #define SYS_unlink      87
+#define SYS_gettimeofday 96
 #define SYS_arch_prctl  158
 #define SYS_exit_group  231
 

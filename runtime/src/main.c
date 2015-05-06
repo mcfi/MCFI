@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <cfggen/cfggen.h>
 #include "pager.h"
+#include <time.h>
 
 #define MAX_PATH 256
 
@@ -1148,5 +1149,12 @@ void* runtime_init(int argc, char **argv) {
   /* copy data from kernel-allocated stack to sandbox-stack */
   stack_init();
 
+#ifdef PROFILING
+  {
+    struct timeval tv;
+    gettimeofday(&tv);
+    dprintf(STDERR_FILENO, "[%lu:%lu] Started!\n", tv.tv_sec, tv.tv_usec);
+  }
+#endif
   return stack;
 }

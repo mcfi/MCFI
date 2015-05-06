@@ -51,6 +51,9 @@ endif
 ifeq ($(VERBOSE), 1)
 CFLAGS+=-DVERBOSE
 endif
+ifeq ($(PROFILING), 1)
+CFLAGS+=-DPROFILING
+endif
 
 build: $(RTIME)
 	mkdir -p $(SDK)/bin

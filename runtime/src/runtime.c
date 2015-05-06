@@ -6,6 +6,7 @@
 #include <tcb.h>
 #include <errno.h>
 #include "pager.h"
+#include <time.h>
 #include <cfggen/cfggen.h>
 
 static void* prog_brk = 0;
@@ -19,8 +20,10 @@ dict *thread_escape_map = 0;
 
 #ifdef COLLECT_STAT
 static unsigned int at_patch_count = 0;
-static unsigned int vmtd_enable_count = 0;
-static unsigned int lp_enable_count = 0;
+static unsigned int func_addr_activation_count = 0;
+static unsigned int func_entry_patch_count = 0;
+static unsigned int vmtd_activation_count = 0;
+static unsigned int lp_activation_count = 0;
 static unsigned int radc_patch_count = 0;
 static unsigned int raic_patch_count = 0;
 static unsigned int eqc_callgraph_count = 0;
@@ -143,21 +146,36 @@ void patch_at(unsigned long patchpoint) {
     vertex *tmp, *atsite;
     HASH_ITER(hh, (graph*)(v->value), atsite, tmp) {
       assert (cfggened);
-      *((unsigned long*)(table + (unsigned long)atsite->key)) |= 1;
-      // Luckily, libc does not take any function address before the
-      // the CFG generation.
-      //else {
-      //  /* add all possible function addresses to patch_compensate */
-      //  dict_add(&patch_compensate, table + (unsigned long)atsite->key, 0);
-      //}
-      //dprintf(STDERR_FILENO, "Patch %x\n", (unsigned long)atsite->key);
-#ifdef COLLECT_STAT
-      ++at_patch_count;
+      unsigned long *ptid = (unsigned long*)(table + (unsigned long)atsite->key);
+      if (!(*ptid & 1)) {
+        *ptid |= 1;
+        // Luckily, libc does not take any function address before the
+        // the CFG generation.
+        //else {
+        //  /* add all possible function addresses to patch_compensate */
+        //  dict_add(&patch_compensate, table + (unsigned long)atsite->key, 0);
+        //}
+        //dprintf(STDERR_FILENO, "Patch %x\n", (unsigned long)atsite->key);
+#ifdef PROFILING
+        {
+          struct timeval tv;
+          gettimeofday(&tv);
+          dprintf(STDERR_FILENO, "[%lu:%lu] Activated Function at 0x%x\n",
+                  tv.tv_sec, tv.tv_usec, (unsigned long)atsite->key);
+        }
 #endif
+#ifdef COLLECT_STAT
+        ++func_addr_activation_count;
+#endif
+      }
     }
     g_del_vertex(&fats_in_code, v->key);
   } /* else the address is also taken in data */
 #endif
+#ifdef COLLECT_STAT
+  ++at_patch_count;
+#endif
+
   /* the patch should be performed after the tary id is set valid */
   char *p = (char*)(m->osb_base_addr + patchpoint - 8);
   char patch[8];
@@ -202,11 +220,21 @@ void patch_entry(unsigned long patchpoint) {
         if (kv_m) {
           keyvalue *v, *tmp;
           HASH_ITER(hh, (dict*)(kv_m->value), v, tmp) {
+            unsigned long *ptid = (unsigned long*)(table + (unsigned long)v->key);
+            if (!(*ptid & 1)) {
+              *ptid |= 1;
 #ifdef COLLECT_STAT
-            if (!(*((unsigned long*)(table + (unsigned long)v->key)) & 1))
-              ++vmtd_enable_count;
+              ++vmtd_activation_count;
 #endif
-            *((unsigned long*)(table + (unsigned long)v->key)) |= 1;
+#ifdef PROFILING
+              {
+                struct timeval tv;
+                gettimeofday(&tv);
+                dprintf(STDERR_FILENO, "[%lu:%lu] Activated Virtual Method at 0x%x\n",
+                        tv.tv_sec, tv.tv_usec, (unsigned long)v->key);
+              }
+#endif
+            }
           }
         }
       }
@@ -221,11 +249,22 @@ void patch_entry(unsigned long patchpoint) {
     HASH_ITER(hh, (dict*)(kv_lp->value), v, tmp) {
       *(char*)(table + m->base_addr + (uintptr_t)v->key) = LPV;
 #ifdef COLLECT_STAT
-      ++lp_enable_count;
+      ++lp_activation_count;
+#endif
+#ifdef PROFILING
+      {
+        struct timeval tv;
+        gettimeofday(&tv);
+        dprintf(STDERR_FILENO, "[%lu:%lu] Activated LandingPad at 0x%x\n",
+                tv.tv_sec, tv.tv_usec, (unsigned long)v->key + m->base_addr);
+      }
 #endif
     }
     g_del_vertex(&(m->flp), kv_lp->key);
   }
+#ifdef COLLECT_STAT
+  ++func_entry_patch_count;
+#endif
   // kv_methods->value is a list of virtual methods
   keyvalue *kv = dict_find(m->func_orig, (void*)patchpoint);
   assert(kv);
@@ -275,6 +314,14 @@ void patch_call(unsigned long patchpoint) {
   unsigned long *p =
     (unsigned long*)(m->osb_base_addr + (unsigned long)patch->key - 8);
   *p = (unsigned long)patch->value;
+#ifdef PROFILING
+  {
+    struct timeval tv;
+    gettimeofday(&tv);
+    dprintf(STDERR_FILENO, "[%lu:%lu] Activated Return Address at 0x%x\n",
+            tv.tv_sec, tv.tv_usec, patchpoint);
+  }
+#endif
 #endif
 }
 
@@ -1695,6 +1742,13 @@ static struct ibe_t ibe_count(void) {
 #endif
 
 void collect_stat(void) {
+#ifdef PROFILING
+  {
+    struct timeval tv;
+    gettimeofday(&tv);
+    dprintf(STDERR_FILENO, "[%lu:%lu] Ended!\n", tv.tv_sec, tv.tv_usec);
+  }
+#endif
 #ifdef COLLECT_STAT
   unsigned int lp_count = 0;
   unsigned int eqclp = 0;
@@ -1737,21 +1791,27 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "[%u] C-Style Functions AddrTaken In Code: %u\n",
           pid, HASH_COUNT(ibt_funcs_taken_in_code));
   dprintf(STDERR_FILENO, "[%u] Total online activated C-style functions: %u\n",
-          pid, at_patch_count);
+          pid, func_addr_activation_count);
   dprintf(STDERR_FILENO, "[%u] Virtual Methods AddrTaken In Code: %u\n",
           pid, HASH_COUNT(vmtd_taken_in_code));
   dprintf(STDERR_FILENO, "[%u] Total online activated virtual methods: %u\n",
-          pid, vmtd_enable_count);
+          pid, vmtd_activation_count);
   dprintf(STDERR_FILENO, "[%u] Total online activated landing pads: %u\n",
-          pid, lp_enable_count);
-  dprintf(STDERR_FILENO, "[%u] Total Patches (or Activated Return Addrs): %u\n",
+          pid, lp_activation_count);
+  dprintf(STDERR_FILENO, "[%u] Total online activated return addrs: %u\n",
           pid, radc_patch_count + raic_patch_count);
   dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of Direct Calls: %u\n",
           pid, radc_patch_count);
-  dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of InDirect Calls: %u\n",
+  dprintf(STDERR_FILENO, "[%u] Activated Return Addrs of Indirect Calls: %u\n",
           pid, raic_patch_count);
   dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges Considering Activation: %lu\n",
           pid, ibe.ibe_count);
+  dprintf(STDERR_FILENO, "[%u] Total function address taken site patches: %lu\n",
+          pid, at_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Total function entry patches: %lu\n",
+          pid, func_entry_patch_count);
+  dprintf(STDERR_FILENO, "[%u] Total call site patches: %lu\n",
+          pid, radc_patch_count + raic_patch_count);
 #endif
   dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges: %lu\n",
           pid, ibe.ibe_count_wo_activation);
