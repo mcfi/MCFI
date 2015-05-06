@@ -111,6 +111,7 @@ public:
   Pass *Inliner;
 
   bool DisableTailCalls;
+  bool DisablePICFI;
   bool DisableUnitAtATime;
   bool DisableUnrollLoops;
   bool BBVectorize;

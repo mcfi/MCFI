@@ -63,6 +63,7 @@ PassManagerBuilder::PassManagerBuilder() {
     LibraryInfo = nullptr;
     Inliner = nullptr;
     DisableTailCalls = false;
+    DisablePICFI = false;
     DisableUnitAtATime = false;
     DisableUnrollLoops = false;
     BBVectorize = RunBBVectorization;
@@ -143,9 +144,8 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
     // manager to get the same behavior as EP_OptimizerLast in non-O0 builds.
     if (!GlobalExtensions->empty() || !Extensions.empty())
       MPM.add(createBarrierNoopPass());
-#ifndef NO_ONLINE_PATCHING
-    MPM.add(createFuncAddrTakenPass()); // register function address taken events
-#endif
+    if (!DisablePICFI)
+      MPM.add(createFuncAddrTakenPass()); // register function address taken events
     addExtensionsToPM(EP_EnabledOnOptLevel0, MPM);
     return;
   }
@@ -281,9 +281,8 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
       MPM.add(createConstantMergePass());     // Merge dup global constants
     }
   }
-#ifndef NO_ONLINE_PATCHING
-  MPM.add(createFuncAddrTakenPass()); // register function address taken events
-#endif
+  if (!DisablePICFI)
+    MPM.add(createFuncAddrTakenPass()); // register function address taken events
   addExtensionsToPM(EP_OptimizerLast, MPM);
 }
 
