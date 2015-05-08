@@ -1,6 +1,6 @@
 diff -rupN nginx-1.4.0.native/src/event/ngx_event.c nginx-1.4.0/src/event/ngx_event.c
 --- nginx-1.4.0.native/src/event/ngx_event.c	2013-03-15 16:00:49.000000000 -0400
-+++ nginx-1.4.0/src/event/ngx_event.c	2014-12-20 14:19:36.199413025 -0500
++++ nginx-1.4.0/src/event/ngx_event.c	2015-05-07 23:17:42.045986155 -0400
 @@ -572,6 +572,9 @@ ngx_event_module_init(ngx_cycle_t *cycle
  #if !(NGX_WIN32)
  
@@ -13,7 +13,7 @@ diff -rupN nginx-1.4.0.native/src/event/ngx_event.c nginx-1.4.0/src/event/ngx_ev
      ngx_event_timer_alarm = 1;
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_addition_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_addition_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_addition_filter_module.c	2012-07-07 17:22:27.000000000 -0400
-+++ nginx-1.4.0/src/http/modules/ngx_http_addition_filter_module.c	2015-05-07 21:40:40.362185000 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_addition_filter_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -128,7 +128,7 @@ ngx_http_addition_header_filter(ngx_http
  
  
@@ -33,7 +33,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_addition_filter_module.c
      }
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_charset_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_charset_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_charset_filter_module.c	2012-01-18 10:07:43.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_charset_filter_module.c	2015-03-08 21:02:10.080733612 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_charset_filter_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -540,13 +540,13 @@ ngx_http_charset_ctx(ngx_http_request_t
  
  
@@ -52,7 +52,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_charset_filter_module.c 
      if (ctx == NULL || ctx->table == NULL) {
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_chunked_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_chunked_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_chunked_filter_module.c	2013-02-18 08:50:52.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_chunked_filter_module.c	2015-03-08 21:01:01.576733621 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_chunked_filter_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -98,7 +98,7 @@ ngx_http_chunked_header_filter(ngx_http_
  
  
@@ -73,7 +73,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_chunked_filter_module.c 
      }
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_fastcgi_module.c nginx-1.4.0/src/http/modules/ngx_http_fastcgi_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_fastcgi_module.c	2013-02-01 09:41:50.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_fastcgi_module.c	2015-03-08 21:25:10.248733448 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_fastcgi_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -2579,7 +2579,7 @@ ngx_http_fastcgi_merge_params(ngx_conf_t
              return NGX_ERROR;
          }
@@ -92,9 +92,27 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_fastcgi_module.c nginx-1
          copy->len = src[i].skip_empty;
  
  
+diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_gunzip_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_gunzip_filter_module.c
+--- nginx-1.4.0.native/src/http/modules/ngx_http_gunzip_filter_module.c	2012-11-26 16:30:45.000000000 -0500
++++ nginx-1.4.0/src/http/modules/ngx_http_gunzip_filter_module.c	2015-05-07 23:30:42.521959497 -0400
+@@ -172,12 +172,13 @@ ngx_http_gunzip_header_filter(ngx_http_r
+ 
+ 
+ static ngx_int_t
+-ngx_http_gunzip_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
++ngx_http_gunzip_body_filter(void *context, ngx_chain_t *in)
+ {
+     int                     rc;
+     ngx_chain_t            *cl;
+     ngx_http_gunzip_ctx_t  *ctx;
+ 
++    ngx_http_request_t *r = (ngx_http_request_t*)context;
+     ctx = ngx_http_get_module_ctx(r, ngx_http_gunzip_filter_module);
+ 
+     if (ctx == NULL || ctx->done) {
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_gzip_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_gzip_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_gzip_filter_module.c	2013-03-11 07:19:58.000000000 -0400
-+++ nginx-1.4.0/src/http/modules/ngx_http_gzip_filter_module.c	2015-05-07 21:48:05.286169803 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_gzip_filter_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -313,12 +313,13 @@ ngx_http_gzip_header_filter(ngx_http_req
  
  
@@ -112,7 +130,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_gzip_filter_module.c ngi
      if (ctx == NULL || ctx->done || r->header_only) {
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_proxy_module.c nginx-1.4.0/src/http/modules/ngx_http_proxy_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_proxy_module.c	2013-02-27 08:29:50.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_proxy_module.c	2015-03-08 21:27:17.000733433 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_proxy_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -2962,8 +2962,8 @@ ngx_http_proxy_merge_headers(ngx_conf_t
                  return NGX_ERROR;
              }
@@ -148,7 +166,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_proxy_module.c nginx-1.4
  
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_range_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_range_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_range_filter_module.c	2012-07-09 13:04:37.000000000 -0400
-+++ nginx-1.4.0/src/http/modules/ngx_http_range_filter_module.c	2015-03-08 21:01:16.656733619 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_range_filter_module.c	2015-05-07 23:17:42.045986155 -0400
 @@ -573,10 +573,10 @@ ngx_http_range_not_satisfiable(ngx_http_
  
  
@@ -164,7 +182,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_range_filter_module.c ng
      }
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_scgi_module.c nginx-1.4.0/src/http/modules/ngx_http_scgi_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_scgi_module.c	2013-02-23 06:50:42.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_scgi_module.c	2015-03-08 21:27:58.092733428 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_scgi_module.c	2015-05-07 23:17:42.049986155 -0400
 @@ -1539,7 +1539,7 @@ ngx_http_scgi_merge_params(ngx_conf_t *c
              return NGX_ERROR;
          }
@@ -185,7 +203,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_scgi_module.c nginx-1.4.
  
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_ssi_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_ssi_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_ssi_filter_module.c	2012-08-17 11:35:50.000000000 -0400
-+++ nginx-1.4.0/src/http/modules/ngx_http_ssi_filter_module.c	2015-03-08 21:01:54.196733614 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_ssi_filter_module.c	2015-05-07 23:17:42.049986155 -0400
 @@ -369,7 +369,7 @@ ngx_http_ssi_header_filter(ngx_http_requ
  
  
@@ -206,7 +224,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_ssi_filter_module.c ngin
      if (ctx == NULL
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_sub_filter_module.c nginx-1.4.0/src/http/modules/ngx_http_sub_filter_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_sub_filter_module.c	2012-12-06 18:03:53.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_sub_filter_module.c	2015-05-07 21:47:52.330170245 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_sub_filter_module.c	2015-05-07 23:17:42.049986155 -0400
 @@ -176,7 +176,7 @@ ngx_http_sub_header_filter(ngx_http_requ
  
  
@@ -226,7 +244,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_sub_filter_module.c ngin
      if (ctx == NULL) {
 diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_uwsgi_module.c nginx-1.4.0/src/http/modules/ngx_http_uwsgi_module.c
 --- nginx-1.4.0.native/src/http/modules/ngx_http_uwsgi_module.c	2013-02-23 06:50:42.000000000 -0500
-+++ nginx-1.4.0/src/http/modules/ngx_http_uwsgi_module.c	2015-03-08 21:28:28.408733424 -0400
++++ nginx-1.4.0/src/http/modules/ngx_http_uwsgi_module.c	2015-05-07 23:17:42.049986155 -0400
 @@ -1581,7 +1581,7 @@ ngx_http_uwsgi_merge_params(ngx_conf_t *
              return NGX_ERROR;
          }
@@ -247,7 +265,7 @@ diff -rupN nginx-1.4.0.native/src/http/modules/ngx_http_uwsgi_module.c nginx-1.4
  
 diff -rupN nginx-1.4.0.native/src/http/ngx_http.c nginx-1.4.0/src/http/ngx_http.c
 --- nginx-1.4.0.native/src/http/ngx_http.c	2013-03-21 12:03:24.000000000 -0400
-+++ nginx-1.4.0/src/http/ngx_http.c	2015-03-08 20:52:36.188733681 -0400
++++ nginx-1.4.0/src/http/ngx_http.c	2015-05-07 23:17:42.049986155 -0400
 @@ -70,7 +70,7 @@ ngx_uint_t   ngx_http_max_module;
  
  
@@ -259,7 +277,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http.c nginx-1.4.0/src/http/ngx_http.
  ngx_str_t  ngx_http_html_default_types[] = {
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_copy_filter_module.c nginx-1.4.0/src/http/ngx_http_copy_filter_module.c
 --- nginx-1.4.0.native/src/http/ngx_http_copy_filter_module.c	2012-03-15 16:08:58.000000000 -0400
-+++ nginx-1.4.0/src/http/ngx_http_copy_filter_module.c	2015-03-08 21:00:27.020733625 -0400
++++ nginx-1.4.0/src/http/ngx_http_copy_filter_module.c	2015-05-07 23:17:42.049986155 -0400
 @@ -78,7 +78,7 @@ static ngx_http_output_body_filter_pt
  
  
@@ -279,7 +297,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_copy_filter_module.c nginx-1.4.0
      ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_core_module.c nginx-1.4.0/src/http/ngx_http_core_module.c
 --- nginx-1.4.0.native/src/http/ngx_http_core_module.c	2013-03-29 04:47:37.000000000 -0400
-+++ nginx-1.4.0/src/http/ngx_http_core_module.c	2015-03-08 21:10:34.980733552 -0400
++++ nginx-1.4.0/src/http/ngx_http_core_module.c	2015-05-07 23:17:42.049986155 -0400
 @@ -1943,11 +1943,11 @@ ngx_http_send_header(ngx_http_request_t
  
  
@@ -296,7 +314,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_core_module.c nginx-1.4.0/src/ht
      ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_core_module.h nginx-1.4.0/src/http/ngx_http_core_module.h
 --- nginx-1.4.0.native/src/http/ngx_http_core_module.h	2013-03-20 06:36:57.000000000 -0400
-+++ nginx-1.4.0/src/http/ngx_http_core_module.h	2015-03-08 21:09:47.032733558 -0400
++++ nginx-1.4.0/src/http/ngx_http_core_module.h	2015-05-07 23:17:42.053986155 -0400
 @@ -519,11 +519,12 @@ ngx_http_cleanup_t *ngx_http_cleanup_add
  
  typedef ngx_int_t (*ngx_http_output_header_filter_pt)(ngx_http_request_t *r);
@@ -315,7 +333,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_core_module.h nginx-1.4.0/src/ht
  ngx_int_t ngx_http_set_disable_symlinks(ngx_http_request_t *r,
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_postpone_filter_module.c nginx-1.4.0/src/http/ngx_http_postpone_filter_module.c
 --- nginx-1.4.0.native/src/http/ngx_http_postpone_filter_module.c	2012-03-15 16:08:58.000000000 -0400
-+++ nginx-1.4.0/src/http/ngx_http_postpone_filter_module.c	2015-03-08 21:01:34.404733617 -0400
++++ nginx-1.4.0/src/http/ngx_http_postpone_filter_module.c	2015-05-07 23:17:42.053986155 -0400
 @@ -50,11 +50,11 @@ static ngx_http_output_body_filter_pt
  
  
@@ -332,7 +350,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_postpone_filter_module.c nginx-1
      ngx_log_debug3(NGX_LOG_DEBUG_HTTP, c->log, 0,
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_script.c nginx-1.4.0/src/http/ngx_http_script.c
 --- nginx-1.4.0.native/src/http/ngx_http_script.c	2012-12-06 18:03:53.000000000 -0500
-+++ nginx-1.4.0/src/http/ngx_http_script.c	2015-03-08 21:22:49.464733465 -0400
++++ nginx-1.4.0/src/http/ngx_http_script.c	2015-05-07 23:17:42.053986155 -0400
 @@ -26,6 +26,10 @@ static ngx_int_t
  static size_t ngx_http_script_full_name_len_code(ngx_http_script_engine_t *e);
  static void ngx_http_script_full_name_code(ngx_http_script_engine_t *e);
@@ -442,7 +460,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_script.c nginx-1.4.0/src/http/ng
  ngx_http_script_full_name_code(ngx_http_script_engine_t *e)
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_script.h nginx-1.4.0/src/http/ngx_http_script.h
 --- nginx-1.4.0.native/src/http/ngx_http_script.h	2012-01-18 10:07:43.000000000 -0500
-+++ nginx-1.4.0/src/http/ngx_http_script.h	2015-03-08 21:25:59.540733442 -0400
++++ nginx-1.4.0/src/http/ngx_http_script.h	2015-05-07 23:17:42.053986155 -0400
 @@ -229,8 +229,10 @@ void *ngx_http_script_start_code(ngx_poo
  void *ngx_http_script_add_code(ngx_array_t *codes, size_t size, void *code);
  
@@ -456,7 +474,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_script.h nginx-1.4.0/src/http/ng
  void ngx_http_script_copy_capture_code(ngx_http_script_engine_t *e);
 diff -rupN nginx-1.4.0.native/src/http/ngx_http_write_filter_module.c nginx-1.4.0/src/http/ngx_http_write_filter_module.c
 --- nginx-1.4.0.native/src/http/ngx_http_write_filter_module.c	2012-12-12 09:48:48.000000000 -0500
-+++ nginx-1.4.0/src/http/ngx_http_write_filter_module.c	2015-03-08 20:59:56.284733628 -0400
++++ nginx-1.4.0/src/http/ngx_http_write_filter_module.c	2015-05-07 23:17:42.053986155 -0400
 @@ -45,7 +45,7 @@ ngx_module_t  ngx_http_write_filter_modu
  
  
@@ -476,7 +494,7 @@ diff -rupN nginx-1.4.0.native/src/http/ngx_http_write_filter_module.c nginx-1.4.
      if (c->error) {
 diff -rupN nginx-1.4.0.native/src/os/unix/ngx_linux_config.h nginx-1.4.0/src/os/unix/ngx_linux_config.h
 --- nginx-1.4.0.native/src/os/unix/ngx_linux_config.h	2012-01-18 10:07:43.000000000 -0500
-+++ nginx-1.4.0/src/os/unix/ngx_linux_config.h	2014-12-20 14:12:38.239420188 -0500
++++ nginx-1.4.0/src/os/unix/ngx_linux_config.h	2015-05-07 23:17:42.053986155 -0400
 @@ -51,7 +51,7 @@
  #include <malloc.h>             /* memalign() */
  #include <limits.h>             /* IOV_MAX */
@@ -488,7 +506,7 @@ diff -rupN nginx-1.4.0.native/src/os/unix/ngx_linux_config.h nginx-1.4.0/src/os/
  
 diff -rupN nginx-1.4.0.native/src/os/unix/ngx_process.c nginx-1.4.0/src/os/unix/ngx_process.c
 --- nginx-1.4.0.native/src/os/unix/ngx_process.c	2012-10-18 10:48:33.000000000 -0400
-+++ nginx-1.4.0/src/os/unix/ngx_process.c	2014-12-20 14:21:21.395411222 -0500
++++ nginx-1.4.0/src/os/unix/ngx_process.c	2015-05-07 23:17:42.053986155 -0400
 @@ -21,7 +21,7 @@ typedef struct {
  
  
@@ -500,7 +518,7 @@ diff -rupN nginx-1.4.0.native/src/os/unix/ngx_process.c nginx-1.4.0/src/os/unix/
  
 diff -rupN nginx-1.4.0.native/src/os/unix/ngx_send.c nginx-1.4.0/src/os/unix/ngx_send.c
 --- nginx-1.4.0.native/src/os/unix/ngx_send.c	2012-01-18 10:07:43.000000000 -0500
-+++ nginx-1.4.0/src/os/unix/ngx_send.c	2015-03-01 11:45:54.801924399 -0500
++++ nginx-1.4.0/src/os/unix/ngx_send.c	2015-05-07 23:17:42.053986155 -0400
 @@ -31,6 +31,8 @@ ngx_unix_send(ngx_connection_t *c, u_cha
  #endif
  
@@ -512,7 +530,7 @@ diff -rupN nginx-1.4.0.native/src/os/unix/ngx_send.c nginx-1.4.0/src/os/unix/ngx
          ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,
 diff -rupN nginx-1.4.0.native/src/os/unix/ngx_user.c nginx-1.4.0/src/os/unix/ngx_user.c
 --- nginx-1.4.0.native/src/os/unix/ngx_user.c	2012-12-21 11:13:03.000000000 -0500
-+++ nginx-1.4.0/src/os/unix/ngx_user.c	2014-12-20 14:13:56.203418851 -0500
++++ nginx-1.4.0/src/os/unix/ngx_user.c	2015-05-07 23:17:42.053986155 -0400
 @@ -32,7 +32,7 @@ ngx_libc_crypt(ngx_pool_t *pool, u_char
  
      cd.initialized = 0;
