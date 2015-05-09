@@ -6,6 +6,10 @@ CC = clang
 
 STAT ?= 0
 MCFI ?= 0
+NOCFI ?= 0
+VERBOSE ?= 0
+PROFILING ?= 0
+
 CFLAGS = -fno-stack-protector -fno-strict-aliasing -I./include -nostdinc -fPIC
 SRCS = $(sort $(wildcard src/*.c src/*/*.c))
 OBJS = $(SRCS:.c=.o)
@@ -25,9 +29,10 @@ ifeq ($(SDK), )
   SDK = $(HOMEDIR)/MCFI/toolchain
 endif
 
-.PHONY: $(RTIME) all release debug staticcheck build clean
+.PHONY: all release debug staticcheck build clean
 
 all: release
+	@echo "Runtime successfully built and installed."
 
 release: CFLAGS+=-O3
 release: build
@@ -64,6 +69,9 @@ clean:
 	rm -f $(RTIME)
 
 %.o: %.s
+	$(CC) -c -o $@ $<
+
+%.o: %.S
 	$(CC) -c -o $@ $<
 
 %.o: %.c $(INCLUDES)
