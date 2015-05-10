@@ -192,11 +192,7 @@ void patch_entry(unsigned long patchpoint) {
   //dprintf(STDERR_FILENO, "patched entry %x\n", patchpoint);
   code_module *m;
   int found = FALSE;
-  /*
-  DL_FOREACH(modules, m) {
-    dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, m->sz);
-  }
-  */
+
   DL_FOREACH(modules, m) {
     if (patchpoint >= m->base_addr &&
         patchpoint < m->base_addr + m->sz) {
@@ -204,7 +200,7 @@ void patch_entry(unsigned long patchpoint) {
       break;
     }
   }
-  assert(found);
+  assert(found && patchpoint % 8 == 0);
   patchpoint -= m->base_addr;
   assert(cfggened);
   keyvalue *kv_ctor = dict_find(m->ctor, (void*)patchpoint);
@@ -286,11 +282,9 @@ void patch_call(unsigned long patchpoint) {
     }
   }
   assert(found);
-  /*
   assert(patchpoint % 8 == 0 ||
          (patchpoint + 3) % 8 == 0||
          (patchpoint + 2) % 8 == 0);
-  */
 #ifdef COLLECT_STAT
   if (patchpoint % 8 == 0)
     ++radc_patch_count;
@@ -300,7 +294,7 @@ void patch_call(unsigned long patchpoint) {
   patchpoint = (patchpoint + 7) / 8 * 8;
   //dprintf(STDERR_FILENO, "%x, %x\n", m->base_addr, patchpoint - m->base_addr);
   keyvalue *patch = dict_find(m->ra_orig, (const void*)(patchpoint - m->base_addr));
-  //assert(patch);
+  assert(patch);
   //dprintf(STDERR_FILENO, "%x, %x, %lx, %x\n",
   //        m->base_addr, patch->key, patch->value, patch_count);
 
