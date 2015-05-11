@@ -763,7 +763,16 @@ int gen_cfg(void) {
   dict *fats_in_data = 0;
   dict *defined_ctors = 0;
   graph *aliases = 0;
-
+#ifdef COLLECT_STAT
+  if (rt_eqc_ids) {
+    g_dtor(&rt_eqc_ids);
+    rt_eqc_ids = 0;
+  }
+  if (ict_eqc_ids) {
+    g_dtor(&ict_eqc_ids);
+    ict_eqc_ids = 0;
+  }
+#endif
   if (fats_in_code) {
     g_dtor(&fats_in_code);
     fats_in_code = 0;
@@ -1758,18 +1767,30 @@ void collect_stat(void) {
 
   unsigned int pid = __syscall0(SYS_getpid);
 
+  /*
+   * TODO: the following equivalence class numbers don't match, figure out later.
+   */
   dprintf(STDERR_FILENO, "\n[%u] MCFI Statistics\n", pid);
-  dprintf(STDERR_FILENO, "[%u] Total Equivalence Classes: %u\n", pid,
+  /*
+  dprintf(STDERR_FILENO, "[%u] Total Equivalence Classes for instructions: %u\n", pid,
           eqc_callgraph_count + eqc_retgraph_count + eqclp);
-  dprintf(STDERR_FILENO, "[%u] Forward-Edge Equivalence Classes: %u\n", pid,
+  dprintf(STDERR_FILENO, "[%u] Equivalence Classes for indirect calls: %u\n", pid,
           eqc_callgraph_count);
-  dprintf(STDERR_FILENO, "[%u] Back-Edge Equivalence Classes: %u\n", pid,
+  dprintf(STDERR_FILENO, "[%u] Equivalence Classes for returns: %u\n", pid,
           eqc_retgraph_count + eqclp);
-
+  */
+  dprintf(STDERR_FILENO, "[%u] Equivalence classes for indirect branch targets: %u\n", pid,
+          HASH_COUNT(ict_eqc_ids) + HASH_COUNT(rt_eqc_ids) + eqclp);
+  dprintf(STDERR_FILENO, "[%u] Equivalence classes for functions reachable by indirect "
+          "branches: %u\n", pid, HASH_COUNT(ict_eqc_ids));
+  dprintf(STDERR_FILENO, "[%u] Equivalence classes for return addresses: %u\n", pid,
+          HASH_COUNT(rt_eqc_ids));
+  dprintf(STDERR_FILENO, "[%u] Equivalence classes for landing pads: %u\n", pid, eqclp);
   dprintf(STDERR_FILENO, "[%u] Total Indirect Branches: %u\n", pid,
-          ict_count + rt_count);
-  dprintf(STDERR_FILENO, "[%u] Forward Branches: %u\n", pid, ict_count);
-  dprintf(STDERR_FILENO, "[%u] Backward Branches: %u\n", pid, rt_count);
+          ict_count + rt_count + eqclp);
+  dprintf(STDERR_FILENO, "[%u] Indirect calls/jmps: %u\n", pid, ict_count);
+  dprintf(STDERR_FILENO, "[%u] Returns: %u\n", pid, rt_count);
+  dprintf(STDERR_FILENO, "[%u] Landing pad jmp: %u\n", pid, eqclp);
 
   dprintf(STDERR_FILENO, "[%u] Total Indirect Branch Targets: %u\n", pid,
           ibt_funcs + ibt_radcs + ibt_raics + lp_count);
@@ -1784,6 +1805,8 @@ void collect_stat(void) {
 #ifndef NO_ONLINE_PATCHING
   dprintf(STDERR_FILENO, "[%u] C-Style Functions AddrTaken In Code: %u\n",
           pid, HASH_COUNT(ibt_funcs_taken_in_code));
+  dprintf(STDERR_FILENO, "[%u] C-Style Functions AddrTaken In Data: %u\n",
+          pid, ibt_funcs - HASH_COUNT(ibt_funcs_taken_in_code));
   dprintf(STDERR_FILENO, "[%u] Total online activated C-style functions: %u\n",
           pid, func_addr_activation_count);
   dprintf(STDERR_FILENO, "[%u] Virtual Methods AddrTaken In Code: %u\n",

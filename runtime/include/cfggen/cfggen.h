@@ -1257,6 +1257,8 @@ static unsigned int ibt_radcs = 0; /* return addresses of direct calls */
 static unsigned int ibt_raics = 0; /* return addresses of indirect calls */
 static unsigned int ict_count = 0; /* indirect calls */
 static unsigned int rt_count = 0;  /* returns */
+static graph *rt_eqc_ids = 0;
+static graph *ict_eqc_ids = 0;
 
 static void incr_ibt_radcs(void) {
   ++ibt_radcs;
@@ -1309,6 +1311,9 @@ static void populate_tary_for_func_addr(code_module *m,
       }
       *p = ((unsigned long)id->value & mask);
       incr(); /* collect stat data */
+#ifdef COLLECT_STAT
+      g_add_vertex(&ict_eqc_ids, id->value);
+#endif
     }
   }
 }
@@ -1329,6 +1334,9 @@ static void populate_tary_for_return_addr(char* tary, dict *ids, symbol *syms,
       }
       *p = ((unsigned long)id->value & mask);
       if (incr) incr(); /* collect stat data */
+#ifdef COLLECT_STAT
+      g_add_vertex(&rt_eqc_ids, id->value);
+#endif
     }
   }
 }
