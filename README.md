@@ -1,7 +1,7 @@
-MCFI
+MCFI/PICFI
 ====
 
-This directory contains the MCFI toolchain that has been tested on Ubuntu 14.04. To build the toolchain, you first need to execute the following command to install the required tools.
+This directory contains the MCFI/PICFI toolchain that has been tested on x64 Ubuntu 14.04. Technical details of MCFI can be found in ```http://www.cse.lehigh.edu/~gtan/paper/mcfi.pdf```. PICFI further improves MCFI by enforcing per-input CFGs. To build the toolchain, you first need to execute the following command to install the required tools.
 
   ```sudo apt-get install build-essential g++-multilib flex bison libtool subversion git cmake autoconf automake```
 
@@ -20,3 +20,11 @@ By default, clang would generate PICFI-enforced binaries, but you may pass the f
 ```-Xclang -mdisable-picfi```: disable PICFI but enable MCFI.
 
 ```-Xclang -mcount-iib```: instrument each MCFI-instrumented indirect branch further so that the amount of its dynamic execution can be counted.
+
+Ported Applications
+==
+All SPECCPU2006 C/C++ benchmarks have been tested with both the test and reference data sets. However, you need to apply the patches in the ```spec2006``` directory to make the benchmarks compatible with MCFI/PICFI.
+
+v8: ```https://github.com/mcfi/v8```
+
+nginx-1.4.0: ```https://github.com/mcfi/nginx-1.4.0```
