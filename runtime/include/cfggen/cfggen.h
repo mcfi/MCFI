@@ -1257,8 +1257,8 @@ static unsigned int ibt_radcs = 0; /* return addresses of direct calls */
 static unsigned int ibt_raics = 0; /* return addresses of indirect calls */
 static unsigned int ict_count = 0; /* indirect calls */
 static unsigned int rt_count = 0;  /* returns */
-static graph *rt_eqc_ids = 0;
-static graph *ict_eqc_ids = 0;
+static dict *rt_eqc_ids = 0;
+static dict *ict_eqc_ids = 0;
 
 static void incr_ibt_radcs(void) {
   ++ibt_radcs;
@@ -1269,6 +1269,16 @@ static void incr_ibt_raics(void) {
 static void incr_ibt_funcs(void) {
   ++ibt_funcs;
 }
+
+static void incr_dict_val(dict **d, void *k) {
+  keyvalue *kv = dict_find(*d, k);
+  if (!kv) {
+    kv = dict_add(d, k, 0);
+  }
+  unsigned long count = (unsigned long)kv->value;
+  count++;
+  kv->value = (void*)count;
+}
 #else
 static void incr_ibt_radcs(void) {
 }
@@ -1276,6 +1286,7 @@ static void incr_ibt_raics(void) {
 }
 static void incr_ibt_funcs(void) {
 }
+
 #endif
 
 static void populate_tary_for_func_addr(code_module *m,
@@ -1312,7 +1323,7 @@ static void populate_tary_for_func_addr(code_module *m,
       *p = ((unsigned long)id->value & mask);
       incr(); /* collect stat data */
 #ifdef COLLECT_STAT
-      g_add_vertex(&ict_eqc_ids, id->value);
+      incr_dict_val(&ict_eqc_ids, id->value);
 #endif
     }
   }
@@ -1335,7 +1346,7 @@ static void populate_tary_for_return_addr(char* tary, dict *ids, symbol *syms,
       *p = ((unsigned long)id->value & mask);
       if (incr) incr(); /* collect stat data */
 #ifdef COLLECT_STAT
-      g_add_vertex(&rt_eqc_ids, id->value);
+      incr_dict_val(&rt_eqc_ids, id->value);
 #endif
     }
   }
