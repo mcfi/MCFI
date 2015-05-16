@@ -1751,16 +1751,14 @@ static struct ibe_t ibe_count(void) {
     if (tkv) {
       IBEs.ibe_count += (unsigned long)ikv->value * (unsigned long)tkv->value;
       dict_del(&ibt, tkv->key);
-      // we only consider those edges that should have been available if no
-      // online activation is used.
-      tkv = dict_find(ict_eqc_ids, ikv->key);
-      if (tkv) {
-        IBEs.ibe_count_wo_activation += (unsigned long)ikv->value * (unsigned long)tkv->value;
-      }
-      tkv = dict_find(rt_eqc_ids, ikv->key);
-      if (tkv) {
-        IBEs.ibe_count_wo_activation += (unsigned long)ikv->value * (unsigned long)tkv->value;
-      }
+    }
+    tkv = dict_find(ict_eqc_ids, ikv->key);
+    if (tkv) {
+      IBEs.ibe_count_wo_activation += (unsigned long)ikv->value * (unsigned long)tkv->value;
+    }
+    tkv = dict_find(rt_eqc_ids, ikv->key);
+    if (tkv) {
+      IBEs.ibe_count_wo_activation += (unsigned long)ikv->value * (unsigned long)tkv->value;
     }
   }
   /* TODO: some IBTs do not have corresponding IBs. All cases seem to
