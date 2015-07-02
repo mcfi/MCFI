@@ -2,6 +2,9 @@
         .align 16, 0x90
         .type memcpy,@function
 memcpy:
+        # save the return address to a secure place so
+        # that memcpy itself cannot change it
+        popq %r11
         movl %edi, %edi
 	mov %rdi,%rax
 	cmp $8,%rdx
@@ -21,8 +24,8 @@ memcpy:
 2:	movsb
 	dec %edx
 	jnz 2b
-1:	popq %rcx
-        movl %ecx, %ecx
+1:
+        movl %r11d, %ecx
 try:    movq %gs:0x1000, %rdi
 __mcfi_bary_memcpy:     
         cmpq %rdi, %gs:(%rcx)
