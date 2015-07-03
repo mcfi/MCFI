@@ -7,6 +7,9 @@ memmove:
 	sub %rsi,%rax
 	cmp %rdx,%rax
 	jae memcpy
+        # pop out the return address so the following
+        # execution won't change it.
+        popq %r11
 	mov %rdx,%rcx
 	leal -1(%rdi,%rdx),%edi
 	lea -1(%rsi,%rdx),%rsi
@@ -15,8 +18,7 @@ memmove:
 	cld
 	lea 1(%rdi),%rax
 	#ret
-        popq %rcx
-        movl %ecx, %ecx
+        movl %r11d, %ecx
 try:    movq %gs:0x1000, %rdi
 __mcfi_bary_memmove:
         cmpq %rdi, %gs:(%rcx)
