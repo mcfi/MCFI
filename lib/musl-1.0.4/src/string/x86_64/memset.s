@@ -2,6 +2,8 @@
         .align 16, 0x90
         .type memset,@function
 memset:
+        # save the return address to a scratch register
+        popq %r11
         movl %edi, %edi
 	and $0xff,%esi
 	mov $0x101010101010101,%rax
@@ -41,8 +43,7 @@ memset:
 
 1:	mov %r8,%rax
 2:      #ret
-        popq %rcx
-        movl %ecx, %ecx
+        movl %r11d, %ecx
 try:    movq %gs:0x1000, %rdi
 __mcfi_bary_memset:
         cmpq %rdi, %gs:(%rcx)
