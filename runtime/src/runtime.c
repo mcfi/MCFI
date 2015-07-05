@@ -272,6 +272,7 @@ void patch_entry(unsigned long patchpoint) {
 void patch_call(unsigned long patchpoint) {
 #ifndef NO_ONLINE_PATCHING
   //dprintf(STDERR_FILENO, "patched call %lx\n", patchpoint);
+  static dict* patched_ra = 0;
   code_module *m;
   int found = FALSE;
   DL_FOREACH(modules, m) {
@@ -285,6 +286,15 @@ void patch_call(unsigned long patchpoint) {
   assert(patchpoint % 8 == 0 ||
          (patchpoint + 3) % 8 == 0||
          (patchpoint + 2) % 8 == 0);
+
+  /* Different CPU cores might cache the same unpatched
+   * instructions. So any duplicated run will be a nop.
+   */
+  if (dict_find(patched_ra, (void*)patchpoint))
+    return;
+
+  dict_add(&patched_ra, (void*)patchpoint, (void*)0);
+
 #ifdef COLLECT_STAT
   if (patchpoint % 8 == 0)
     ++radc_patch_count;
