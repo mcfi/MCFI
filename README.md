@@ -5,7 +5,7 @@ This directory contains the MCFI/PICFI toolchain that has been tested on x64 Ubu
 
   ```sudo apt-get install build-essential g++-multilib flex bison libtool subversion git cmake autoconf automake texinfo texi2html```
 
-Also, you need a prebuilt clang 3.5.0 compiler that can be downloaded from http://llvm.org/releases/3.5.0/clang+llvm-3.5.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz . After you download the prebuilt compiler, decompress it. Then set and export LLVM_HOME environment variable to be the directory name of the decompressed clang compiler.
+Also, you need a prebuilt clang 3.5.0 compiler that can be downloaded from http://llvm.org/releases/3.5.0/clang+llvm-3.5.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz . After you download the prebuilt compiler, decompress it. Then **set** and **export** LLVM_HOME environment variable to be the directory name of the decompressed clang compiler.
 
 1. Run ```build.sh``` to build the MCFI toolchain. By default, the toolchain will be installed in ```$HOME/MCFI/toolchain``` if you do not set MCFI_SDK to some other places.
 
