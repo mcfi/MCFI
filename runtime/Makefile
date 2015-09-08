@@ -2,7 +2,7 @@
 # add STAT=1 at command line to enable execution statistics data collection
 # add MCFI=1 at command line to disable online code patching
 
-CC = clang
+CC = $(shell eval echo ${LLVM_HOME})/bin/clang
 
 STAT ?= 0
 MCFI ?= 0
