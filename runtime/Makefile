@@ -53,6 +53,9 @@ endif
 ifeq ($(NOCFI), 1)
 CFLAGS+=-DNOCFI -DNO_ONLINE_PATCHING
 endif
+ifeq ($(NOJCV), 1)
+CFLAGS+=-DNO_JITCODE_VERIFICATION
+endif
 ifeq ($(VERBOSE), 1)
 CFLAGS+=-DVERBOSE
 endif

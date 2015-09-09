@@ -1932,6 +1932,12 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
   uint16_t state;
   verifier *v = m->verifier;
   unsigned jmp_count = 0;
+
+#ifdef NO_JITCODE_VERIFICATION
+  // without verification, we simply set all jit code bytes as
+  // indirectly reachable
+  memset(tary, DCV, size);
+#else
   /* for each direct call/jump instruction, we need a 4-byte slot to record
      its target address. For a code piece of size, there are (size + 1) / 2
      direct call/jmp instructions at most, since a direct call/jmp instruction
@@ -2019,6 +2025,8 @@ static int verify_jitted_code(code_module *m, unsigned char *data, size_t size, 
     }
   }
   free(jmp_targets);
+#endif
+
   return result;
 }
 
