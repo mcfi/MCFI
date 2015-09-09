@@ -19,3 +19,5 @@ make x* where x* can be combination of the follows:
               # the indirect branch
 
   PROFILING=1 # dump the time stamp for each online address activation
+
+  NOJCV=1     # disable jit code online verification
