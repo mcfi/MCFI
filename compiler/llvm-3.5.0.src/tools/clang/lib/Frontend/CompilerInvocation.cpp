@@ -414,6 +414,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableFree = Args.hasArg(OPT_disable_free);
   Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
   Opts.DisableTailCallInsts = Args.hasArg(OPT_mdisable_tail_callinsts);
+  Opts.DisableCFI = Args.hasArg(OPT_mdisable_cfi);
   Opts.DisablePICFI = Args.hasArg(OPT_mdisable_picfi);
   Opts.CountInstrumentedIB = Args.hasArg(OPT_mcount_iib);
   Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);

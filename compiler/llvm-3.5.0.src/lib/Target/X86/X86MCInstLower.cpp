@@ -615,7 +615,8 @@ static void LowerTlsAddr(MCStreamer &OutStreamer,
                          X86MCInstLower &MCInstLowering,
                          const MachineInstr &MI,
                          const MCSubtargetInfo& STI,
-                         MCContext &OutContext) {
+                         MCContext &OutContext,
+                         TargetMachine &TM) {
 
   bool is64Bits = MI.getOpcode() == X86::TLS_addr64 ||
                   MI.getOpcode() == X86::TLS_base_addr64;
@@ -675,12 +676,14 @@ static void LowerTlsAddr(MCStreamer &OutStreamer,
   OutStreamer.EmitInstruction(LEA, STI);
 
   if (needsPadding) {
-    OutStreamer.EmitCodeAlignment(8, 0);
+    if (!TM.Options.DisableCFI)
+      OutStreamer.EmitCodeAlignment(8, 0);
     OutStreamer.EmitInstruction(MCInstBuilder(X86::DATA16_PREFIX), STI);
     OutStreamer.EmitInstruction(MCInstBuilder(X86::DATA16_PREFIX), STI);
     OutStreamer.EmitInstruction(MCInstBuilder(X86::REX64_PREFIX), STI);
   } else
-    OutStreamer.EmitCodeAlignment(8, 0, 5);
+    if (!TM.Options.DisableCFI)
+      OutStreamer.EmitCodeAlignment(8, 0, 5);
 
   StringRef name = is64Bits ? "__tls_get_addr" : "___tls_get_addr";
   MCSymbol *tlsGetAddr = context.GetOrCreateSymbol(name);
@@ -692,13 +695,15 @@ static void LowerTlsAddr(MCStreamer &OutStreamer,
   OutStreamer.EmitInstruction(MCInstBuilder(is64Bits ? X86::CALL64pcrel32
                                                      : X86::CALLpcrel32)
     .addExpr(tlsRef), STI);
-  static size_t TGASeq;
-  MCSymbol *TGASym =
-    OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
-                                 + to_hex(++TGASeq)
-                                 + std::string("___tls_get_addr"));
-  OutStreamer.EmitSymbolAttribute(TGASym, MCSymbolAttr::MCSA_Hidden);
-  OutStreamer.EmitLabel(TGASym);
+  if (!TM.Options.DisableCFI) {
+    static size_t TGASeq;
+    MCSymbol *TGASym =
+      OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
+                                   + to_hex(++TGASeq)
+                                   + std::string("___tls_get_addr"));
+    OutStreamer.EmitSymbolAttribute(TGASym, MCSymbolAttr::MCSA_Hidden);
+    OutStreamer.EmitLabel(TGASym);
+  }
 }
 
 /// \brief Emit the optimal amount of multi-byte nops on X86.
@@ -833,7 +838,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::TLS_addr64:
   case X86::TLS_base_addr32:
   case X86::TLS_base_addr64:
-    return LowerTlsAddr(OutStreamer, MCInstLowering, *MI, getSubtargetInfo(), OutContext);
+    return LowerTlsAddr(OutStreamer, MCInstLowering, *MI, getSubtargetInfo(), OutContext, TM);
 
   case X86::MOVPC32r: {
     // This is a pseudo op for a two instruction sequence with a label, which
@@ -942,14 +947,14 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
   // MCFI requires each call instruction to be 4/8-byte aligned
   case X86::CALLpcrel32: {
-    if (!isNoReturnFunction(MI->getOperand(0))) {
+    if (!TM.Options.DisableCFI && !isNoReturnFunction(MI->getOperand(0))) {
       OutStreamer.EmitCodeAlignment(4, 0, 5);
     }
     break;
   }
   case X86::CALL64pcrel32:
   {
-    if (!isNoReturnFunction(MI->getOperand(0))) {
+    if (!TM.Options.DisableCFI && !isNoReturnFunction(MI->getOperand(0))) {
       OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 5);
       if (!TM.Options.DisablePICFI) {
         StringRef FuncName;
@@ -996,35 +1001,38 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
   case X86::CALL32r:
   {
-    OutStreamer.EmitCodeAlignment(4, 0, 2);
+    if (!TM.Options.DisableCFI)
+      OutStreamer.EmitCodeAlignment(4, 0, 2);
     break;
   }
   case X86::CALL64r:
   {
-    const unsigned reg = MI->getOperand(0).getReg();
-    switch (reg) {
-    case X86::R8: case X86::R9: case X86::R10: case X86::R11:
-    case X86::R12: case X86::R13: case X86::R14: case X86::R15:
-      if (TM.Options.DisablePICFI) {
-        OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 3);
-      } else {
-        OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0);
-        OutStreamer.EmitCodeAlignment(8, 0, 3);
-      }
-      break;
-    default:
-      if (TM.Options.DisablePICFI) {
-        OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
-      } else {
-        OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 7);
-        OutStreamer.EmitCodeAlignment(8, 0, 2);
+    if (!TM.Options.DisableCFI) {
+      const unsigned reg = MI->getOperand(0).getReg();
+      switch (reg) {
+      case X86::R8: case X86::R9: case X86::R10: case X86::R11:
+      case X86::R12: case X86::R13: case X86::R14: case X86::R15:
+        if (TM.Options.DisablePICFI) {
+          OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 3);
+        } else {
+          OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0);
+          OutStreamer.EmitCodeAlignment(8, 0, 3);
+        }
+        break;
+      default:
+        if (TM.Options.DisablePICFI) {
+          OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 2);
+        } else {
+          OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0, 7);
+          OutStreamer.EmitCodeAlignment(8, 0, 2);
+        }
       }
     }
     break;
   }
   }
 
-  if (!DisableDS) {
+  if (!TM.Options.DisableCFI && !DisableDS) {
     // memory sandboxing
     if ((MI->mayStore() || (EnableLoadDS && MI->mayLoad())) && // only writes are sandboxed
         !MI->isBranch() && // calls also change store mem, but no need to sandbox
@@ -1055,7 +1063,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   MCInstLowering.Lower(MI, TmpInst);
 
   // get the address taken function
-  if (!MI->isBranch()) {
+  if (!TM.Options.DisableCFI && !MI->isBranch()) {
     for (unsigned i = 1; i < TmpInst.getNumOperands(); ++i) {
       const MCOperand &MO = TmpInst.getOperand(i);
       if (MO.isExpr()) {
@@ -1086,11 +1094,12 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::RETQ:
   case X86::TAILJMPm:
   case X86::TAILJMPm64:
-  case X86::CALL32m:    
+  case X86::CALL32m:
   case X86::CALL64m:
   {
-    llvm_unreachable(
-      "BUG: MCFI instrumentation for indirect branches is not complete!");
+    if (!TM.Options.DisableCFI)
+      llvm_unreachable(
+        "BUG: MCFI instrumentation for indirect branches is not complete!");
   }
   case X86::JMP32m:
   case X86::JMP64m:
@@ -1101,7 +1110,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     // happens when PIC code is generated.
     // Later we should modfiy the register spiller to make jump-through-memory
     // instructions disappear.
-    if (!MI->getOperand(3).isJTI()) {
+    if (!TM.Options.DisableCFI && !MI->getOperand(3).isJTI()) {
       assert(TM.getRelocationModel() == Reloc::PIC_ && MI->isTableJump());
     }
     break;
@@ -1111,32 +1120,35 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::TAILJMPr:
   case X86::TAILJMPr64:
   {
-    assert(MI->hasBarySlot() || MI->isTableJump());
+    if (!TM.Options.DisableCFI)
+      assert(MI->hasBarySlot() || MI->isTableJump());
     break;
   }
     // MCFI BID read
   case X86::MOV32rm:
   case X86::MOV64rm:
   {
-    const unsigned BaseReg = MI->getOperand(1).getReg();
-    const unsigned SegReg = MI->getOperand(5).getReg();
-    if (!BaseReg && (SegReg == X86::GS || SegReg == X86::FS) &&
-        MI->hasBarySlot()) {
-      const unsigned long MCFIID = MI->getBarySlot();
-      MCSymbol *MCFIIDSym = 
-        OutContext.GetOrCreateSymbol(StringRef("__mcfi_bary_") + to_hex(MCFIID));
-      OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Hidden);
-      OutStreamer.EmitLabel(MCFIIDSym);
-      if (TM.Options.CountInstrumentedIB) { // count of indirect branches
-        MCInst CountInst;
-        CountInst.setOpcode(X86::ADD64mi8);
-        CountInst.addOperand(MCOperand::CreateReg(0));
-        CountInst.addOperand(MCOperand::CreateImm(1));
-        CountInst.addOperand(MCOperand::CreateReg(0));
-        CountInst.addOperand(MCOperand::CreateImm(0x108));
-        CountInst.addOperand(MCOperand::CreateReg(32));
-        CountInst.addOperand(MCOperand::CreateImm(1));
-        EmitToStreamer(OutStreamer, CountInst);
+    if (!TM.Options.DisableCFI) {
+      const unsigned BaseReg = MI->getOperand(1).getReg();
+      const unsigned SegReg = MI->getOperand(5).getReg();
+      if (!BaseReg && (SegReg == X86::GS || SegReg == X86::FS) &&
+          MI->hasBarySlot()) {
+        const unsigned long MCFIID = MI->getBarySlot();
+        MCSymbol *MCFIIDSym = 
+          OutContext.GetOrCreateSymbol(StringRef("__mcfi_bary_") + to_hex(MCFIID));
+        OutStreamer.EmitSymbolAttribute(MCFIIDSym, MCSymbolAttr::MCSA_Hidden);
+        OutStreamer.EmitLabel(MCFIIDSym);
+        if (TM.Options.CountInstrumentedIB) { // count of indirect branches
+          MCInst CountInst;
+          CountInst.setOpcode(X86::ADD64mi8);
+          CountInst.addOperand(MCOperand::CreateReg(0));
+          CountInst.addOperand(MCOperand::CreateImm(1));
+          CountInst.addOperand(MCOperand::CreateReg(0));
+          CountInst.addOperand(MCOperand::CreateImm(0x108));
+          CountInst.addOperand(MCOperand::CreateReg(32));
+          CountInst.addOperand(MCOperand::CreateImm(1));
+          EmitToStreamer(OutStreamer, CountInst);
+        }
       }
     }
     break;
@@ -1151,61 +1163,65 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   case X86::CALL32r:
   case X86::CALL64r:
   {
-    MCSymbol *RetAddrSym;
-    if (MI->getOpcode() == X86::CALL64r ||
-        MI->getOpcode() == X86::CALL32r) {
-      assert(MI->hasBarySlot());
-      RetAddrSym =
-        OutContext.GetOrCreateSymbol(StringRef("__mcfi_icj_")
-                                     + to_hex(++Seq)
-                                     + std::string("_")
-                                     + to_hex(MI->getBarySlot()));
-    } else {
-      assert(MI->getOpcode() == X86::CALL64pcrel32 ||
-             MI->getOpcode() == X86::CALLpcrel32);
-      StringRef FuncName;
-      const MachineOperand &MO = MI->getOperand(0);
-      if (MO.isSymbol()) {
-        FuncName = MO.getSymbolName();
-      } else if (MO.isGlobal()) {
-        FuncName = MO.getGlobal()->getName();
+    if (!TM.Options.DisableCFI) {
+      MCSymbol *RetAddrSym;
+      if (MI->getOpcode() == X86::CALL64r ||
+          MI->getOpcode() == X86::CALL32r) {
+        assert(MI->hasBarySlot());
+        RetAddrSym =
+          OutContext.GetOrCreateSymbol(StringRef("__mcfi_icj_")
+                                       + to_hex(++Seq)
+                                       + std::string("_")
+                                       + to_hex(MI->getBarySlot()));
+      } else {
+        assert(MI->getOpcode() == X86::CALL64pcrel32 ||
+               MI->getOpcode() == X86::CALLpcrel32);
+        StringRef FuncName;
+        const MachineOperand &MO = MI->getOperand(0);
+        if (MO.isSymbol()) {
+          FuncName = MO.getSymbolName();
+        } else if (MO.isGlobal()) {
+          FuncName = MO.getGlobal()->getName();
+        }
+        assert(!FuncName.empty());
+        RetAddrSym =
+          OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
+                                       + to_hex(++Seq)
+                                       + std::string("_")
+                                       + FuncName);
       }
-      assert(!FuncName.empty());
-      RetAddrSym =
-        OutContext.GetOrCreateSymbol(StringRef("__mcfi_dcj_")
-                                     + to_hex(++Seq)
-                                     + std::string("_")
-                                     + FuncName);
+      OutStreamer.EmitSymbolAttribute(RetAddrSym, MCSymbolAttr::MCSA_Hidden);
+      OutStreamer.EmitLabel(RetAddrSym);
     }
-    OutStreamer.EmitSymbolAttribute(RetAddrSym, MCSymbolAttr::MCSA_Hidden);
-    OutStreamer.EmitLabel(RetAddrSym);
   }
   }
 }
 
 void X86AsmPrinter::EmitMCFIPadding(const MachineInstr *MI) {
-  switch (MI->getOpcode()) {
-  case X86::CALLpcrel32:
-  case X86::CALL64pcrel32:
-  {
-    if (isNoReturnFunction(MI->getOperand(0)))
-      break;
-  }
-  case X86::CALL32r:
-  case X86::CALL64r:
-  {
-    OutStreamer.AddComment(StringRef("MCFI Padding Noop"));
-    MCInst TmpInst;
-    TmpInst.setOpcode(X86::NOOP);
-    EmitToStreamer(OutStreamer, TmpInst);
-  }
+  if (!TM.Options.DisableCFI) {
+    switch (MI->getOpcode()) {
+    case X86::CALLpcrel32:
+    case X86::CALL64pcrel32:
+    {
+      if (isNoReturnFunction(MI->getOperand(0)))
+        break;
+    }
+    case X86::CALL32r:
+    case X86::CALL64r:
+    {
+      OutStreamer.AddComment(StringRef("MCFI Padding Noop"));
+      MCInst TmpInst;
+      TmpInst.setOpcode(X86::NOOP);
+      EmitToStreamer(OutStreamer, TmpInst);
+    }
+    }
   }
 }
 
 void X86AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
   AsmPrinter::EmitBasicBlockStart(MBB); // base impl first
   static unsigned Seq;
-  if (MBB.isLandingPad()) {
+  if (MBB.isLandingPad() && !TM.Options.DisableCFI) {
     OutStreamer.EmitCodeAlignment(SmallID ? 4 : 8, 0);
     MCSymbol *LPSym =
       OutContext.GetOrCreateSymbol(StringRef("__mcfi_lp_") + to_hex(++Seq) +
@@ -1218,42 +1234,44 @@ void X86AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
 
 void X86AsmPrinter::EmitInlineAsmInstrumentation(StringRef Str, const MDNode *LocMDNode,
                                                  InlineAsm::AsmDialect Dialect) {
-  // we only take care of common InlineAsm and report unhandled asm instruction
-  // to developers
-  StringRef TrimedStr = Str.trim();
-  if (TrimedStr.startswith_lower("cld; rep;") ||
-      TrimedStr.startswith_lower("cld;rep ;") ||
-      TrimedStr.startswith_lower("rep;") ||
-      TrimedStr.startswith_lower("cld; repne;") ||
-      TrimedStr.startswith_lower("cld;repne ;") ||
-      TrimedStr.startswith_lower("repne;")){
-    // sandboxing
-    if (SmallSandbox && !DisableDS) {
-      MCInst WriteSandboxingInst;
-      WriteSandboxingInst.setOpcode(X86::MOV32rr);
-      WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
-      WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
-      EmitToStreamer(OutStreamer, WriteSandboxingInst);
-      if (EnableLoadDS) {
-        MCInst ReadSandboxingInst;
-        ReadSandboxingInst.setOpcode(X86::MOV32rr);
-        ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
-        ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
-        EmitToStreamer(OutStreamer, ReadSandboxingInst);
+  if (!TM.Options.DisableCFI) {
+    // we only take care of common InlineAsm and report unhandled asm instruction
+    // to developers
+    StringRef TrimedStr = Str.trim();
+    if (TrimedStr.startswith_lower("cld; rep;") ||
+        TrimedStr.startswith_lower("cld;rep ;") ||
+        TrimedStr.startswith_lower("rep;") ||
+        TrimedStr.startswith_lower("cld; repne;") ||
+        TrimedStr.startswith_lower("cld;repne ;") ||
+        TrimedStr.startswith_lower("repne;")){
+      // sandboxing
+      if (SmallSandbox && !DisableDS) {
+        MCInst WriteSandboxingInst;
+        WriteSandboxingInst.setOpcode(X86::MOV32rr);
+        WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
+        WriteSandboxingInst.insert(std::end(WriteSandboxingInst), MCOperand::CreateReg(X86::EDI));
+        EmitToStreamer(OutStreamer, WriteSandboxingInst);
+        if (EnableLoadDS) {
+          MCInst ReadSandboxingInst;
+          ReadSandboxingInst.setOpcode(X86::MOV32rr);
+          ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
+          ReadSandboxingInst.insert(std::end(ReadSandboxingInst), MCOperand::CreateReg(X86::ESI));
+          EmitToStreamer(OutStreamer, ReadSandboxingInst);
+        }
+        return;
+      }
+    } else if (TrimedStr.startswith_lower("pmovmskb")) {
+      if (TrimedStr.find("(") != StringRef::npos && EnableLoadDS) {
+        OutStreamer.EmitIntValue(0x67, 1);
       }
       return;
+    } else if (TrimedStr.startswith_lower("mfence") ||
+               TrimedStr.startswith_lower("sfence") ||
+               TrimedStr.startswith_lower("lfence")) {
+      return;
     }
-  } else if (TrimedStr.startswith_lower("pmovmskb")) {
-    if (TrimedStr.find("(") != StringRef::npos && EnableLoadDS) {
-      OutStreamer.EmitIntValue(0x67, 1);
-    }
-    return;
-  } else if (TrimedStr.startswith_lower("mfence") ||
-             TrimedStr.startswith_lower("sfence") ||
-             TrimedStr.startswith_lower("lfence")) {
-    return;
+    llvm::errs() << "MCFI Warning: InlineAsm\n\t"
+                 << TrimedStr
+                 << "\nshould be manually sandboxed!\n";
   }
-  llvm::errs() << "MCFI Warning: InlineAsm\n\t"
-               << TrimedStr
-               << "\nshould be manually sandboxed!\n";
 }

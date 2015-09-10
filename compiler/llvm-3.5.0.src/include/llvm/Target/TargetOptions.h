@@ -59,7 +59,7 @@ namespace llvm {
           HonorSignDependentRoundingFPMathOption(false), UseSoftFloat(false),
           NoZerosInBSS(false), JITEmitDebugInfo(false),
           JITEmitDebugInfoToDisk(false), GuaranteedTailCallOpt(false),
-          DisableTailCalls(false), DisablePICFI(false),
+          DisableTailCalls(false), DisableCFI(false), DisablePICFI(false),
           CountInstrumentedIB(false),
           StackAlignmentOverride(0),
           EnableFastISel(false), PositionIndependentExecutable(false),
@@ -152,6 +152,9 @@ namespace llvm {
     /// DisableTailCalls - This flag controls whether we will use tail calls.
     /// Disabling them may be useful to maintain a correct call stack.
     unsigned DisableTailCalls : 1;
+
+    /// DisableCFI
+    unsigned DisableCFI : 1;
 
     /// DisablePICFI
     unsigned DisablePICFI : 1;
@@ -249,6 +252,7 @@ inline bool operator==(const TargetOptions &LHS,
     ARE_EQUAL(JITEmitDebugInfoToDisk) &&
     ARE_EQUAL(GuaranteedTailCallOpt) &&
     ARE_EQUAL(DisableTailCalls) &&
+    ARE_EQUAL(DisableCFI) &&
     ARE_EQUAL(DisablePICFI) &&
     ARE_EQUAL(CountInstrumentedIB) &&
     ARE_EQUAL(StackAlignmentOverride) &&

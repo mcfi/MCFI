@@ -236,6 +236,7 @@ void EmitAssemblyHelper::CreatePasses() {
   PMBuilder.LoopVectorize = CodeGenOpts.VectorizeLoop;
 
   PMBuilder.DisableTailCalls = CodeGenOpts.DisableTailCalls;
+  PMBuilder.DisableCFI = CodeGenOpts.DisableCFI;
   PMBuilder.DisablePICFI = CodeGenOpts.DisablePICFI;
   PMBuilder.DisableUnitAtATime = !CodeGenOpts.UnitAtATime;
   PMBuilder.DisableUnrollLoops = !CodeGenOpts.UnrollLoops;
@@ -468,6 +469,7 @@ TargetMachine *EmitAssemblyHelper::CreateTargetMachine(bool MustCreateTM) {
   Options.UseSoftFloat = CodeGenOpts.SoftFloat;
   Options.StackAlignmentOverride = CodeGenOpts.StackAlignment;
   Options.DisableTailCalls = CodeGenOpts.DisableTailCalls || CodeGenOpts.DisableTailCallInsts;
+  Options.DisableCFI = CodeGenOpts.DisableCFI;
   Options.DisablePICFI = CodeGenOpts.DisablePICFI;
   Options.CountInstrumentedIB = CodeGenOpts.CountInstrumentedIB;
   Options.TrapFuncName = CodeGenOpts.TrapFuncName;

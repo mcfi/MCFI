@@ -365,6 +365,10 @@ void MCFI::extractGlobalArray(const StringRef ArrayName,
 }
 
 bool MCFI::runOnMachineFunction(MachineFunction &MF) {
+
+  if (MF.getTarget().Options.DisableCFI)
+    return false;
+
   Module* newM = const_cast<Module*>(MF.getMMI().getModule());
   if (M != newM) {
     M = newM;

@@ -112,6 +112,7 @@ public:
 
   bool DisableTailCalls;
   bool DisablePICFI;
+  bool DisableCFI;
   bool DisableUnitAtATime;
   bool DisableUnrollLoops;
   bool BBVectorize;
