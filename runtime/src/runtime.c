@@ -1192,6 +1192,7 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
                       void *md,   /* metadata, whose semantics depends on the type */
                       void *extra /* extra info, optional */
                       ) {
+#ifndef NOCFI
   code_module *m = get_code_heap(h);
 
   switch(type) {
@@ -1342,10 +1343,9 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
       assert(ra);
       unsigned long *p = (unsigned long*)(table + addr);
       unsigned long *q = (unsigned long*)(table + (uintptr_t)ra->value);
-#ifndef NOCFI
-      *q |= 1;
-#endif
+      //*q |= 1;
       *p = *q;
+      *p |= 1;
     }
     break;
   case ROCK_ICJ_SYM_UNREG:
@@ -1418,6 +1418,7 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
     break;
   }
   //dprintf(STDERR_FILENO, "[reg_cfg_metadata] exited\n");
+#endif
 }
 
 static void wait(void) {
