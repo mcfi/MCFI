@@ -1187,6 +1187,8 @@ static dict *icj_target_ret = 0;
 static dict *ret_name = 0;
 static dict *ret_offset = 0;
 
+static unsigned long STATIC_BID_SLOT_END = 0;
+
 void reg_cfg_metadata(void *h,    /* code heap handle */
                       int type,   /* type of the metadata */
                       void *md,   /* metadata, whose semantics depends on the type */
@@ -1194,6 +1196,8 @@ void reg_cfg_metadata(void *h,    /* code heap handle */
                       ) {
 #ifndef NOCFI
   code_module *m = get_code_heap(h);
+
+  STATIC_BID_SLOT_END = alloc_bid_slot();
 
   switch(type) {
   case ROCK_FUNC_SYM:
@@ -1660,6 +1664,8 @@ int rock_fork(void) {
 struct ibe_t {
   unsigned long ibe_count;
   unsigned long ibe_count_wo_activation; // without considering online activation
+  unsigned int ict_that_has_targets_count; /* reachable indirect calls */
+  unsigned int rt_that_has_targets_count; /* reachable returns */
 };
 
 static int sort_by_value(keyvalue *kv1, keyvalue *kv2) {
@@ -1675,6 +1681,8 @@ static struct ibe_t ibe_count(void) {
   struct ibe_t IBEs;
   IBEs.ibe_count = 0;
   IBEs.ibe_count_wo_activation = 0;
+  IBEs.ict_that_has_targets_count = 0;
+  IBEs.rt_that_has_targets_count = 0;
 
   code_module *m;
   dict *ib = 0;
@@ -1683,50 +1691,76 @@ static struct ibe_t ibe_count(void) {
   //graph *ibt_wo_ac = 0;
   unsigned int i;
 
+  unsigned id = (STATIC_BID_SLOT_END ? STATIC_BID_SLOT_END :
+                 alloc_bid_slot() - BID_SLOT_START)/ 8;
+  unsigned long *p = (unsigned long*)(table + BID_SLOT_START);
+  for (i = 0; i < id; i++) {
+    if (p[i] & 1) {
+      incr_dict_val(&ib, (void*)p[i]);
+    }
+  }
+
   DL_FOREACH(modules, m) {
+    // we do not consider JIT code heap
+    if (m->code_heap)
+      continue;
     //dprintf(STDERR_FILENO, "Module: %x, %x\n", m->base_addr, m->sz);
     unsigned long* p = (unsigned long*)(table + m->base_addr);
     size_t sz = m->sz / 8;
+    //unsigned long total = 0;
     for (i = 0; i < sz; i++) {
+      // if the target is activated and there exists an indirect branch
+      // targeting it.
       if (p[i] & 1) {
         incr_dict_val(&ibt, (void*)p[i]);
-        //dprintf(STDERR_FILENO, "ibta: %lx, %lx\n",
-        //        (unsigned long)p + 8*i - (unsigned long)table,
-        //        p[i]);
       }
     }
   }
 
+  // Filter out those targets whose IDs no IB matches
   HASH_SRT(hh, ibt, sort_by_value);
   HASH_SRT(hh, ict_eqc_ids, sort_by_value);
   HASH_SRT(hh, rt_eqc_ids, sort_by_value);
 
   {
     dprintf(STDERR_FILENO, "=====================================\n");
-    dprintf(STDERR_FILENO, "How many addresses are included in each eqc in descending order?\n");
+    dprintf(STDERR_FILENO, "How many indirect branches and addresses are\n"
+            "included in each eqc in descending order?\n"
+            "M:N means M indirect branches and N addresses.\n");
     keyvalue *kv, *tmp;
 #ifndef NO_ONLINE_PATCHING
     dprintf(STDERR_FILENO, "\nPICFI functions\n");
     HASH_ITER(hh, ibt, kv, tmp) {
-      if (dict_find(ict_eqc_ids, kv->key))
-        dprintf(STDERR_FILENO, "%lu ", kv->value);
+      keyvalue *kv2 = dict_find(ib, kv->key);
+      if (dict_find(ict_eqc_ids, kv->key) && kv2) {
+        dprintf(STDERR_FILENO, "%lu:%lu ", kv2->value, kv->value);
+      }
     }
 
     dprintf(STDERR_FILENO, "\n\nPICFI return addresses\n");
     HASH_ITER(hh, ibt, kv, tmp) {
-      if (dict_find(rt_eqc_ids, kv->key))
-        dprintf(STDERR_FILENO, "%lu ", kv->value);
+      keyvalue *kv2 = dict_find(ib, kv->key);
+      if (dict_find(rt_eqc_ids, kv->key) && kv2)
+        dprintf(STDERR_FILENO, "%lu:%lu ", kv2->value, kv->value);
     }
     dprintf(STDERR_FILENO, "\n");
 #endif
     dprintf(STDERR_FILENO, "\nMCFI functions count\n");
     HASH_ITER(hh, ict_eqc_ids, kv, tmp) {
-      dprintf(STDERR_FILENO, "%lu ", kv->value);
+      keyvalue *kv2 = dict_find(ib, kv->key);
+      if (kv2) {
+        IBEs.ict_that_has_targets_count += (unsigned long)kv2->value;
+        dprintf(STDERR_FILENO, "%lu:%lu ", kv2->value, kv->value);
+      }
     }
 
     dprintf(STDERR_FILENO, "\n\nMCFI return addresses\n");
     HASH_ITER(hh, rt_eqc_ids, kv, tmp) {
-      dprintf(STDERR_FILENO, "%lu ", kv->value);
+      keyvalue *kv2 = dict_find(ib, kv->key);
+      if (kv2) {
+        IBEs.rt_that_has_targets_count += (unsigned long)(kv2->value);
+        dprintf(STDERR_FILENO, "%lu:%lu ", kv2->value, kv->value);
+      }
     }
     dprintf(STDERR_FILENO, "\n");
     dprintf(STDERR_FILENO, "=====================================\n");
@@ -1743,19 +1777,7 @@ static struct ibe_t ibe_count(void) {
     }
   }
   */
-  unsigned id = (alloc_bid_slot() - BID_SLOT_START)/ 8;
-  unsigned long *p = (unsigned long*)(table + BID_SLOT_START);
-  for (i = 0; i < id; i++) {
-    if (p[i] & 1) {
-      keyvalue *kv = dict_find(ib, (void*)p[i]);
-      if (!kv) {
-        kv = dict_add(&ib, (void*)p[i], (void*)0);
-      }
-      unsigned long count = (unsigned long)kv->value;
-      count++;
-      kv->value = (void*)count;
-    }
-  }
+
   keyvalue *ikv, *tkv, *tmp;
   HASH_ITER(hh, ib, ikv, tmp) {
     tkv = dict_find(ibt, ikv->key);
@@ -1811,7 +1833,10 @@ void collect_stat(void) {
   unsigned int pid = __syscall0(SYS_getpid);
 
   /*
-   * TODO: the following equivalence class numbers don't match, figure out later.
+   * The following equivalence class numbers don't match, because not all
+   * indirect branches have matching targets. For the following example,
+   * int main() {} void foo(void) {}
+   * foo's return goes to nowhere. However, the return is counted as one eqc.
    */
   dprintf(STDERR_FILENO, "\n[%u] MCFI Statistics\n", pid);
   /*
@@ -1829,10 +1854,13 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "[%u] Equivalence classes for return addresses: %u\n", pid,
           HASH_COUNT(rt_eqc_ids));
   dprintf(STDERR_FILENO, "[%u] Equivalence classes for landing pads: %u\n", pid, eqclp);
-  dprintf(STDERR_FILENO, "[%u] Total Indirect Branches: %u\n", pid,
-          ict_count + rt_count + eqclp);
-  dprintf(STDERR_FILENO, "[%u] Indirect calls/jmps: %u\n", pid, ict_count);
-  dprintf(STDERR_FILENO, "[%u] Returns: %u\n", pid, rt_count);
+  dprintf(STDERR_FILENO, "[%u] Total Indirect Branches (with targets): %u (%u)\n", pid,
+          ict_count + rt_count + eqclp,
+          ibe.ict_that_has_targets_count + ibe.rt_that_has_targets_count + eqclp);
+  dprintf(STDERR_FILENO, "[%u] Indirect calls/jmps (with targets): %u (%u)\n",
+          pid, ict_count, ibe.ict_that_has_targets_count);
+  dprintf(STDERR_FILENO, "[%u] Returns (with targets): %u (%u)\n",
+          pid, rt_count, ibe.rt_that_has_targets_count);
   dprintf(STDERR_FILENO, "[%u] Landing pad jmp: %u\n", pid, eqclp);
 
   dprintf(STDERR_FILENO, "[%u] Total Indirect Branch Targets: %u\n", pid,
