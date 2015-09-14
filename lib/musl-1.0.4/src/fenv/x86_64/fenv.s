@@ -23,12 +23,12 @@ feclearexcept:
         movl %ecx, %ecx
 try1:   movq %gs:0x1000, %rdi
 __mcfi_bary_feclearexcept:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check1
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check1:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -51,12 +51,12 @@ feraiseexcept:
         movl %ecx, %ecx
 try2:   movq %gs:0x1000, %rdi
 __mcfi_bary_feraiseexcept:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check2
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check2:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi
@@ -88,12 +88,12 @@ __fesetround:
         movl %ecx, %ecx
 try3:   movq %gs:0x1000, %rdi
 __mcfi_bary___fesetround:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check3
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check3:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die3
         cmpl %esi, %edi
@@ -116,12 +116,12 @@ fegetround:
         movl %ecx, %ecx
 try4:   movq %gs:0x1000, %rdi
 __mcfi_bary_fegetround:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check4
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check4:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die4
         cmpl %esi, %edi
@@ -143,12 +143,12 @@ fegetenv:
         movl %ecx, %ecx
 try5:   movq %gs:0x1000, %rdi
 __mcfi_bary_fegetenv:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check5
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check5:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die5
         cmpl %esi, %edi
@@ -181,12 +181,12 @@ fesetenv:
         movl %ecx, %ecx
 try6:   movq %gs:0x1000, %rdi
 __mcfi_bary_fesetenv:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check6
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check6:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die6
         cmpl %esi, %edi
@@ -211,12 +211,12 @@ fetestexcept:
         movl %ecx, %ecx
 try7:   movq %gs:0x1000, %rdi
 __mcfi_bary_fetestexcept:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check7
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check7:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die7
         cmpl %esi, %edi

@@ -27,13 +27,13 @@ memcpy:
 1:
         movl %r11d, %ecx
 try:    movq %gs:0x1000, %rdi
-__mcfi_bary_memcpy:     
-        cmpq %rdi, %gs:(%rcx)
+__mcfi_bary_memcpy:
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die
         cmpl %esi, %edi

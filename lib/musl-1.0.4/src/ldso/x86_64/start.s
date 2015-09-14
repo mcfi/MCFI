@@ -21,7 +21,8 @@ __mcfi_dcj_1___dynlink:
 try:
         movq %gs:0x1000, %rdx
 __mcfi_bary___exe_elf_entry:
-        cmpq %rdx, %gs:(%rax)
+        movq %gs:(%rax), %r11
+        cmpq %rdx, %r11
         jne die # this indirect jump only executes once
         xor %edx,%edx
         # addq $1, %fs:0x108 # icj_count

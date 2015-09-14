@@ -5,12 +5,12 @@
         movl %ecx, %ecx
 try1:   movq %gs:0x1000, %rdi
 __mcfi_bary__libc_init:
-	cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+	cmpq %rdi, %rsi
         jne check1
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check1:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -26,12 +26,12 @@ die1:
         movl %ecx, %ecx
 try2:   movq %gs:0x1000, %rdi
 __mcfi_bary__libc_fini:
-	cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+	cmpq %rdi, %rsi
         jne check2
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check2:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi

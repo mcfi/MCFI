@@ -22,9 +22,10 @@ __clone:
         movl %r9d, %r9d
 try1:   movq %gs:0x1000, %r11
 __mcfi_bary___thread_start:
-        cmpq %r11, %gs:(%r9)
+        movq %gs:(%r9), %r10
+        cmpq %r11, %r10
         jne check1
-        nop
+        .byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00 # 6-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
 	call *%r9
 __mcfi_icj_1___thread_start:
@@ -38,7 +39,8 @@ __mcfi_icj_1___thread_start:
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
 __mcfi_bary___clone:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
@@ -53,7 +55,6 @@ die:
         jmp __report_cfi_violation_for_return@PLT
 
 check1:
-        movq %gs:(%r9), %r10
         testb $0x1, %r10b
         jz die1
         cmpl %r11d, %r10d

@@ -58,9 +58,10 @@ __call_dtor:
 try4:
         movq %gs:0x1000, %rdx
 __mcfi_bary___call_dtor_invoke:
-        cmpq %rdx, %gs:(%rax)
+        movq %gs:(%rax), %rcx
+        cmpq %rdx, %rcx
         jne check4
-        .byte 0x66, 0x90 # 2-byte nop
+        .byte 0x0F, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00 # 7-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
         callq *%rax
 __mcfi_icj_1___call_dtor_invoke:
@@ -70,11 +71,11 @@ __mcfi_icj_1___call_dtor_invoke:
         movl %ecx, %ecx
 try1:   movq %gs:0x1000, %rdi
 __mcfi_bary___call_dtor:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check1
         jmpq *%rcx
 check1:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -84,7 +85,6 @@ die1:
         jmp __report_cfi_violation_for_return@PLT
 
 check4:
-        movq %gs:(%rax), %rcx
         testb $0x1, %cl
         jz die4
         cmpl %edx, %ecx
@@ -104,9 +104,10 @@ __call_exn_dtor:
 try5:
         movq %gs:0x1000, %rdx
 __mcfi_bary___call_exn_dtor_invoke:
-        cmpq %rdx, %gs:(%rax)
+        movq %gs:(%rax), %rcx
+        cmpq %rdx, %rcx
         jne check5
-        .byte 0x66, 0x90 # 2-byte nop
+        .byte 0x0F, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00 # 7-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
         callq *%rax
 __mcfi_icj_1___call_exn_dtor_invoke:
@@ -116,11 +117,11 @@ __mcfi_icj_1___call_exn_dtor_invoke:
         movl %ecx, %ecx
 try2:   movq %gs:0x1000, %rdi
 __mcfi_bary___call_exn_dtor:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check2
         jmpq *%rcx
 check2:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi
@@ -130,7 +131,6 @@ die2:
         jmp __report_cfi_violation_for_return@PLT
 
 check5:
-        movq %gs:(%rax), %rcx
         testb $0x1, %cl
         jz die5
         cmpl %edx, %ecx
@@ -150,9 +150,10 @@ __call_thread_func:
 try6:
         movq %gs:0x1000, %rdx
 __mcfi_bary___call_thread_func_invoke:
-        cmpq %rdx, %gs:(%rax)
+        movq %gs:(%rax), %rcx
+        cmpq %rdx, %rcx
         jne check6
-        .byte 0x66, 0x90 # 2-byte nop
+        .byte 0x0F, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00 # 7-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
         callq *%rax
 __mcfi_icj_1___call_thread_func_invoke:
@@ -162,11 +163,11 @@ __mcfi_icj_1___call_thread_func_invoke:
         movl %ecx, %ecx
 try3:   movq %gs:0x1000, %rdi
 __mcfi_bary___call_thread_func:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check3
         jmpq *%rcx
 check3:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die3
         cmpl %esi, %edi
@@ -176,7 +177,6 @@ die3:
         jmp __report_cfi_violation_for_return@PLT
 
 check6:
-        movq %gs:(%rax), %rcx
         testb $0x1, %cl
         jz die6
         cmpl %edx, %ecx

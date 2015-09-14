@@ -39,12 +39,12 @@ __mcfi_dcj_1_exp2l:
         movl %ecx, %ecx
 try1:   movq %gs:0x1000, %rdi
 __mcfi_bary_expm1l:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check1
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check1:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -113,13 +113,13 @@ exp2l:
         popq %rcx
         movl %ecx, %ecx
 try2:   movq %gs:0x1000, %rdi
-__mcfi_bary_exp2l:     
-        cmpq %rdi, %gs:(%rcx)
+__mcfi_bary_exp2l:
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check2
         # addq $1, %fs:0x108 # icj_count
         jmpq *%rcx
 check2:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi

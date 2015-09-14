@@ -39,12 +39,12 @@ strcat:                                 # @strcat
 	movq	%gs:4096, %rdi
 	.hidden	__mcfi_bary_a6315766ed77499f
 __mcfi_bary_a6315766ed77499f:
-	cmpq	%rdi, %gs:(%rcx)
+        movq	%gs:(%rcx), %rsi
+	cmpq	%rdi, %rsi
 	jne	.LBB0_8
 # BB#7:
 	jmpq	*%rcx
 .LBB0_8:                                #   in Loop: Header=BB0_6 Depth=1
-	movq	%gs:(%rcx), %rsi
 	testb	$1, %sil
 	je	.LBB0_10
 # BB#9:                                 #   in Loop: Header=BB0_6 Depth=1

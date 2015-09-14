@@ -24,13 +24,13 @@ try:
 5:
         mov %gs:0x1000, %rdi
 __mcfi_bary_longjmp:
-3:      
-        cmp %rdi, %gs:(%rdx)
+3:
+        mov %gs:(%rdx), %rsi
+        cmp %rdi, %rsi
         jne 2f
         # addq $1, %fs:0x108 # icj_count
 	jmp *%rdx               /* goto saved address without altering rsp */
 2:
-        mov %gs:(%rdx), %rsi
         test $0x1, %sil
         jz 4f
         cmp %esi, %edi
