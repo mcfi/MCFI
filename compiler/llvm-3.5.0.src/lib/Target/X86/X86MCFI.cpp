@@ -306,6 +306,7 @@ private:
   void MCFIx64IDCmp(MachineFunction &MF,
                     MachineBasicBlock *MBB,
                     unsigned BIDReg,
+                    unsigned TIDReg,
                     const unsigned TargetReg,
                     DebugLoc& DL);
 
@@ -415,6 +416,7 @@ bool MCFI::runOnMachineFunction(MachineFunction &MF) {
 void MCFI::MCFIx64IDCmp(MachineFunction &MF,
                         MachineBasicBlock* MBB,
                         unsigned BIDReg,
+                        unsigned TIDReg,
                         const unsigned TargetReg,
                         DebugLoc &DL) {
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
@@ -423,26 +425,32 @@ void MCFI::MCFIx64IDCmp(MachineFunction &MF,
   
   auto I = std::begin(*MBB);
   
-  unsigned BIDRegReadOp = X86::MOV64rm;
-  unsigned CmpOp = X86::CMP64mr;
+  unsigned IDRegReadOp = X86::MOV64rm;
+  unsigned CmpOp = X86::CMP64rr;
 
   if (SmallID) {
     BIDReg = getX86SubSuperRegister(BIDReg, MVT::i32, true);
-    BIDRegReadOp = X86::MOV32rm;
-    CmpOp = X86::CMP32mr;
+    TIDReg = getX86SubSuperRegister(TIDReg, MVT::i32, true);
+    IDRegReadOp = X86::MOV32rm;
+    CmpOp = X86::CMP32rr;
   }
 
   // mov %gs:BarySlot, BIDReg
-  auto &MIB = BuildMI(*MBB, I, DL, TII->get(BIDRegReadOp))
+  auto &MIB = BuildMI(*MBB, I, DL, TII->get(IDRegReadOp))
     .addReg(BIDReg, RegState::Define)
     .addReg(0).addImm(1).addReg(0)
     .addImm(0x1000 + BarySlot * (SmallID ? 4 : 8))
     .addReg(X86::GS);
   MIB->setBarySlot(ModuleID + BarySlot);
-  
-  // cmp BIDReg, %gs:(TargetReg)
+
+  // mov %gs:(TargetReg), %TIDReg
+  BuildMI(*MBB, I, DL, TII->get(IDRegReadOp))
+    .addReg(TIDReg, RegState::Define)
+    .addReg(TargetReg).addImm(1).addReg(0).addImm(0).addReg(X86::GS);
+  // cmp BIDReg, TIDReg
   BuildMI(*MBB, I, DL, TII->get(CmpOp))
-    .addReg(TargetReg).addImm(1).addReg(0).addImm(0).addReg(X86::GS).addReg(BIDReg);
+    .addReg(BIDReg).addReg(TIDReg);
+
   // jne Lcheck
   BuildMI(*MBB, I, DL, TII->get(X86::JNE_1));
 }
@@ -474,18 +482,12 @@ void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
   auto I = std::begin(*MBB);
 
   const unsigned TestOp = X86::TEST8ri;
-  unsigned TIDRegReadOp = X86::MOV64rm;
   
   if (SmallID) {
     BIDReg = getX86SubSuperRegister(BIDReg, MVT::i32, true);
     TIDReg = getX86SubSuperRegister(TIDReg, MVT::i32, true);
-    TIDRegReadOp = X86::MOV32rm;
   }
 
-  // mov %gs:(TargetReg), %TIDReg
-  BuildMI(*MBB, I, DL, TII->get(TIDRegReadOp))
-    .addReg(TIDReg, RegState::Define)
-    .addReg(TargetReg).addImm(1).addReg(0).addImm(0).addReg(X86::GS);
   // test $1, TIDReg
   BuildMI(*MBB, I, DL, TII->get(TestOp))
     .addReg(getX86SubSuperRegister(TIDReg, MVT::i8, false)).addImm(1);
@@ -574,15 +576,15 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
   IDCmpMBB = MF.CreateMachineBasicBlock();
   MBBI = MBB;
   MF.insert(++MBBI, IDCmpMBB); // original MBB to ICCmpMBB, fallthrough
-  
-  MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TargetReg, DL); // fill the IDCmp block
+
+  MCFIx64IDCmp(MF, IDCmpMBB, BIDReg, TIDReg, TargetReg, DL); // fill the IDCmp block
   
   ICJMBB = MF.CreateMachineBasicBlock();
   MBBI = IDCmpMBB;
   MF.insert(++MBBI, ICJMBB); // fall through ICJMBB
   IDCmpMBB->addSuccessor(ICJMBB);
   MCFIx64ICJ(MF, ICJMBB, CJOp, TargetReg, DL); // fill ICJMBB
-  
+
   IDValidityCheckMBB = MF.CreateMachineBasicBlock();
   MF.push_back(IDValidityCheckMBB);
   MCFIx64IDValidityCheck(MF, IDValidityCheckMBB, BIDReg,
@@ -681,26 +683,6 @@ static unsigned getX64ScratchReg(const std::set<unsigned> RegSet) {
     if (RegSet.find(reg) == std::end(RegSet))
       return reg;
   llvm_unreachable("getX64ScratchReg does not find scratch registers.");
-}
-
-static void MCFIx64SpillRegToStack(MachineBasicBlock* MBB,
-                                   MachineBasicBlock::iterator &MI,
-                                   const TargetInstrInfo *TII,
-                                   const unsigned ScratchReg,
-                                   const int64_t Offset) {
-  BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::MOV64mr))
-    .addReg(X86::RSP).addImm(1).addReg(0).addImm(Offset).addReg(0)
-    .addReg(ScratchReg);
-}
-
-static void MCFIx64ReloadRegFromStack(MachineBasicBlock* MBB,
-                                      MachineBasicBlock::iterator &MI,
-                                      const TargetInstrInfo *TII,
-                                      const unsigned ScratchReg,
-                                      const int64_t Offset) {
-  BuildMI(*MBB, MI, MI->getDebugLoc(), TII->get(X86::MOV64rm))
-    .addReg(ScratchReg)
-    .addReg(X86::RSP).addImm(1).addReg(0).addImm(Offset).addReg(0);
 }
 
 void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
@@ -827,17 +809,20 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, CJOp,
               IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, false);
 
-  if (BIDRegSpill) {
-    MCFIx64SpillRegToStack(MBB, MI, TII, BIDReg, -8);
-    auto ICJBegin = std::begin(*ICJMBB);
-    MCFIx64ReloadRegFromStack(ICJMBB, ICJBegin, TII, BIDReg, -8);
-  }
+  if (BIDRegSpill)
+    BuildMI(*MBB, MI, DL, TII->get(X86::PUSH64r)).addReg(BIDReg);
 
-  if (TIDRegSpill) {
-    MCFIx64SpillRegToStack(MBB, MI, TII, TIDReg, -16);
-    auto ICJBegin = std::begin(*ICJMBB);
-    MCFIx64ReloadRegFromStack(ICJMBB, ICJBegin, TII, TIDReg, -16);
-  }
+  if (TIDRegSpill)
+    BuildMI(*MBB, MI, DL, TII->get(X86::PUSH64r)).addReg(TIDReg);
+
+  auto ICJBegin = std::begin(*ICJMBB);
+  if (TIDRegSpill)
+    BuildMI(*ICJMBB, ICJBegin, DL, TII->get(X86::POP64r))
+      .addReg(TIDReg, RegState::Define);
+
+  if (BIDRegSpill)
+    BuildMI(*ICJMBB, ICJBegin, DL, TII->get(X86::POP64r))
+      .addReg(BIDReg, RegState::Define);
 
   IDCmpMBB->instr_front().setIRInst(I); // transfer the IR to the BID read instruction.
   if (CJOp == X86::TAILJMPr64) {
