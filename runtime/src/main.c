@@ -45,11 +45,12 @@ const char MCFI_SDK_NAME[] = "MCFI_SDK";
 
 
 #ifdef NOCFI
-static char two_byte_nop[]  = {0x66, 0x90};
-static char four_byte_nop[] = {0x0f, 0x1f, 0x40, 0x00};
-static char five_byte_nop[] = {0x0f, 0x1f, 0x44, 0x00, 0x00};
-static char six_byte_nop[]  = {0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00};
-static char nine_byte_nop[] = {0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00};
+static char two_byte_nop[]   = {0x66, 0x90};
+static char three_byte_nop[] = {0x0f, 0x1f, 0x00};
+static char four_byte_nop[]  = {0x0f, 0x1f, 0x40, 0x00};
+static char five_byte_nop[]  = {0x0f, 0x1f, 0x44, 0x00, 0x00};
+static char six_byte_nop[]   = {0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00};
+static char nine_byte_nop[]  = {0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00};
 #endif
 
 int snprintf(char *str, size_t size, const char *format, ...);
@@ -696,7 +697,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       char *addr = elf + sym[cnt].st_value - cm->base_addr;
       /* 9-byte BID read */
       memcpy(addr - 9, nine_byte_nop, 9);
-      /* 4/5 byte BID TID comparison, only need to check the possible sib byte */
+      /* 4/5 byte TID load, only need to check the possible sib byte */
       if (addr[4] == 0 || addr[4] == 0x24) {
         memcpy(addr, five_byte_nop, 5);
         addr += 5;
@@ -704,6 +705,9 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
         memcpy(addr, four_byte_nop, 4);
         addr += 4;
       }
+      /* 3-byte BID TID comparison */
+      memcpy(addr, three_byte_nop, 3);
+      addr += 3;
       if (*addr == 0x0f) { /* jcc A, A, A, A */
         memcpy(addr, six_byte_nop, 6);
       } else { /* jcc A */
