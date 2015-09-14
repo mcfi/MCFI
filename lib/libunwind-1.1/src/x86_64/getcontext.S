@@ -103,11 +103,11 @@ _Ux86_64_getcontext:
         movl %ecx, %ecx
 try:    movq %gs:0x1000, %rdi
 __mcfi_bary__Ux86_64_getcontext:
-        cmpq %rdi, %gs:(%rcx)
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check
         jmpq *%rcx
 check:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jne die
         cmpl %esi, %edi
@@ -149,12 +149,12 @@ _Ux86_64_getcontext_trace:
         popq %rcx
         movl %ecx, %ecx
 try2:   movq %gs:0x1000, %rdi
-__mcfi_bary__Ux86_64_getcontext_trace:     
-        cmpq %rdi, %gs:(%rcx)
+__mcfi_bary__Ux86_64_getcontext_trace:
+        movq %gs:(%rcx), %rsi
+        cmpq %rdi, %rsi
         jne check2
         jmpq *%rcx
 check2:
-        movq %gs:(%rcx), %rsi
         testb $0x1, %sil
         jne die2
         cmpl %esi, %edi
