@@ -764,6 +764,7 @@ int gen_cfg(void) {
   /* don't generate the cfg at all */
   return 0;
 #endif
+
   //dprintf(STDERR_FILENO, "[gen_cfg] called, %p\n", table);
   icf *icfs = 0;
   function *functions = 0;
@@ -793,13 +794,18 @@ int gen_cfg(void) {
     vmtd = 0;
   }
 
+  start_timer("Metadata Merging");
   merge_mcfi_metainfo(modules, &icfs, &functions, &classes,
                       &cha, &fats, &fats_in_data, &fats_in_code, &aliases, &defined_ctors);
+  stop_timer("Metadata Merging");
 
   graph *all_funcs_grouped_by_name = 0;
+
+  start_timer("Call Graph Construction");
   graph *callgraph =
     build_callgraph(icfs, functions, classes, cha,
                     fats, aliases, &all_funcs_grouped_by_name);
+  stop_timer("Call Graph Construction");
 
   icfs_clear(&icfs);
   dict_clear(&classes);
@@ -816,7 +822,9 @@ int gen_cfg(void) {
   dict_clear(&defined_ctors);
   g_free_transitive_closure(&aliases_tc);
 
+  start_timer("Call Graph EQC");
   node *lcg = g_get_lcc(&callgraph);
+  stop_timer("Call Graph EQC");
 
 #ifdef COLLECT_STAT
   unsigned int count;
@@ -825,13 +833,18 @@ int gen_cfg(void) {
   eqc_callgraph_count = count;
 #endif
 
+  start_timer("Return Graph Construction");
   /* based on the callgraph, let's build the return graph on top of it */
   build_retgraph(&callgraph, all_funcs_grouped_by_name, modules);
+  stop_timer("Return Graph Construction");
 
   g_dtor(&all_funcs_grouped_by_name);
   functions_clear(&functions);
 
+  start_timer("Return Graph EQC");
   node *lrt = g_get_lcc(&callgraph);
+  stop_timer("Return Graph EQC");
+
   //l_print(lrt, print_cfgcc);
   g_dtor(&callgraph);
 
@@ -840,6 +853,7 @@ int gen_cfg(void) {
   eqc_retgraph_count = count;
 #endif
 
+  start_timer("ID Generation and Table Filling");
   unsigned long id_for_others;
   dict *callids = 0, *retids = 0;
   gen_mcfi_id(&lcg, &lrt, &version, &id_for_others, &callids, &retids);
@@ -915,6 +929,7 @@ int gen_cfg(void) {
     }
     dict_clear(&patch_compensate);
   }
+  stop_timer("ID Generation and Table Filling");
 
   /* update the counters */
   update_thesc();
@@ -1809,7 +1824,7 @@ void collect_stat(void) {
   {
     struct timeval tv;
     gettimeofday(&tv);
-    dprintf(STDERR_FILENO, "[%lu:%lu] Ended!\n", tv.tv_sec, tv.tv_usec);
+    dprintf(STDERR_FILENO, "[%lu:%lu] Program Ended!\n", tv.tv_sec, tv.tv_usec);
   }
 #endif
 #ifdef COLLECT_STAT

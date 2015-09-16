@@ -511,6 +511,7 @@ unsigned int alloc_bid_slot(void) {
 }
 
 code_module *load_mcfi_metadata(char *elf, size_t sz) {
+  start_timer("Process MCFI Metadata");
   Elf64_Ehdr *ehdr = (Ehdr *)elf;
   Elf64_Shdr *shdr = (Elf64_Shdr *)(elf + ehdr->e_shoff);
   Elf64_Shdr *shstrtbl = &shdr[ehdr->e_shstrndx];
@@ -526,6 +527,7 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   size_t cnt;
   size_t numsym = 0;
   size_t numdynsym = 0;
+  size_t metadata_size = 0;
 
   icf *icfs = 0;
   function *functions = 0;
@@ -553,34 +555,43 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       parse_icfs(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &icfs, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIFuncInfo")) {
       parse_functions(elf + shdr[cnt].sh_offset, /* content */
                       elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                       &functions, &ctor, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFICHA")) {
       parse_cha(elf + shdr[cnt].sh_offset, /* content */
                 elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                 &classes, &cha, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIAliases")) {
       parse_aliases(elf + shdr[cnt].sh_offset, /* content */
                     elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                     &aliases, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIAddrTaken")) {
       parse_fats(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &fats_in_data, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIAddrTakenInCode")) {
       parse_fats(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &fats_in_code, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIVtable")) {
       parse_vtable(elf + shdr[cnt].sh_offset, /* content */
                    elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                    &vtable, &stringpool);
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIDtorCxaAtExit")) {
       // TODO: Add handling code here
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".MCFIDtorCxaThrow")) {
       // TODO: Add handling code here
+      metadata_size += shdr[cnt].sh_size;
     } else if (0 == strcmp(shname, ".rela.plt")) {
       relaplt = (Elf64_Rela*)(elf + shdr[cnt].sh_offset);
       numrelaplt = shdr[cnt].sh_size / sizeof(*relaplt);
@@ -864,6 +875,10 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
       memcpy(p+1, &patch, 4);
     }
   }
+#endif
+  stop_timer("Processing MCFI Metadata");
+#ifdef PROFILING
+  dprintf(STDERR_FILENO, "Processed Metadata Size (bytes): %lu\n", metadata_size);
 #endif
   return cm;
 }
@@ -1157,7 +1172,7 @@ void* runtime_init(int argc, char **argv) {
   {
     struct timeval tv;
     gettimeofday(&tv);
-    dprintf(STDERR_FILENO, "[%lu:%lu] Started!\n", tv.tv_sec, tv.tv_usec);
+    dprintf(STDERR_FILENO, "[%lu:%lu] Program Started!\n", tv.tv_sec, tv.tv_usec);
   }
 #endif
   return stack;
