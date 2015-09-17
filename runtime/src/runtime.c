@@ -1869,17 +1869,17 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "[%u] Equivalence classes for return addresses: %u\n", pid,
           HASH_COUNT(rt_eqc_ids));
   dprintf(STDERR_FILENO, "[%u] Equivalence classes for landing pads: %u\n", pid, eqclp);
+  unsigned ibwtgts = ibe.ict_that_has_targets_count + ibe.rt_that_has_targets_count + eqclp;
   dprintf(STDERR_FILENO, "[%u] Total Indirect Branches (with targets): %u (%u)\n", pid,
-          ict_count + rt_count + eqclp,
-          ibe.ict_that_has_targets_count + ibe.rt_that_has_targets_count + eqclp);
+          ict_count + rt_count + eqclp, ibwtgts);
   dprintf(STDERR_FILENO, "[%u] Indirect calls/jmps (with targets): %u (%u)\n",
           pid, ict_count, ibe.ict_that_has_targets_count);
   dprintf(STDERR_FILENO, "[%u] Returns (with targets): %u (%u)\n",
           pid, rt_count, ibe.rt_that_has_targets_count);
   dprintf(STDERR_FILENO, "[%u] Landing pad jmp: %u\n", pid, eqclp);
 
-  dprintf(STDERR_FILENO, "[%u] Total Indirect Branch Targets: %u\n", pid,
-          ibt_funcs + ibt_radcs + ibt_raics + lp_count);
+  unsigned total_ibts = ibt_funcs + ibt_radcs + ibt_raics + lp_count;
+  dprintf(STDERR_FILENO, "[%u] Total Indirect Branch Targets: %u\n", pid, total_ibts);
   dprintf(STDERR_FILENO, "[%u] Functions Reachable by Indirect Branches: %u\n",
           pid, ibt_funcs);
   dprintf(STDERR_FILENO, "[%u] Return Addresses of Direct Calls: %u\n",
@@ -1916,8 +1916,10 @@ void collect_stat(void) {
   dprintf(STDERR_FILENO, "[%u] Total call site patches: %lu\n",
           pid, radc_patch_count + raic_patch_count);
 #endif
-  dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges: %lu\n",
-          pid, ibe.ibe_count_wo_activation);
+  dprintf(STDERR_FILENO, "[%u] Amount of Indirect Branch Edges: %lu (Out:%u, In:%u)\n",
+          pid, ibe.ibe_count_wo_activation,
+          (ibe.ibe_count_wo_activation + ibwtgts - 1) / ibwtgts,
+          (ibe.ibe_count_wo_activation + total_ibts - 1) / total_ibts);
   icj_count += thread_self()->icj_count;
   if (icj_count > 0) {
     /* the printf code does not support %lu well, so we use %lx instead */
