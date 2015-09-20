@@ -106,8 +106,11 @@ __mcfi_bary__Ux86_64_getcontext:
         movq %gs:(%rcx), %rsi
         cmpq %rdi, %rsi
         jne check
+go:
         jmpq *%rcx
 check:
+        cmpb  $0xfc, %sil # interoperability support
+        je    go
         testb $0x1, %sil
         jne die
         cmpl %esi, %edi
@@ -153,8 +156,11 @@ __mcfi_bary__Ux86_64_getcontext_trace:
         movq %gs:(%rcx), %rsi
         cmpq %rdi, %rsi
         jne check2
+go2:
         jmpq *%rcx
 check2:
+        cmpb  $0xfc, %sil
+        je    go2
         testb $0x1, %sil
         jne die2
         cmpl %esi, %edi

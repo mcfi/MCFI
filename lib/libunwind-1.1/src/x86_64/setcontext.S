@@ -108,8 +108,11 @@ _Ux86_64_setcontext:
 catchbranch:
         cmpb   $0xfe, %gs:(%r11)
         jne    die
+go:
         jmpq   *%r11
 die:
+        cmpb   $0xfc, %r11b
+        je     go
         leaq   catchbranch(%rip), %rdi
         movq   %r11, %rsi
         jmp    __report_cfi_violation@PLT
