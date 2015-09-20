@@ -283,6 +283,7 @@ private:
                    MachineBasicBlock *&IDCmpMBB,
                    MachineBasicBlock *&ICJMBB,
                    const unsigned CJOp,
+                   MachineBasicBlock *&InteropCheckMBB,
                    MachineBasicBlock *&IDValidityCheckMBB,
                    MachineBasicBlock *&VerCheckMBB,
                    MachineBasicBlock *&ReportMBB,
@@ -315,7 +316,14 @@ private:
                   const unsigned CJOp,
                   const unsigned TargetReg,
                   DebugLoc& DL);
-  
+
+  void MCFIx64InteropCheck(MachineFunction &MF,
+                                 MachineBasicBlock *MBB,
+                                 unsigned BIDReg,
+                                 unsigned TIDReg,
+                                 const unsigned TargetReg,
+                                 DebugLoc &DL);
+
   void MCFIx64IDValidityCheck(MachineFunction &MF,
                               MachineBasicBlock *MBB,
                               unsigned BIDReg,
@@ -467,6 +475,32 @@ void MCFI::MCFIx64ICJ(MachineFunction &MF, MachineBasicBlock* MBB,
   std::prev(I)->setBarySlot(ModuleID + BarySlot);
 }
 
+void MCFI::MCFIx64InteropCheck(MachineFunction &MF,
+                               MachineBasicBlock *MBB,
+                               unsigned BIDReg,
+                               unsigned TIDReg,
+                               const unsigned TargetReg,
+                               DebugLoc &DL) {
+  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+
+  MBB->addLiveIn(BIDReg);
+  MBB->addLiveIn(TargetReg);
+
+  auto I = std::begin(*MBB);
+
+  const unsigned CmpOp = X86::CMP8ri;
+
+  if (SmallID)
+    TIDReg = getX86SubSuperRegister(TIDReg, MVT::i32, true);
+
+  // cmp $0xfc, TIDReg
+  BuildMI(*MBB, I, DL, TII->get(CmpOp))
+    .addReg(getX86SubSuperRegister(TIDReg, MVT::i8, false)).addImm(0xfc);
+
+  // if equal, perform the indirect branch
+  BuildMI(*MBB, I, DL, TII->get(X86::JE_4));
+}
+
 void MCFI::MCFIx64IDValidityCheck(MachineFunction &MF,
                                   MachineBasicBlock *MBB,
                                   unsigned BIDReg,
@@ -566,6 +600,7 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
                        MachineBasicBlock *&IDCmpMBB,
                        MachineBasicBlock *&ICJMBB,
                        const unsigned CJOp,
+                       MachineBasicBlock *&InteropCheckMBB,
                        MachineBasicBlock *&IDValidityCheckMBB,
                        MachineBasicBlock *&VerCheckMBB,
                        MachineBasicBlock *&ReportMBB,
@@ -585,12 +620,19 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
   IDCmpMBB->addSuccessor(ICJMBB);
   MCFIx64ICJ(MF, ICJMBB, CJOp, TargetReg, DL); // fill ICJMBB
 
+  InteropCheckMBB = MF.CreateMachineBasicBlock();
+  MF.push_back(InteropCheckMBB);
+  MCFIx64InteropCheck(MF, InteropCheckMBB, BIDReg, TIDReg, TargetReg, DL);
+
+  IDCmpMBB->addSuccessor(InteropCheckMBB, UINT_MAX); // as far as possible
+  InteropCheckMBB->addSuccessor(ICJMBB);
+
   IDValidityCheckMBB = MF.CreateMachineBasicBlock();
   MF.push_back(IDValidityCheckMBB);
   MCFIx64IDValidityCheck(MF, IDValidityCheckMBB, BIDReg,
                          TIDReg, TargetReg, DL); // fill IDValCheck MBB
-  
-  IDCmpMBB->addSuccessor(IDValidityCheckMBB, UINT_MAX); // as far as possible
+
+  InteropCheckMBB->addSuccessor(IDValidityCheckMBB); // as far as possible
 
   VerCheckMBB = MF.CreateMachineBasicBlock();
   MF.push_back(VerCheckMBB);
@@ -613,7 +655,8 @@ void MCFI::MCFIx64MBBs(MachineFunction &MF,
   // now MBB should be followed by IDCmpMBB
   MBB->addSuccessor(IDCmpMBB);
   
-  MachineInstrBuilder(MF, &IDCmpMBB->instr_back()).addMBB(IDValidityCheckMBB);
+  MachineInstrBuilder(MF, &IDCmpMBB->instr_back()).addMBB(InteropCheckMBB);
+  MachineInstrBuilder(MF, &InteropCheckMBB->instr_back()).addMBB(ICJMBB);
   MachineInstrBuilder(MF, &IDValidityCheckMBB->instr_back()).addMBB(ReportMBB);
   MachineInstrBuilder(MF, &VerCheckMBB->instr_back()).addMBB(IDCmpMBB);
 }
@@ -652,11 +695,11 @@ void MCFI::MCFIx64Ret(MachineFunction &MF, MachineBasicBlock *MBB,
   // remove the return instruction
   MI = MBB->erase(MI); // MI points std::end(MBB)
 
-  MachineBasicBlock *IDCmpMBB, *ICJMBB,
+  MachineBasicBlock *IDCmpMBB, *ICJMBB, *InteropCheckMBB,
     *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, X86::JMP64r,
-              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, true);
+              InteropCheckMBB, IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, true);
   Returns.push_back(to_hex(ModuleID + BarySlot));
   BarySlot++;
 }
@@ -803,11 +846,11 @@ void MCFI::MCFIx64IndirectCall(MachineFunction &MF, MachineBasicBlock *MBB,
     TIDRegSpill = true;
   }
   // build the MCFI basic blocks
-  MachineBasicBlock *IDCmpMBB, *ICJMBB,
+  MachineBasicBlock *IDCmpMBB, *ICJMBB, *InteropCheckMBB,
     *IDValidityCheckMBB, *VerCheckMBB, *ReportMBB;
 
   MCFIx64MBBs(MF, MBB, BIDReg, TIDReg, TargetReg, IDCmpMBB, ICJMBB, CJOp,
-              IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, false);
+              InteropCheckMBB, IDValidityCheckMBB, VerCheckMBB, ReportMBB, DL, false);
 
   if (BIDRegSpill)
     BuildMI(*MBB, MI, DL, TII->get(X86::PUSH64r)).addReg(BIDReg);
