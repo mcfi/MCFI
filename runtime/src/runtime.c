@@ -1014,7 +1014,9 @@ void set_gotplt(unsigned long addr, unsigned long v) {
 
   /* change the .got.plt entry atomically */
   unsigned long *p =
-    (unsigned long*)(am->osb_gotplt + addr - am->gotplt);
+    (am->instrumented) ?
+    ((unsigned long*)(am->osb_gotplt + addr - am->gotplt)) :
+    (unsigned long*)addr;
   *p = v;
 }
 
@@ -1624,7 +1626,7 @@ static void save_content(void) {
       quit(-1);
     }
     memcpy(m->code, (void*)m->base_addr, m->sz);
-    if (m->gotpltsz > 0) {
+    if (m->instrumented && m->gotpltsz > 0) {
       m->gotpltcontent = mmap(0, m->gotpltsz, PROT_WRITE | PROT_READ,
                               MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
       if (m->gotpltcontent == (void*)-1) {
@@ -1640,7 +1642,7 @@ static void save_content(void) {
   DL_FOREACH(modules, m) {
     munmap((void*)m->base_addr, m->sz);
     munmap((void*)m->osb_base_addr, m->sz);
-    if (m->gotpltsz > 0) {
+    if (m->instrumented && m->gotpltsz > 0) {
       munmap((void*)m->gotplt, m->gotpltsz);
       munmap((void*)m->osb_gotplt, m->gotpltsz);
     }
@@ -1654,7 +1656,7 @@ static void restore_content(void) {
     memcpy((void*)m->osb_base_addr, m->code, m->sz);
     munmap(m->code, m->sz);
     m->code = 0;
-    if (m->gotpltsz > 0) {
+    if (m->instrumented && m->gotpltsz > 0) {
       restore_parallel_mapping((void*)m->gotplt, (void*)m->osb_gotplt, m->gotpltsz, PROT_READ);
       memcpy((void*)m->osb_gotplt, m->gotpltcontent, m->gotpltsz);
       munmap(m->gotpltcontent, m->gotpltsz);

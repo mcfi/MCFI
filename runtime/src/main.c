@@ -15,9 +15,6 @@
 /* x64 Linux loads images from 0x400000 */
 #define X64ABIBASE 0x400000UL
 
-/* size of the plt entry */
-#define PLT_ENT_SIZE 32
-
 /* the table region holding Bary and Tary */
 void* table = 0;
 
@@ -37,6 +34,8 @@ int lt_envc = 0;
 code_module *modules = 0; /* code modules */
 str *stringpool = 0;
 dict *vtabletaken = 0;
+
+int COMPAT_MODE = 0; /* compatibility mode */
 
 /* default SDK path */
 const char *MCFI_SDK = 0;
@@ -556,42 +555,51 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &icfs, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIFuncInfo")) {
       parse_functions(elf + shdr[cnt].sh_offset, /* content */
                       elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                       &functions, &ctor, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFICHA")) {
       parse_cha(elf + shdr[cnt].sh_offset, /* content */
                 elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                 &classes, &cha, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIAliases")) {
       parse_aliases(elf + shdr[cnt].sh_offset, /* content */
                     elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                     &aliases, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIAddrTaken")) {
       parse_fats(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &fats_in_data, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIAddrTakenInCode")) {
       parse_fats(elf + shdr[cnt].sh_offset, /* content */
                  elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                  &fats_in_code, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIVtable")) {
       parse_vtable(elf + shdr[cnt].sh_offset, /* content */
                    elf + shdr[cnt].sh_offset + shdr[cnt].sh_size, /* size */
                    &vtable, &stringpool);
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIDtorCxaAtExit")) {
       // TODO: Add handling code here
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".MCFIDtorCxaThrow")) {
       // TODO: Add handling code here
       metadata_size += shdr[cnt].sh_size;
+      cm->instrumented = 1;
     } else if (0 == strcmp(shname, ".rela.plt")) {
       relaplt = (Elf64_Rela*)(elf + shdr[cnt].sh_offset);
       numrelaplt = shdr[cnt].sh_size / sizeof(*relaplt);
@@ -626,6 +634,14 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
     funcsym->name = f->name;
     funcsym->offset = ehdr->e_entry - cm->base_addr;
     DL_APPEND(cm->funcsyms, funcsym);
+
+    /* __gxx_personality_v0 is also a special function */
+    f = alloc_function();
+    f->name = sp_intern_string(&stringpool, "__gxx_personality_v0");
+    f->type = sp_intern_string(&stringpool,
+                "i32!i32@i32@i64@%struct._Unwind_Exception*@%struct._Unwind_Context*@");
+    DL_APPEND(functions, f);
+    dict_add(&fats_in_data, "__gxx_personality_v0", 0);
   }
   cm->icfs = icfs;
   cm->functions = functions;
@@ -808,12 +824,13 @@ code_module *load_mcfi_metadata(char *elf, size_t sz) {
   }
   g_free_transitive_closure(&aliases_tc);
   /* PLT entries are essentially functions */
+  int plt_ent_size = cm->instrumented ? 32 : 16;
   for (cnt = 0; cnt < numrelaplt; cnt++) {
     size_t dynsymidx = ELF64_R_SYM(relaplt[cnt].r_info);
     symbol *funcsym = alloc_sym();
     funcsym->name =
       sp_intern_string(&stringpool, dynstr + dynsym[dynsymidx].st_name);
-    funcsym->offset = plt_offset + (cnt + 1) * PLT_ENT_SIZE;
+    funcsym->offset = plt_offset + (cnt + 1) * plt_ent_size;
     DL_APPEND(cm->funcsyms, funcsym);
     //dprintf(STDERR_FILENO, "%x, %x, %s\n", cnt + 1, funcsym->offset, funcsym->name);
     dict_add(&(cm->gpfuncs), (void*)relaplt[cnt].r_offset - cm->gotplt, funcsym->name);
@@ -992,6 +1009,11 @@ void *load_elf(int fd, int is_exe, char **entry) {
    */
   /* elf will be rewritten */
   code_module *cm = load_mcfi_metadata(elf, elf_size);
+
+  /* if any module is not instrumented, compatibility mode is turned on */
+  if (!cm->instrumented)
+    COMPAT_MODE = 1;
+
   remove_trampoline_type(cm);
   cm->is_exe = is_exe;
   DL_APPEND(modules, cm);
@@ -1064,24 +1086,28 @@ void *load_elf(int fd, int is_exe, char **entry) {
                VMMAP_ENTRY_ANONYMOUS);
     }
   }
-  /* copy .got.plt out from the loaded segment */
-  void *gotplt = malloc(cm->gotpltsz);
-  if (!gotplt) {
-    dprintf(STDERR_FILENO, "[load_elf] gotplt malloc failed\n");
-    quit(-1);
+  if (cm->instrumented) {
+    /* copy .got.plt out from the loaded segment */
+    void *gotplt = malloc(cm->gotpltsz);
+    if (!gotplt) {
+      dprintf(STDERR_FILENO, "[load_elf] gotplt malloc failed\n");
+      quit(-1);
+    }
+    memcpy(gotplt, base + VADDR(cm->gotplt, is_exe), cm->gotpltsz);
+    /* .got.plt should be remapped with a parallel mapping */
+    if (0 != munmap(base + VADDR(cm->gotplt, is_exe), cm->gotpltsz)) {
+      dprintf(STDERR_FILENO, "[load_elf] .got.plt unmap failed with %d\n", errn);
+      quit(-1);
+    }
+    void *osb_gp = create_parallel_mapping(base + VADDR(cm->gotplt, is_exe),
+                                           cm->gotpltsz, PROT_READ);/* readonly */
+    cm->gotplt = (size_t)(base + VADDR(cm->gotplt, is_exe));
+    cm->osb_gotplt = (uintptr_t)osb_gp;
+    memcpy(osb_gp, gotplt, cm->gotpltsz);
+    free(gotplt);
+  } else {
+    cm->gotplt = (size_t)(base + VADDR(cm->gotplt, is_exe));
   }
-  memcpy(gotplt, base + VADDR(cm->gotplt, is_exe), cm->gotpltsz);
-  /* .got.plt should be remapped with a parallel mapping */
-  if (0 != munmap(base + VADDR(cm->gotplt, is_exe), cm->gotpltsz)) {
-    dprintf(STDERR_FILENO, "[load_elf] .got.plt unmap failed with %d\n", errn);
-    quit(-1);
-  }
-  void *osb_gp = create_parallel_mapping(base + VADDR(cm->gotplt, is_exe),
-                                         cm->gotpltsz, PROT_READ);/* readonly */
-  cm->gotplt = (size_t)(base + VADDR(cm->gotplt, is_exe));
-  cm->osb_gotplt = (uintptr_t)osb_gp;
-  memcpy(osb_gp, gotplt, cm->gotpltsz);
-  free(gotplt);
 #undef VADDR
   if (entry) {
     *entry = base + ((Ehdr*)elf)->e_entry;

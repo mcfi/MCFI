@@ -9,6 +9,9 @@
 /* LPV assigned to each landing pad's tary entry */
 #define LPV 0xFE
 
+/* NPV assigned to each native code module's tary entry */
+#define NPV 0xFC
+
 /* DCV is assigned to each dynamically generated code's
    indirect branch target's tary entry */
 #define DCV 0xF4
@@ -31,6 +34,9 @@ typedef struct verifier_t verifier;
 typedef struct function_t function;
 typedef struct icf_t icf;
 typedef struct sym_t sym;
+
+/* if any native module is loaded, COMPAT_MODE is set to 1 */
+extern int COMPAT_MODE;
 
 struct icf_t {
   UT_hash_handle hh;  
@@ -182,6 +188,7 @@ struct code_module_t {
   graph    *backward_reference;
   dict     *bid_slot_in_codeheap;/* remembers bid slots needed for instructions in the codeheap */
   struct verifier_t *verifier; /* pointer to the verifier */
+  int      instrumented; /* if the module has been mcfi-instrumented */
 };
 
 static code_module *alloc_code_module(void) {
@@ -1153,10 +1160,10 @@ static unsigned long _convert_to_mcfi_half_id_format(unsigned long *number) {
     d <<= 1;
     ++*number;
 
-    if (a != DCV && a != LPV &&
-        b != DCV && b != LPV &&
-        c != DCV && c != LPV &&
-        d != DCV && d != LPV)
+    if (a != DCV && a != LPV && a != NPV &&
+        b != DCV && b != LPV && b != NPV &&
+        c != DCV && c != LPV && c != NPV &&
+        d != DCV && d != LPV && d != NPV)
       break;
   }
   unsigned long rs = ((d << 24) | (c << 16) | (b << 8) | a);
@@ -1229,10 +1236,10 @@ static void gen_mcfi_id(node **lcg, node **lrt,
   unsigned long eqc_number = 0;
 
   unsigned long mcfi_version = _convert_to_mcfi_half_id_format(version);
-#define GEN_IDS(lcc, ids) do {                  \
+#define GEN_IDS(lcc, ids, dv) do {              \
     DL_FOREACH_SAFE(*lcc, n, ntmp) {            \
       vertex *v, *tmp;                          \
-      unsigned long id = _convert_to_mcfi_half_id_format(&eqc_number);  \
+      unsigned long id = COMPAT_MODE ? dv : _convert_to_mcfi_half_id_format(&eqc_number); \
       id = ((id << 32UL) | mcfi_version | 1); /* least significant bit should be one */ \
       HASH_ITER(hh, (vertex*)(n->val), v, tmp) {                        \
         dict_add(ids, v->key, (void*)id);                               \
@@ -1242,11 +1249,12 @@ static void gen_mcfi_id(node **lcg, node **lrt,
       free(n);                                                          \
     }                                                                   \
   } while (0)
-  GEN_IDS(lcg, callids);
-  GEN_IDS(lrt, retids);
+  GEN_IDS(lcg, callids, 1);
+  GEN_IDS(lrt, retids, 2);
 #undef GEN_IDS
-  *id_for_other_icfs = ((_convert_to_mcfi_half_id_format(&eqc_number) << 32UL) |
-                        mcfi_version | 1);
+  *id_for_other_icfs = COMPAT_MODE ?
+    NPV :
+    ((_convert_to_mcfi_half_id_format(&eqc_number) << 32UL) | mcfi_version | 1);
 }
 
 #ifdef COLLECT_STAT
@@ -1356,6 +1364,10 @@ static void populate_tary_for_return_addr(char* tary, dict *ids, symbol *syms,
 static void gen_tary(code_module *m, dict *callids, dict *retids, char *table,
                      graph **fats_in_code, graph **vmtd) {
   char *tary = table + m->base_addr;
+  if (!m->instrumented) {
+    memset(tary, NPV, m->sz);
+    return;
+  }
 #ifndef NO_ONLINE_PATCHING
   populate_tary_for_func_addr(m, tary, callids, m->funcsyms, _mark_func,
                               FALSE, fats_in_code, vmtd, incr_ibt_funcs);
@@ -1378,6 +1390,7 @@ static void gen_tary(code_module *m, dict *callids, dict *retids, char *table,
 static void gen_bary(code_module *m, dict *callids, dict *retids, char *table,
                      unsigned long id_for_other_icfs) {
   symbol *icfsym;
+
   DL_FOREACH(m->icfsyms, icfsym) {
     keyvalue *i = dict_find(callids, _mark_icj(icfsym->name));
 
