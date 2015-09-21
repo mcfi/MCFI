@@ -63,6 +63,7 @@ __mcfi_bary___call_dtor_invoke:
         jne check4
         .byte 0x0F, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00 # 7-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
+go4:
         callq *%rax
 __mcfi_icj_1___call_dtor_invoke:
         addl $8, %esp
@@ -74,8 +75,11 @@ __mcfi_bary___call_dtor:
         movq %gs:(%rcx), %rsi
         cmpq %rdi, %rsi
         jne check1
+go1:
         jmpq *%rcx
 check1:
+        cmpb  $0xfc, %sil
+        je    go1
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -85,6 +89,8 @@ die1:
         jmp __report_cfi_violation_for_return@PLT
 
 check4:
+        cmpb  $0xfc, %cl
+        je    go4
         testb $0x1, %cl
         jz die4
         cmpl %edx, %ecx
@@ -109,6 +115,7 @@ __mcfi_bary___call_exn_dtor_invoke:
         jne check5
         .byte 0x0F, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00 # 7-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
+go5:
         callq *%rax
 __mcfi_icj_1___call_exn_dtor_invoke:
         addl $8, %esp
@@ -120,8 +127,11 @@ __mcfi_bary___call_exn_dtor:
         movq %gs:(%rcx), %rsi
         cmpq %rdi, %rsi
         jne check2
+go2:
         jmpq *%rcx
 check2:
+        cmpb  $0xfc, %sil
+        je    go2
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi
@@ -131,6 +141,8 @@ die2:
         jmp __report_cfi_violation_for_return@PLT
 
 check5:
+        cmpb  $0xfc, %cl
+        je    go5
         testb $0x1, %cl
         jz die5
         cmpl %edx, %ecx
@@ -155,6 +167,7 @@ __mcfi_bary___call_thread_func_invoke:
         jne check6
         .byte 0x0F, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00 # 7-byte nop
         .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 # 5-byte nop
+go6:
         callq *%rax
 __mcfi_icj_1___call_thread_func_invoke:
         addl $8, %esp
@@ -166,8 +179,11 @@ __mcfi_bary___call_thread_func:
         movq %gs:(%rcx), %rsi
         cmpq %rdi, %rsi
         jne check3
+go3:
         jmpq *%rcx
 check3:
+        cmpb  $0xfc, %sil
+        je    go3
         testb $0x1, %sil
         jz die3
         cmpl %esi, %edi
@@ -177,6 +193,8 @@ die3:
         jmp __report_cfi_violation_for_return@PLT
 
 check6:
+        cmpb  $0xfc, %cl
+        je    go6
         testb $0x1, %cl
         jz die6
         cmpl %edx, %ecx

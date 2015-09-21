@@ -43,8 +43,11 @@ __mcfi_bary_expm1l:
         cmpq %rdi, %rsi
         jne check1
         # addq $1, %fs:0x108 # icj_count
+go1:
         jmpq *%rcx
 check1:
+        cmpb  $0xfc, %sil
+        jne   go1
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -118,8 +121,11 @@ __mcfi_bary_exp2l:
         cmpq %rdi, %rsi
         jne check2
         # addq $1, %fs:0x108 # icj_count
+go2:
         jmpq *%rcx
 check2:
+        cmpb  $0xfc, %sil
+        je    go2
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi

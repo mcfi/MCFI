@@ -43,8 +43,11 @@ __mcfi_bary_a6315766ed77499f:
 	cmpq	%rdi, %rsi
 	jne	.LBB0_8
 # BB#7:
+go:
 	jmpq	*%rcx
 .LBB0_8:                                #   in Loop: Header=BB0_6 Depth=1
+        cmpb    $0xfc, %sil
+        je      go
 	testb	$1, %sil
 	je	.LBB0_10
 # BB#9:                                 #   in Loop: Header=BB0_6 Depth=1

@@ -27,8 +27,11 @@ __mcfi_bary_feclearexcept:
         cmpq %rdi, %rsi
         jne check1
         # addq $1, %fs:0x108 # icj_count
+go1:
         jmpq *%rcx
 check1:
+        cmpb  $0xfc, %sil
+        je    go1
         testb $0x1, %sil
         jz die1
         cmpl %esi, %edi
@@ -55,8 +58,11 @@ __mcfi_bary_feraiseexcept:
         cmpq %rdi, %rsi
         jne check2
         # addq $1, %fs:0x108 # icj_count
+go2:
         jmpq *%rcx
 check2:
+        cmpb  $0xfc, %sil
+        je    go2
         testb $0x1, %sil
         jz die2
         cmpl %esi, %edi
@@ -92,8 +98,11 @@ __mcfi_bary___fesetround:
         cmpq %rdi, %rsi
         jne check3
         # addq $1, %fs:0x108 # icj_count
+go3:
         jmpq *%rcx
 check3:
+        cmpb  $0xfc, %sil
+        je    go3
         testb $0x1, %sil
         jz die3
         cmpl %esi, %edi
@@ -120,8 +129,11 @@ __mcfi_bary_fegetround:
         cmpq %rdi, %rsi
         jne check4
         # addq $1, %fs:0x108 # icj_count
+go4:
         jmpq *%rcx
 check4:
+        cmpb  $0xfc, %sil
+        je    go4
         testb $0x1, %sil
         jz die4
         cmpl %esi, %edi
@@ -147,8 +159,11 @@ __mcfi_bary_fegetenv:
         cmpq %rdi, %rsi
         jne check5
         # addq $1, %fs:0x108 # icj_count
+go5:
         jmpq *%rcx
 check5:
+        cmpb  $0xfc, %sil
+        je    go5
         testb $0x1, %sil
         jz die5
         cmpl %esi, %edi
@@ -185,8 +200,11 @@ __mcfi_bary_fesetenv:
         cmpq %rdi, %rsi
         jne check6
         # addq $1, %fs:0x108 # icj_count
+go6:
         jmpq *%rcx
 check6:
+        cmpb  $0xfc, %sil
+        je    go6
         testb $0x1, %sil
         jz die6
         cmpl %esi, %edi
@@ -215,8 +233,11 @@ __mcfi_bary_fetestexcept:
         cmpq %rdi, %rsi
         jne check7
         # addq $1, %fs:0x108 # icj_count
+go7:
         jmpq *%rcx
 check7:
+        cmpb  $0xfc, %sil
+        je    go7
         testb $0x1, %sil
         jz die7
         cmpl %esi, %edi

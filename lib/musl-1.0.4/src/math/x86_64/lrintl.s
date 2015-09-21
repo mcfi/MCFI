@@ -14,8 +14,10 @@ __mcfi_bary_lrintl:
         cmpq %rdi, %rsi
         jne check
         # addq $1, %fs:0x108 # icj_count
-        jmpq *%rcx
+go:     jmpq *%rcx
 check:
+        cmpb  $0xfc, %sil
+        je    go
         testb $0x1, %sil
         jz die
         cmpl %esi, %edi
