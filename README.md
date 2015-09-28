@@ -17,7 +17,7 @@ By default, clang would generate PICFI-enforced binaries, but you may pass the f
 
 ```-Xclang -mdisable-tail-callinsts```: turn tail call optimization off at only the machine code level, but not the IR level. This is the single most important CFG precision improvement method AFAIK. The performance does not change much if you pass this option, but the CFG precision would be significantly increased. **If you are interested in analyzing the security of MCFI/PICFI, you definitely should try this option**.
 
-```-Xclang -mdisable-picfi```: disable PICFI but enable MCFI.
+```-Xclang -mdisable-picfi```: disable PICFI but enable MCFI. You also need to type ```make MCFI=1``` to build the runtime.
 
 ```-Xclang -mcount-iib```: instrument each MCFI-instrumented indirect branch further so that the amount of its dynamic execution can be counted.
 
