@@ -1,7 +1,7 @@
 MCFI/PICFI
 ====
 
-This directory contains the MCFI/PICFI toolchain that has been tested on x64 Ubuntu 14.04. Technical details of MCFI/PICFI can be found on ```http://www.cse.lehigh.edu/~ben210```. MCFI enforces fine-grained CFI and PICFI further improves MCFI by enforcing per-input CFGs. To build the toolchain, you first need to execute the following command to install the required tools.
+This directory contains the MCFI/PICFI toolchain that has been tested on x64 Ubuntu 14.04. Technical details of MCFI/PICFI can be found in ```pcfi.pdf```. MCFI enforces fine-grained CFI and PICFI further improves MCFI by enforcing per-input CFGs. To build the toolchain, you first need to execute the following command to install the required tools.
 
   ```sudo apt-get install build-essential g++-multilib flex bison libtool subversion git cmake autoconf automake texinfo texi2html```
 
