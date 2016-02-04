@@ -21,6 +21,34 @@ By default, clang would generate PICFI-enforced binaries, but you may pass the f
 
 ```-Xclang -mcount-iib```: instrument each MCFI-instrumented indirect branch further so that the amount of its dynamic execution can be counted.
 
+PICFI Code Sharing
+==
+
+The current implementation of PICFI relies on online code patching for minimizing performance overhead, so code cannot be shared between processes, which enlarge physical memory consumption if deployed on real systems. To enable code sharing, the following x64 instrumentation can be used instead of code patching. Take a return address after a direct call to function ```foo``` as an example,
+
+```
+# for each indirect branch target (IBT), we use a bit in a bitmap to
+# indicate if the IBT has been activated or not. The bitmap could be
+# allocated in the .bss section for a module, so the relative address
+# of the bit is statically known. For example, it may be the 3rd bit
+# in a byte at address imm(%rip).
+
+    test $0x4, immi(%rip)                # test if the bit is set
+    jz   activate_ra_foo_1               # if the bit is not set, jump to a small
+                                         # stub that activates return address 1
+    call foo                             # original call instruction
+ra_foo_1:                                # return address of foo
+    ...
+    
+activate_ra_foo_1:
+    1. marshal the args to the PICFI runtime
+    2. call the runtime to update the CFFG
+    3. set the bit to 1.
+    4. transfer the control flow to call foo
+    
+```
+The above approach may enlarge slightly code size and slow down the program, but enables code sharing.
+
 Ported Applications
 ==
 All SPECCPU2006 C/C++ benchmarks have been tested with both the test and reference data sets. However, you need to apply the patches in the ```spec2006``` directory to make the benchmarks compatible with MCFI/PICFI.
