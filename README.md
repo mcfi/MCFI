@@ -56,3 +56,7 @@ All SPECCPU2006 C/C++ benchmarks have been tested with both the test and referen
 v8: ```https://github.com/mcfi/v8```
 
 nginx-1.4.0: ```https://github.com/mcfi/nginx-1.4.0```
+
+Independent Evaluation
+==
+This tool chain has been independently verified by researchers from Purdue University, SBA Research and UC Irvine. Please see the results on http://arxiv.org/abs/1602.04056.
