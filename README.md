@@ -66,3 +66,7 @@ nginx-1.4.0: ```https://github.com/mcfi/nginx-1.4.0```
 Independent Evaluation
 ==
 This tool chain has been independently verified by researchers from Purdue University, SBA Research and UC Irvine. Please see the results in https://nebelwelt.net/publications/files/17CSUR.pdf.
+
+Usage in Google CTF 2017
+==
+This tool chain was used in Google CTF 2017! See the CTF challenge https://github.com/google/google-ctf/tree/master/2017/quals/2017-pwn-cfi and a reference solution writeup https://drive.google.com/drive/folders/0BwMPuUHZOj0ndG5BMmQ5b0xxNmc.
