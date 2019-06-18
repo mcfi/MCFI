@@ -28,7 +28,7 @@ make install
 # Build the linker
 mkdir -p $MCFI/compiler/binutils-2.24/build && cd $MCFI/compiler/binutils-2.24/build
 
-../configure --prefix=$MCFI_SDK --exec-prefix=$MCFI_SDK
+../configure --prefix=$MCFI_SDK --exec-prefix=$MCFI_SDK CFLAGS="-Wno-error -g -O2"
 
 make -j8
 
