@@ -3,7 +3,7 @@ MCFI/PICFI
 
 This directory contains the MCFI/PICFI toolchain that has been tested on x64 Ubuntu 14.04. Technical details of MCFI/PICFI can be found in ```pcfi.pdf```. MCFI enforces fine-grained CFI and PICFI further improves MCFI by enforcing per-input CFGs. To build the toolchain, you first need to execute the following command to install the required tools.
 
-  ```sudo apt-get install build-essential g++-multilib flex bison libtool subversion git cmake autoconf automake texinfo texi2html```
+  ```sudo apt-get install build-essential g++-multilib flex bison libtool subversion git cmake autoconf automake texinfo texi2html libtinfo5 gyp```
 
 Also, you need a prebuilt clang 3.5.0 compiler that can be downloaded from http://llvm.org/releases/3.5.0/clang+llvm-3.5.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz . After you download the prebuilt compiler, decompress it. Then **set** and **export** LLVM_HOME environment variable to be the directory name of the decompressed clang compiler. For example, you could add the following two lines in the .bashrc file after you move the decompressed prebuilt compiler into, say, $HOME/llvm. Remember to **restart** bash to pick up the changes in .bashrc file.
 
