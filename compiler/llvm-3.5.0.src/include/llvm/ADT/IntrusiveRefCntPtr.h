@@ -134,9 +134,8 @@ public:
 //===----------------------------------------------------------------------===//
   template <typename T>
   class IntrusiveRefCntPtr {
-    T* Obj;
-
   public:
+    T* Obj;
     typedef T element_type;
 
     explicit IntrusiveRefCntPtr() : Obj(nullptr) {}
