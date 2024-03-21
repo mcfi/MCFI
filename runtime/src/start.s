@@ -15,4 +15,4 @@ _start:
         xorl %edi, %edi
         jmpq *libc_entry(%rip)  /* runtime_init returns user-program interpreter's entry */
 
-.section        .note.GNU-stack,"",@progbits"
+.section        .note.GNU-stack,"",@progbits

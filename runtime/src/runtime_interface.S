@@ -175,4 +175,4 @@ runtime_\func:
         runtime_function move_code
         runtime_function patch_at
 
-.section        .note.GNU-stack,"",@progbits"
+.section        .note.GNU-stack,"",@progbits
